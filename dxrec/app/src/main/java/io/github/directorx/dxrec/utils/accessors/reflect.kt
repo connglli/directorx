@@ -18,7 +18,3 @@ fun <T, F> Class<T>.getFieldValue(obj: T?, name: String): F? {
 fun <T, F> Class<T>.getFieldValue(name: String): F? {
     return getFieldValue(null, name)
 }
-
-fun <T> Class<T>.invokeMethod() {
-
-}

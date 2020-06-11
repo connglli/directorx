@@ -1,24 +1,29 @@
 package io.github.directorx.dxrec
 
 import android.app.Activity
-import io.github.directorx.dxrec.utils.accessors.dumpView
+import io.github.directorx.dxrec.utils.accessors.dump
 import java.util.*
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.LinkedBlockingQueue
 
 class DxBroker(private val capacity: Int) {
+    private val buffer: StringBuffer = StringBuffer()
+
     val staged: BlockingQueue<Item> = LinkedBlockingQueue()
     val indexed: LinkedList<Item> = LinkedList()
 
     val curr: Item?
         get() = indexed.lastOrNull()
 
-    fun add(act: Activity, evt: DxEvent, refresh: Boolean = false) =
+    fun add(act: Activity, evt: DxEvent, refresh: Boolean = false) {
+        buffer.setLength(0)
+        act.dump(buffer)
         if (refresh) {
-            refresh(act.javaClass.name, act.dumpView(), evt)
+            refresh(act.javaClass.name, buffer.toString(), evt)
         } else {
-            push(act.javaClass.name, act.dumpView(), evt)
+            push(act.javaClass.name, buffer.toString(), evt)
         }
+    }
 
     fun add(act: String, tree: String, evt: DxEvent, refresh: Boolean = false) =
         if (refresh) {
@@ -51,5 +56,5 @@ class DxBroker(private val capacity: Int) {
     }
 
     // activity, event, decor_view
-    data class Item(val act: String, val evt: DxEvent, val dec: String, var committed: Boolean = false)
+    data class Item(val act: String, val evt: DxEvent, val dump: String, var committed: Boolean = false)
 }

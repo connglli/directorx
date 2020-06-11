@@ -5,6 +5,7 @@ import android.util.Base64
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.widget.TextView
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -104,7 +105,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         if (last == null || last.evt !is DxSwipeEvent || last.evt.t0 != evt.t0) {
             broker.add(act, evt)
         } else {
-            broker.add(last.act, last.dec, evt, refresh = true)
+            broker.add(last.act, last.dump, evt, refresh = true)
         }
     }
 
@@ -136,35 +137,35 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         val method = View::class.java.getMethod("toString")
         XposedBridge.hookMethod(method, object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam?) {
-                try {
-                    param?.also {
-                        if (param.hasThrowable()) {
-                            return
-                        }
+                if (param == null || param.hasThrowable()) {
+                    return
+                }
 
-                        // append desc and text
-                        val view = it.thisObject as View
-                        val mContentDescription = View::class.java.getFieldValue<View, CharSequence>(view, "mContentDescription")
-                        val mText = View::class.java.getFieldValue<View, CharSequence>(view, "mText")
-                        val result = it.result as String
+                // append desc and text
+                val view = param.thisObject as View
+                val mContentDescription = View::class.java.getFieldValue<View, CharSequence>(view, "mContentDescription")
+                val mText = if (view is TextView) {
+                    TextView::class.java.getFieldValue<TextView, CharSequence>(view, "mText")
+                } else {
+                    null
+                }
+                val result = param.result as String
 
-                        var info = result.substring(0 until result.length - 1)
-                        // FIX: some custom view may invoke View#toString() more than once
-                        if ("desc=" !in info) {
-                            if (mContentDescription != null && mContentDescription.isNotEmpty()) {
-                                info += " desc=\"${asString("application/json", mContentDescription, encode)}\""
-                            }
-                        }
-                        if ("text=" !in info) {
-                            if (mText != null && mText.isNotEmpty()) {
-                                info += " text=\"${asString("application/json", mText, encode)}\""
-                            }
-                        }
-                        info += "}"
-
-                        param.result = info
+                var info = result.substring(0 until result.length - 1)
+                // FIX: some custom view may invoke View#toString() more than once
+                if ("desc=" !in info) {
+                    if (mContentDescription != null && mContentDescription.isNotEmpty()) {
+                        info += " desc=\"${asString("application/json", mContentDescription, encode)}\""
                     }
-                } catch (ignored: Throwable) {}
+                }
+                if ("text=" !in info) {
+                    if (mText != null && mText.isNotEmpty()) {
+                        info += " text=\"${asString("application/json", mText, encode)}\""
+                    }
+                }
+                info += "}"
+
+                param.result = info
             }
         })
     }

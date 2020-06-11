@@ -14,13 +14,17 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
     }
 
     private fun doDump(item: DxBroker.Item) {
-        val (act, evt, tree) = item
+        val (act, evt, dump) = item
 
-        // VIEW_HIERARCHY act
-        // root
-        //  children
-        DxLogger.d("VIEW_HIERARCHY $act")
-        DxLogger.d(tree, noPrefix=true)
+        // ACTIVITY act
+        DxLogger.d("ACTIVITY_BEGIN $act")
+        for (line in dump.split("\n")) {
+            // FIX: each log entry is limited to 8192 bytes
+            if (line.isNotEmpty()) {
+                DxLogger.d(line, noPrefix=true)
+            }
+        }
+        DxLogger.d("ACTIVITY_END $act")
         when (evt) {
             // TAP act down_time x y
             is DxTapEvent ->
