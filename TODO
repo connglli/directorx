@@ -1,0 +1,19 @@
+FEATURES:
+1. collect crash information by adding states
+
+BUGS:
+1. dxrec does not respond when record Calculator (does not respond only 
+   in the CalculatorActivity, but no in HiddenActivity). Specifically,
+   the hook cannot receive anything; to reproduce it:
+   1. add 
+         `DxLogger.d(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> HIT AT " + System.currentTimeMillis())`
+      to the hook (i.e., XC_MethodHook#beforeHookedMethod()), right before
+      any custom code
+   2. install dxrec
+   3. Add and open Calculator in VirtualXposed
+   4. Play Calculator for many many times
+   One will see, at the very start, the above logs appear very quickly; 
+   but after sufficient number of operations, the above log does not 
+   appear any more
+2. when the view hierarchy is too large, the dumped string often is cut
+   by logcat (some are not dumped)

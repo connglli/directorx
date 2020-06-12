@@ -1,6 +1,7 @@
 {
-    "encode": false,
+    "encode": true,
     "whitelist": [
-        "com.android.gooexcal"
+        "com.android.gooexcal",
+        "com.coolapk.market"
     ]
 }
