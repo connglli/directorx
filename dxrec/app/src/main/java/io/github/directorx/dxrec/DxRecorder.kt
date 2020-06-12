@@ -153,14 +153,18 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
 
                 var info = result.substring(0 until result.length - 1)
                 // FIX: some custom view may invoke View#toString() more than once
-                if ("desc=" !in info) {
+                if ("dx-desc=" !in info) {
                     if (mContentDescription != null && mContentDescription.isNotEmpty()) {
-                        info += " desc=\"${asString("application/json", mContentDescription, encode)}\""
+                        info += " dx-desc=\"${asString("application/json", mContentDescription, encode)}\""
+                    } else {
+                        info += " dx-desc=\"\""
                     }
                 }
-                if ("text=" !in info) {
+                if ("dx-text=" !in info) {
                     if (mText != null && mText.isNotEmpty()) {
-                        info += " text=\"${asString("application/json", mText, encode)}\""
+                        info += " dx-text=\"${asString("application/json", mText, encode)}\""
+                    } else {
+                        info += " dx-text=\"\""
                     }
                 }
                 info += "}"
@@ -170,9 +174,9 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         })
     }
 
-    private fun asString(mime: String, cs: CharSequence, encode: Boolean) =
-        if (encode) asBase64String(mime, cs) else cs.toString()
-
-    private fun asBase64String(mime: String, cs: CharSequence) =
-        "data:${mime};base64,${Base64.encodeToString(cs.toString().toByteArray(), Base64.DEFAULT)}".trim()
+    private fun asString(mime: String, cs: CharSequence, encode: Boolean) = if (encode) { 
+        Base64.encodeToString(cs.toString().toByteArray(), Base64.NO_WRAP).trim()
+    } else {
+        cs.toString() 
+    }
 }

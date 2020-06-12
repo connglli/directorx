@@ -1,0 +1,16 @@
+{
+  "cSpell.words": [
+    "dxadb",
+    "dxevent",
+    "dxlog",
+    "dxpack",
+    "dxrec",
+    "dxview",
+    "getprop",
+    "prio"
+  ],
+  "eslint.enable": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": true
+  }
+}
