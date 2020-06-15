@@ -24,7 +24,9 @@ class IllegalStateException {
 
 class DxrecParser {
   private static PAT_DROID = /--------- beginning of (?<type>\w+)/;
-  private static PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s[\w.]{8}\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rid>\w+)\s)?dx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
+  // FIX: some apps/devices often output non-standard attributes 
+  // for example aid=1073741824 following resource-id
+  private static PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s[\w.]{8}\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rid>\w+)\s.*?)?dx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
 
   private static STATE_NEV = 0;
   private static STATE_NAV = 1;
@@ -223,7 +225,7 @@ class DxrecParser {
     // parse view line by line
     const res = DxrecParser.PAT_AV_VIEW.exec(line);
     if (!res || !res.groups) {
-      throw new IllegalStateException('No activity entries match');
+      throw new IllegalStateException(`No activity entries match: ${line}`);
     }
 
     const {
@@ -319,7 +321,7 @@ class DxrecParser {
 
 // HERE WE GOES
 
-const PKG = 'com.android.gooexcal';
+const PKG = 'com.coolapk.market';
 const TAG = 'DxRecorder';
 const DECODE = true;
 
@@ -351,13 +353,18 @@ try {
   for await (const line of output) {
     const ln = line.trimEnd();
     if (ln.length != 0) {
+      DxLog.debug(ln);
       parser.parse(ln);
     }
   }
 } catch (t) {
   if (t instanceof adb.ProcessException) {
     const e = t as adb.ProcessException;
-    if (e.code !== undefined) {
+    // https://unix.stackexchange.com/questions/223189/what-does-exit-code-130-mean-for-postgres-command
+    // many shell follows the convention that using 128+signal_number
+    // as an exit number, use `kill -l exit_code` to see which signal
+    // exit_code stands for
+    if (e.code !== undefined && e.code != 2 && e.code != 130) {
       DxLog.critical(`${e}`);
     }
   } else {
