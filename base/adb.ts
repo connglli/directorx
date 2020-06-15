@@ -26,33 +26,33 @@ export class ProcessException {
   }
 }
 
-function makeAdbProc(subCmd: string, opt: AdbGlobalOptions = {}): Deno.Process {
+function makeAdbCmd(subCmd: string, opt: AdbGlobalOptions = {}): string[] {
   let cmd = 'adb ';
   const { serial } = opt;
   if (serial) {
     cmd += `-s ${serial} `;
   }
   cmd += subCmd;
-  return Deno.run({
-    cmd: cmd.split(/\s+/),
-    stdout: 'piped',
-    stderr: 'piped',
-  });
+  return cmd.split(/\s+/);
 }
 
 async function exec(
   subCmd: string,
   gOpt?: AdbGlobalOptions,
 ): Promise<AdbResult> {
-  const proc = makeAdbProc(subCmd, gOpt);
+  const proc = Deno.run({
+    cmd: makeAdbCmd(subCmd, gOpt),
+    stdout: 'piped',
+    stderr: 'piped',
+  });
   const { code } = await proc.status();
   let out: string;
   if (code == 0) {
     out = new TextDecoder('utf-8').decode(await proc.output());
-    proc.stderr?.close();
+    proc.stderr.close(); // eslint-disable-line
   } else {
     out = new TextDecoder('utf-8').decode(await proc.stderrOutput());
-    proc.stdout?.close();
+    proc.stdout.close();
   }
   proc.close();
   return { code, out };
@@ -62,19 +62,21 @@ async function* poll(
   subCmd: string,
   gOpt?: AdbGlobalOptions,
 ): AsyncIterableIterator<string> {
-  const proc = makeAdbProc(subCmd, gOpt);
-  if (proc.stdout) {
-    yield* readLines(proc.stdout);
-  }
+  const proc = Deno.run({
+    cmd: makeAdbCmd(subCmd, gOpt),
+    stdout: 'piped',
+    stderr: 'piped',
+  });
+  yield* readLines(proc.stdout);
   const { code } = await proc.status();
   try {
     if (code != 0) {
       const err = new TextDecoder('utf-8').decode(await proc.stderrOutput());
-      proc.stdout?.close();
+      proc.stdout.close();
       throw new ProcessException(code, err);
     }
-    proc.stdout?.close();
-    proc.stderr?.close();
+    proc.stdout.close();
+    proc.stderr.close();
   } finally {
     proc.close();
   }
