@@ -4,10 +4,15 @@
     "dxevent",
     "dxlog",
     "dxpack",
+    "dxpk",
     "dxrec",
     "dxview",
     "getprop",
-    "prio"
+    "knary",
+    "knary tree node",
+    "node",
+    "prio",
+    "tree"
   ],
   "eslint.enable": true,
   "editor.codeActionsOnSave": {

@@ -10,7 +10,25 @@
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "runtimeExecutable": "deno",
-      "runtimeArgs": ["run", "--inspect-brk", "--allow-run", "--unstable", "dxrec.ts"],
+      "runtimeArgs": ["run", "--inspect-brk", "--allow-all", "--unstable", "dxrec.ts"],
+      "port": 9229
+    },
+    {
+      "name": "dx",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "deno",
+      "runtimeArgs": ["run", "--inspect-brk", "--allow-all", "--unstable", "dx.ts"],
+      "port": 9229
+    },
+    {
+      "name": "utils/list",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "deno",
+      "runtimeArgs": ["run", "--inspect-brk", "utils/list.ts"],
       "port": 9229
     }
   ]
