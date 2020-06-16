@@ -16,10 +16,22 @@ export type DxViewFlags = {
   cc: boolean;         // context clickable  
 }
 
+export const DefaultFlags: DxViewFlags = {
+  v: DxViewVisibility.VISIBLE,
+  f: false,
+  e: true,
+  d: true,
+  hs: false,
+  vs: false,
+  c: false,
+  lc: false,
+  cc: false,
+};
+
 export default class DxView {
   constructor(
-    public readonly cls: string,
-    public readonly flags: DxViewFlags,
+    private cls_: string,
+    private flags_: DxViewFlags,
     private left_: number,
     private top_: number,
     private right_: number,
@@ -32,6 +44,14 @@ export default class DxView {
     private parent_: DxView | null = null,
     private children_: DxView[] = []
   ) {}
+
+  get cls(): string {
+    return this.cls_;
+  }
+
+  get flags(): DxViewFlags {
+    return this.flags_;
+  }
 
   get parent(): DxView | null {
     return this.parent_;
@@ -57,6 +77,10 @@ export default class DxView {
     return this.bottom_;
   }
 
+  get res(): string {
+    return `${this.resPkg}:${this.resType}/${this.resId}`;
+  }
+
   get resPkg(): string {
     return this.rpkg_;
   }
@@ -76,11 +100,82 @@ export default class DxView {
   get text(): string {
     return this.text_;
   }
-
   
+  /** Add view v as a child */
   addView(v: DxView): void {
     v.parent_ = this;
     this.children_.push(v);
+  }
+
+  /** Remove child view v */
+  removeView(v: DxView): void {
+    if (v.parent_ != this) {
+      return;
+    }
+    const ind = this.children_.indexOf(v);
+    v.parent_ = null;
+    this.children_ = [
+      ...this.children_.slice(0, ind),
+      ...this.children_.slice(ind+1)
+    ];
+  }
+
+  /** Attach self as a child of view v */
+  attach(v: DxView): void {
+    v.addView(this);
+  }
+
+  /** Detach self from parent */
+  detach(): void {
+    if (this.parent) {
+      this.parent.removeView(this);
+    }
+  }
+
+  reset(
+    cls: string,
+    flags: DxViewFlags,
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+    rpkg = '',
+    rtype = '',
+    rid = '',
+    desc = '',
+    text = '',
+    parent: DxView | null = null,
+    children: DxView[] = []
+  ): void {
+    this.cls_ = cls;
+    this.flags_ = flags;
+    this.left_ = left;
+    this.top_ = top;
+    this.right_ = right;
+    this.bottom_ = bottom;
+    this.rpkg_ = rpkg;
+    this.rtype_ = rtype;
+    this.rid_ = rid;
+    this.desc_ = desc;
+    this.text_ = text;
+    this.parent_ = parent;
+    this.children_ = children;
+  }
+
+  copy(): DxView {
+    return new DxView(
+      this.cls_,
+      this.flags_,
+      this.left_,
+      this.top_,
+      this.right_,
+      this.bottom_,
+      this.rpkg_,
+      this.rtype_,
+      this.rid_,
+      this.desc_,
+      this.text_
+    );
   }
 }
 
@@ -93,17 +188,7 @@ export class DxDecorView extends DxView {
   ) {
     super(
       'com.android.internal.policy.DecorView',
-      {
-        v: DxViewVisibility.VISIBLE,
-        f: false,
-        e: true ,
-        d: true,
-        hs: false,
-        vs: false,
-        c: false,
-        lc: false,
-        cc: false
-      },
+      DefaultFlags,
       left, top, right, bottom
     );
   }

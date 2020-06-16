@@ -1,5 +1,6 @@
 FEATURES:
 1. collect crash information by adding states
+2. save dxpk in a binary compressed format
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 

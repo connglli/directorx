@@ -1,4 +1,4 @@
-import { onSignal } from './deps.ts';
+import { signal } from './deps.ts';
 import * as adb from './dxadb.ts';
 import { DxPacker } from './dxpack.ts';
 import DxEvent, {
@@ -11,9 +11,10 @@ import DxEvent, {
 import DxView, { 
   DxViewFlags, 
   DxViewVisibility, 
-  DxActivity 
+  DxActivity
 } from './dxview.ts';
 import DxLog from './dxlog.ts';
+import { decode as base64Decode } from './utils/base64.ts';
 
 class IllegalStateException {
   constructor(public readonly msg: string) {}
@@ -22,15 +23,15 @@ class IllegalStateException {
   }
 }
 
-class DxrecParser {
+class DxRecParser {
   private static PAT_DROID = /--------- beginning of (?<type>\w+)/;
   // FIX: some apps/devices often output non-standard attributes 
   // for example aid=1073741824 following resource-id
   private static PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s[\w.]{8}\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rid>\w+)\s.*?)?dx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
 
-  private static STATE_NEV = 0;
-  private static STATE_NAV = 1;
-  private static STATE_IAV = 2;
+  private static STATE_NEV = 0; // next is event
+  private static STATE_NAV = 1; // next is activity
+  private static STATE_IAV = 2; // next is activity entry
 
   private curr: {
     a: DxActivity | null;
@@ -41,13 +42,13 @@ class DxrecParser {
     v: null,
     d: -1,
   };
-  private state = DxrecParser.STATE_NAV;
+  private state = DxRecParser.STATE_NAV;
 
   constructor(
-    private readonly pkg: string,
+    private readonly app: string,
     private readonly dev: adb.DeviceInfo,
     private readonly decode: boolean,
-    private readonly packer: DxPacker,
+    private readonly packer: DxPacker
   ) {}
 
   parse(line: string): void {
@@ -58,13 +59,13 @@ class DxrecParser {
 
     // dxrec output
     switch (this.state) {
-    case DxrecParser.STATE_NEV: {
+    case DxRecParser.STATE_NEV: {
       if (!this.curr.a) {
         throw new IllegalStateException('Expect this.curr.a to be non-null');
       }
       const e = this.parseEvent(line);
-      this.packer.append(e);
-      this.state = DxrecParser.STATE_NAV;
+      this.packer.append(e); // pack it
+      this.state = DxRecParser.STATE_NAV;
       // reset curr
       this.curr = { 
         a: null, v: null, d: -1
@@ -72,12 +73,12 @@ class DxrecParser {
       break;
     }
 
-    case DxrecParser.STATE_NAV: {
+    case DxRecParser.STATE_NAV: {
       if (this.curr.a) {
         throw new IllegalStateException('Expect this.curr.a to be null');
       }
       const a = this.parseAvStart(line);
-      this.state = DxrecParser.STATE_IAV;
+      this.state = DxRecParser.STATE_IAV;
       // update curr
       this.curr = {
         a, v: null, d: -1,
@@ -85,13 +86,13 @@ class DxrecParser {
       break;
     }
 
-    case DxrecParser.STATE_IAV: {
+    case DxRecParser.STATE_IAV: {
       if (!this.curr.a) {
         throw new IllegalStateException('Expect this.curr.a to be non-null');
       }
       // no longer activity entry
       if (this.parseAvEnd(line)) {
-        this.state = DxrecParser.STATE_NEV;
+        this.state = DxRecParser.STATE_NEV;
         break;
       }
       // parse an activity entry
@@ -109,7 +110,7 @@ class DxrecParser {
   }
 
   private parseDroid(line: string): boolean {
-    const res = DxrecParser.PAT_DROID.exec(line);
+    const res = DxRecParser.PAT_DROID.exec(line);
     if (!res) {
       return false;
     }
@@ -123,8 +124,8 @@ class DxrecParser {
 
   private parseEvent(line: string): DxEvent {
     const [pkg, type, ...args] = line.split(/\s+/);
-    if (pkg != this.pkg) {
-      throw new IllegalStateException(`Expected ${this.pkg}, got ${pkg}`);
+    if (pkg != this.app) {
+      throw new IllegalStateException(`Expected ${this.app}, got ${pkg}`);
     }
 
     switch (type) {
@@ -189,8 +190,8 @@ class DxrecParser {
   private parseAvStart(line: string): DxActivity {
     // pkg ACTIVITY_BEGIN act
     const [pkg, verb, act] = line.split(/\s+/);
-    if (pkg != this.pkg) {
-      throw new IllegalStateException(`Expected ${this.pkg}, got ${pkg}`);
+    if (pkg != this.app) {
+      throw new IllegalStateException(`Expected ${this.app}, got ${pkg}`);
     }
     if (verb != 'ACTIVITY_BEGIN') {
       throw new IllegalStateException(`Expected ACTIVITY_BEGIN, got ${verb}`);
@@ -203,8 +204,8 @@ class DxrecParser {
     const [pkg, verb, act] = line.split(/\s+/);
     if (verb == 'ACTIVITY_END') {
       const currName = this.curr.a!.name; // eslint-disable-line
-      if (pkg != this.pkg || act != currName) {
-        throw new IllegalStateException(`Expect ${this.pkg}/${currName}, got ${pkg}/${act}`);
+      if (pkg != this.app || act != currName) {
+        throw new IllegalStateException(`Expect ${this.app}/${currName}, got ${pkg}/${act}`);
       }
       return true;
     }
@@ -223,7 +224,7 @@ class DxrecParser {
     }
 
     // parse view line by line
-    const res = DxrecParser.PAT_AV_VIEW.exec(line);
+    const res = DxRecParser.PAT_AV_VIEW.exec(line);
     if (!res || !res.groups) {
       throw new IllegalStateException(`No activity entries match: ${line}`);
     }
@@ -293,15 +294,16 @@ class DxrecParser {
     let text: string;
     let desc: string;
     if (this.decode) {
-      text = window.atob(sText);
-      desc = window.atob(sDesc);
+      text = base64Decode(sText);
+      desc = base64Decode(sDesc);
     } else {
       text = sText;
       desc = sDesc;
     }
 
     // create the view
-    const view = new DxView(
+    const view = this.packer.newView();
+    view.reset(
       cls, flags, 
       left, top, right, bottom,
       rpkg, rtype, rid,
@@ -313,61 +315,67 @@ class DxrecParser {
 
     return [view, dep];
   }
-
-  stop(): void {
-    DxLog.info('stopped');
-  }
 }
 
 // HERE WE GOES
 
-const PKG = 'com.coolapk.market';
-const TAG = 'DxRecorder';
-const DECODE = true;
+export type DxRecordOptions = {
+  tag:  string;    // logcat tag
+  app:  string;    // app package
+  dxpk: string;    // output dxpk path
+  decode: boolean; // flag: decode string or not
+}
 
-// fetch basic information
-const dev = await adb.fetchInfo();
+export default async function dxRec(opt: DxRecordOptions) {
+  const {
+    tag, app, dxpk, decode
+  } = opt;
 
-// prepare packer
-const packer = new DxPacker(PKG);
-const parser = new DxrecParser(PKG, dev, DECODE, packer);
+  // fetch basic information
+  const dev = await adb.fetchInfo();
 
-// register SIGINT handler signal
-DxLog.info('Type ^C to exit\n');
-const handle = onSignal(Deno.Signal.SIGINT, () => {
-  parser.stop();
-  handle.dispose();
-});
+  // prepare packer
+  const packer = new DxPacker(app);
+  const parser = new DxRecParser(app, dev, decode, packer);
 
-// prepare logger
-// clear all previous log
-await adb.clearLogcat();
-const output = adb.pl.logcat(TAG, {
-  prio: 'D',
-  silent: true,
-  // disable formatted output
-  formats: ['raw']
-});
+  // register SIGINT handler signal
+  DxLog.info("Type ^C to exit\n");
+  const handle = signal.onSignal(Deno.Signal.SIGINT, async () => {
+    await packer.save(dxpk);
+    DxLog.info(`\n\nEvent seq saved to ${dxpk}`);
+    handle.dispose();
+  });
 
-try {
-  for await (const line of output) {
-    const ln = line.trimEnd();
-    if (ln.length != 0) {
-      DxLog.debug(ln);
-      parser.parse(ln);
+  // prepare logger
+  // clear all previous log
+  await adb.clearLogcat();
+  const output = adb.pl.logcat(tag, {
+    prio: "D",
+    silent: true,
+    // disable formatted output
+    formats: ["raw"],
+  });
+
+  try {
+    for await (const line of output) {
+      const ln = line.trimEnd();
+      if (ln.length != 0) {
+        // DxLog.debug(ln);
+        parser.parse(ln);
+      }
     }
-  }
-} catch (t) {
-  if (t instanceof adb.ProcessException) {
-    const e = t as adb.ProcessException;
-    // https://unix.stackexchange.com/questions/223189/what-does-exit-code-130-mean-for-postgres-command
-    // many shell follows the convention that using 128+signal_number
-    // as an exit number, use `kill -l exit_code` to see which signal
-    // exit_code stands for
-    if (e.code !== undefined && e.code != 2 && e.code != 130) {
-      DxLog.critical(`${e}`);
+  } catch (t) {
+    if (t instanceof adb.ProcessException) {
+      const e = t as adb.ProcessException;
+      // https://unix.stackexchange.com/questions/223189/what-does-exit-code-130-mean-for-postgres-command
+      // many shell follows the convention that using 128+signal_number
+      // as an exit number, use `kill -l exit_code` to see which signal
+      // exit_code stands for
+      if (e.code !== undefined && e.code != 2 && e.code != 130) {
+        DxLog.critical(`${e}`);
+      }
+    } else {
+      DxLog.critical(`${t}`);
     }
-  } else {
-    DxLog.critical(`${t}`);
   }
 }
