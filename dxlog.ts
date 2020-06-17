@@ -2,7 +2,9 @@ import { log } from './deps.ts';
 
 await log.setup({
   handlers: {
-    console: new log.handlers.ConsoleHandler('DEBUG'),
+    console: new log.handlers.ConsoleHandler('DEBUG', {
+      formatter: '{msg}'
+    }),
   },
   loggers: {
     default: {
@@ -23,3 +25,8 @@ const DxLog = {
 };
 
 export default DxLog;
+
+if (import.meta.main) {
+  DxLog.debug('a');
+  DxLog.info('b');
+}

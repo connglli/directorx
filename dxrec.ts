@@ -1,6 +1,6 @@
 import { signal } from './deps.ts';
 import * as adb from './dxadb.ts';
-import { DxPacker } from './dxpack.ts';
+import DxPacker from './dxpack.ts';
 import DxEvent, {
   DxTapEvent,
   DxLongTapEvent,
@@ -15,23 +15,17 @@ import DxView, {
 } from './dxview.ts';
 import DxLog from './dxlog.ts';
 import { decode as base64Decode } from './utils/base64.ts';
-
-class IllegalStateException {
-  constructor(public readonly msg: string) {}
-  toString(): string {
-    return `IllegalStateException: ${this.msg}`;
-  }
-}
+import { IllegalStateException } from './utils/exp.ts';
 
 class DxRecParser {
-  private static PAT_DROID = /--------- beginning of (?<type>\w+)/;
+  private static readonly PAT_DROID = /--------- beginning of (?<type>\w+)/;
   // FIX: some apps/devices often output non-standard attributes 
   // for example aid=1073741824 following resource-id
-  private static PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s[\w.]{8}\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rid>\w+)\s.*?)?dx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
+  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s[\w.]{8}\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rid>\w+)\s.*?)?dx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
 
-  private static STATE_NEV = 0; // next is event
-  private static STATE_NAV = 1; // next is activity
-  private static STATE_IAV = 2; // next is activity entry
+  private static readonly STATE_NEV = 0; // next is event
+  private static readonly STATE_NAV = 1; // next is activity
+  private static readonly STATE_IAV = 2; // next is activity entry
 
   private curr: {
     a: DxActivity | null;
@@ -326,7 +320,7 @@ export type DxRecordOptions = {
   decode: boolean; // flag: decode string or not
 }
 
-export default async function dxRec(opt: DxRecordOptions) {
+export default async function dxRec(opt: DxRecordOptions): Promise<void> {
   const {
     tag, app, dxpk, decode
   } = opt;
@@ -371,11 +365,10 @@ export default async function dxRec(opt: DxRecordOptions) {
       // many shell follows the convention that using 128+signal_number
       // as an exit number, use `kill -l exit_code` to see which signal
       // exit_code stands for
-      if (e.code !== undefined && e.code != 2 && e.code != 130) {
-        DxLog.critical(`${e}`);
+      if (e.code == undefined || e.code == 2 || e.code == 130) {
+        return;
       }
-    } else {
-      DxLog.critical(`${t}`);
     }
+    throw t;
   }
 }

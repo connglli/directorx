@@ -48,10 +48,10 @@ async function exec(
   const { code } = await proc.status();
   let out: string;
   if (code == 0) {
-    out = new TextDecoder('utf-8').decode(await proc.output());
+    out = new TextDecoder().decode(await proc.output());
     proc.stderr.close(); // eslint-disable-line
   } else {
-    out = new TextDecoder('utf-8').decode(await proc.stderrOutput());
+    out = new TextDecoder().decode(await proc.stderrOutput());
     proc.stdout.close();
   }
   proc.close();
@@ -71,7 +71,7 @@ async function* poll(
   const { code } = await proc.status();
   try {
     if (code != 0) {
-      const err = new TextDecoder('utf-8').decode(await proc.stderrOutput());
+      const err = new TextDecoder().decode(await proc.stderrOutput());
       proc.stdout.close();
       throw new ProcessException(code, err);
     }

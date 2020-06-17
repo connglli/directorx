@@ -162,7 +162,10 @@ export default class DxView {
     this.children_ = children;
   }
 
-  copy(): DxView {
+  copy(
+    parent: DxView | null = null, 
+    children: DxView[] = []
+  ): DxView {
     return new DxView(
       this.cls_,
       this.flags_,
@@ -174,12 +177,15 @@ export default class DxView {
       this.rtype_,
       this.rid_,
       this.desc_,
-      this.text_
+      this.text_,
+      parent,
+      children
     );
   }
 }
 
 export class DxDecorView extends DxView {
+  public static readonly NAME = 'com.android.internal.policy.DecorView';
   constructor(
     left: number,
     top: number,
@@ -187,9 +193,17 @@ export class DxDecorView extends DxView {
     bottom: number,
   ) {
     super(
-      'com.android.internal.policy.DecorView',
+      DxDecorView.NAME,
       DefaultFlags,
       left, top, right, bottom
+    );
+  }
+  copy(): DxDecorView {
+    return new DxDecorView(
+      this.left,
+      this.top,
+      this.right,
+      this.bottom
     );
   }
 }
@@ -198,8 +212,8 @@ export class DxActivity {
   private decor: DxDecorView | null = null;
 
   constructor(
-    public readonly pkg: string, 
-    public readonly name: string
+    public readonly app: string,  // app package name
+    public readonly name: string  // activity name
   ) {}
 
   installDecor(
@@ -209,6 +223,10 @@ export class DxActivity {
     bottom: number
   ): void {
     this.decor = new DxDecorView(left, top, right, bottom);
+  }
+
+  replaceDecor(decor: DxDecorView): void {
+    this.decor = decor;
   }
 
   get decorView(): DxDecorView | null {
