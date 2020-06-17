@@ -1,6 +1,7 @@
 FEATURES:
 1. collect crash information by adding states
 2. save dxpk in a binary compressed format
+3. in DXPK.load() and DXPK.dump() throw meaningful exception and add semantic checking
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 

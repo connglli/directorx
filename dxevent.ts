@@ -11,9 +11,10 @@ export default DxEvent;
 interface DxEvent {
   readonly a: DxActivity;
   readonly ty: DxEventType;
+  copy(a: DxActivity): DxEvent;
 }
 
-export class DxTapEvent {
+export class DxTapEvent implements DxEvent {
   public readonly ty = 'tap';
   constructor(
     public readonly a: DxActivity,
@@ -21,9 +22,14 @@ export class DxTapEvent {
     public readonly y: number,
     public readonly t: number
   ) {}
+  copy(a: DxActivity = this.a): DxEvent {
+    return new DxTapEvent(
+      a, this.x, this.y, this.t
+    );
+  }
 }
 
-export class DxLongTapEvent {
+export class DxLongTapEvent implements DxEvent {
   public readonly ty = 'long-tap';
   constructor(
     public readonly a: DxActivity,
@@ -31,9 +37,14 @@ export class DxLongTapEvent {
     public readonly y: number,
     public readonly t: number,
   ) {}
+  copy(a: DxActivity = this.a): DxEvent {
+    return new DxLongTapEvent(
+      a, this.x, this.y, this.t
+    );
+  }
 }
 
-export class DxDoubleTapEvent {
+export class DxDoubleTapEvent implements DxEvent {
   public readonly ty = 'double-tap';
   constructor(
     public readonly a: DxActivity,
@@ -41,9 +52,14 @@ export class DxDoubleTapEvent {
     public readonly y: number,
     public readonly t: number,
   ) {}
+  copy(a: DxActivity = this.a): DxEvent {
+    return new DxDoubleTapEvent(
+      a, this.x, this.y, this.t
+    );
+  }
 }
 
-export class DxSwipeEvent {
+export class DxSwipeEvent implements DxEvent {
   public readonly ty = 'swipe';
   constructor(
     public readonly a: DxActivity,
@@ -54,9 +70,17 @@ export class DxSwipeEvent {
     public readonly t0: number,
     public readonly t1: number,
   ) {}
+  copy(a: DxActivity = this.a): DxEvent {
+    return new DxSwipeEvent(
+      a, 
+      this.x, this.y, 
+      this.dx, this.dy,
+      this.t0, this.t1
+    );
+  }
 }
 
-export class DxKeyEvent {
+export class DxKeyEvent implements DxEvent {
   public readonly ty = 'key';
   constructor(
     public readonly a: DxActivity,
@@ -64,4 +88,9 @@ export class DxKeyEvent {
     public readonly k: string,
     public readonly t: number,
   ) {}
+  copy(a: DxActivity = this.a): DxEvent {
+    return new DxKeyEvent(
+      a, this.c, this.k, this.t 
+    );
+  }
 }

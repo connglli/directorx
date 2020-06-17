@@ -10,16 +10,25 @@
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "runtimeExecutable": "deno",
-      "runtimeArgs": ["run", "--inspect-brk", "--allow-all", "--unstable", "dxrec.ts"],
+      "runtimeArgs": ["run", "--inspect-brk", "--allow-all", "--unstable", "dx.ts", "rec", "com.android.gooexcal", "-o", "gooexcal.dxpk"],
       "port": 9229
     },
     {
-      "name": "dx",
+      "name": "dxplay",
       "type": "node",
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "runtimeExecutable": "deno",
-      "runtimeArgs": ["run", "--inspect-brk", "--allow-all", "--unstable", "dx.ts"],
+      "runtimeArgs": ["run", "--inspect-brk", "--allow-all", "--unstable", "dx.ts", "play", "gooexcal.dxpk"],
+      "port": 9229
+    },
+      {
+      "name": "dxpack",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "deno",
+      "runtimeArgs": ["run", "--inspect-brk", "--allow-all", "--unstable", "dxpack.ts"],
       "port": 9229
     },
     {
