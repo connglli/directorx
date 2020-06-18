@@ -1,7 +1,11 @@
 FEATURES:
-1. collect crash information by adding states
-2. save dxpk in a binary compressed format
-3. in DXPK.load() and DXPK.dump() throw meaningful exception and add semantic checking
+1. intercept more events, e.g.,
+   1. ui events: dialog, popupwindow, editor
+   2. system events: orientation, gps, ...
+   3. webview
+2. collect crash information by adding states
+3. save dxpk in a binary compressed format
+4. in DXPK.load() and DXPK.dump() throw meaningful exception and add semantic checking
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 
