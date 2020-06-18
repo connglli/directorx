@@ -40,7 +40,7 @@ class DxRecParser {
 
   constructor(
     private readonly app: string,
-    private readonly dev: adb.DeviceInfo,
+    private readonly dev: adb.DevInfo,
     private readonly decode: boolean,
     private readonly packer: DxPacker
   ) {}
@@ -329,7 +329,7 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
   const dev = await adb.fetchInfo();
 
   // prepare packer
-  const packer = new DxPacker(app);
+  const packer = new DxPacker(dev, app);
   const parser = new DxRecParser(app, dev, decode, packer);
 
   // register SIGINT handler signal

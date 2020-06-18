@@ -42,7 +42,7 @@ export async function cmd(args: string, gOpt?: adb.AdbGlobalOptions): Promise<st
   return await unsafeExecOut(`cmd ${args}`, gOpt);
 }
 
-export type DeviceInfo = {
+export type DevInfo = {
   board: string;   // device base board, e.g., sdm845
   brand: string;   // device brand, e.g., OnePlus
   model: string;   // device brand mode, e.g, OnePlus6T
@@ -59,7 +59,7 @@ const PAT_DEVICE_DENS = /Physical\sdensity:\s(?<d>\d+)/;
 
 export async function fetchInfo(
   gOpt?: adb.AdbGlobalOptions
-): Promise<DeviceInfo> {
+): Promise<DevInfo> {
   let width: number;
   let height: number;
   let density: number;

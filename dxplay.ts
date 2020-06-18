@@ -12,6 +12,8 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
 
   try {
     const packer = await DxPacker.load(dxpk);
+    DxLog.debug(packer.dev);
+    DxLog.debug(packer.app);
     for (const ep of packer.eventSeq) {
       const e = packer.unpack(ep);
       DxLog.debug(`${e.ty}, ${e.a.app}, ${e.a.name}`);

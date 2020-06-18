@@ -13,6 +13,7 @@ import DxView, {
   DxActivity, 
   DxDecorView
 } from './dxview.ts';
+import { DevInfo } from './dxadb.ts';
 import * as base64 from './utils/base64.ts';
 import LinkedList from './utils/linked_list.ts';
 import KnaryTree from './utils/knary_tree.ts';
@@ -52,6 +53,7 @@ class EventPack {
 
 type DxpkFields = {
   app: string;
+  dev: DevInfo;
   vpool: DxView[];
   eseq: EventPack[];
 }
@@ -60,7 +62,8 @@ class DXPK {
   private static readonly ENCODER = new TextEncoder();
   private static readonly DECODER = new TextDecoder();
 
-  private static readonly STATE_ACT = 1; // read app next
+  private static readonly STATE_DEV = 0; // read dev info next
+  private static readonly STATE_APP = 1; // read app next
   private static readonly STATE_PSZ = 2; // read pool_size next
   private static readonly STATE_POL = 3; // read pool item (view) next
   private static readonly STATE_SSZ = 4; // read seq_size next
@@ -74,13 +77,33 @@ class DXPK {
     const vpool: DxView[] = [];
     const eseq: EventPack[] = [];
     let app = '';
+    let dev: DevInfo = {
+      brand: '', model: '',
+      abi: '', board: '',
+      width: -1, height: -1, density: -1,
+      sdk: -1, release: -1
+    };
 
     const dxpk = await Deno.open(path, {read: true});
 
-    let state = DXPK.STATE_ACT;
+    let state = DXPK.STATE_DEV;
     let size = 0;
     for await (const l of readLines(dxpk)) {
-      if (state == DXPK.STATE_ACT) {
+      if (state == DXPK.STATE_DEV) {
+        const tokens = l.trim().split(';');
+        dev = {
+          brand: tokens[0],
+          model: tokens[1],
+          abi: tokens[2],
+          board: tokens[3],
+          width: Number(tokens[4]),
+          height: Number(tokens[5]),
+          density: Number(tokens[6]),
+          sdk: Number(tokens[7]),
+          release: Number(tokens[8])
+        };
+        state = DXPK.STATE_APP;
+      } else if (state == DXPK.STATE_APP) {
         app = l.trim();
         state = DXPK.STATE_PSZ;
       } else if (state == DXPK.STATE_PSZ) {
@@ -220,17 +243,14 @@ class DXPK {
 
     await dxpk.close();
 
-    return {
-      app,
-      vpool,
-      eseq
-    };
+    return { app, dev, vpool, eseq };
   }
 
   /** Dump dxpk to file
    * 
    * File format:
-   *      app
+   *      dev # brand;model;...
+   *      app # pkg
    *      M # vpool_size
    *      v1 # cls;resType;...
    *      v2
@@ -245,6 +265,10 @@ class DXPK {
   static async dump(path: string, dxpk: DxpkFields): Promise<void> {
     const buf = new Deno.Buffer();
 
+    await DXPK.writeString(buf, `${dxpk.dev.brand};${dxpk.dev.model};`, false);
+    await DXPK.writeString(buf, `${dxpk.dev.abi};${dxpk.dev.board};`, false);
+    await DXPK.writeString(buf, `${dxpk.dev.width};${dxpk.dev.height};${dxpk.dev.density};`, false);
+    await DXPK.writeString(buf, `${dxpk.dev.sdk};${dxpk.dev.release}`);
     await DXPK.writeString(buf, dxpk.app);
     await DXPK.writeNumber(buf, dxpk.vpool.length);
     for (const v of dxpk.vpool) {
@@ -317,7 +341,8 @@ export default class DxPacker {
   private readonly eseq: EventPack[] = [];
   
   constructor(
-    private readonly app: string,
+    public readonly dev: DevInfo,
+    public readonly app: string,
   ) {}
 
   get viewPool(): DxView[] {
@@ -356,6 +381,7 @@ export default class DxPacker {
   async save(path: string): Promise<void> {
     await DXPK.dump(path, {
       app: this.app,
+      dev: this.dev,
       vpool: this.vpool.slice(),
       eseq: this.eseq.slice()
     });
@@ -363,7 +389,7 @@ export default class DxPacker {
 
   static async load(path: string): Promise<DxPacker> {
     const dxpk = await DXPK.load(path);
-    const packer = new DxPacker(dxpk.app);
+    const packer = new DxPacker(dxpk.dev, dxpk.app);
     for (const v of dxpk.vpool) {
       packer.vpool.push(v as DxView);
     }
