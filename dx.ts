@@ -2,7 +2,7 @@
 
 import { Command, IFlags } from './deps.ts';
 import dxRec from './dxrec.ts';
-import dxPlay from './dxplay.ts';
+import dxPlay, { DxPlayerType } from './dxplay.ts';
 import DxLog from './dxlog.ts';
 
 const NAME = 'dx.ts';
@@ -42,9 +42,12 @@ prog
 prog
   .command('play <dxpk>')
   .description('Replay an dxpk')
-  .action(async (_: IFlags, dxpk: string): Promise<void> => {
+  .option('-p, --player <type:string>', 'which player to use', {
+    default: 'px'
+  })
+  .action(async ({ player }: IFlags, dxpk: string): Promise<void> => {
     try {
-      await dxPlay({ dxpk });
+      await dxPlay({ pty: player as DxPlayerType, dxpk });
     } catch (t) {
       DxLog.critical(t);
     }

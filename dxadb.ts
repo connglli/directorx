@@ -42,54 +42,74 @@ export async function cmd(args: string, gOpt?: adb.AdbGlobalOptions): Promise<st
   return await unsafeExecOut(`cmd ${args}`, gOpt);
 }
 
-export type DevInfo = {
-  board: string;   // device base board, e.g., sdm845
-  brand: string;   // device brand, e.g., OnePlus
-  model: string;   // device brand mode, e.g, OnePlus6T
-  abi: string;     // device cpu abi
-  width: number;   // device width
-  height: number;  // device height
-  density: number; // device density
-  sdk: number;     // Android sdk version
-  release: number; // Android release version 
+export class DevInfo {
+  constructor(
+    public readonly board: string,   // device base board, e.g., sdm845
+    public readonly brand: string,   // device brand, e.g., OnePlus
+    public readonly model: string,   // device brand mode, e.g, OnePlus6T
+    public readonly abi: string,     // device cpu abi
+    public readonly width: number,   // device width, in pixel
+    public readonly height: number,  // device height, in pixel
+    public readonly dpi: number,     // device dpi (dots per inch) = density * 160
+    public readonly sdk: number,     // Android sdk version
+    public readonly release: number // Android release version 
+  ) {}
+
+  get density(): number {
+    return this.dpi / 160;
+  }
+
+  px2dp(px: number): number {
+    return px * this.density;
+  }
+
+  dp2px(dp: number): number {
+    return dp / this.density;
+  }
 }
 
-const PAT_DEVICE_SIZE = /Physical\ssize:\s(?<w>\d+)x(?<h>\d+)/;
-const PAT_DEVICE_DENS = /Physical\sdensity:\s(?<d>\d+)/;
+const PAT_DEVICE_SIZE = /Physical\ssize:\s(?<pw>\d+)x(?<ph>\d+)(\nOverride\ssize:\s(?<ow>\d+)x(?<oh>\d+))?/;
+const PAT_DEVICE_DENS = /Physical\sdensity:\s(?<pd>\d+)(\nOverride\sdensity:\s(?<od>\d+))?/;
 
 export async function fetchInfo(
   gOpt?: adb.AdbGlobalOptions
 ): Promise<DevInfo> {
   let width: number;
   let height: number;
-  let density: number;
-  let out = (await cmd('window size', gOpt)).trim();
+  let dpi: number;
+  let out = (await unsafeExecOut('wm size', gOpt)).trim();
   let res = PAT_DEVICE_SIZE.exec(out);
   if (!res || !res.groups) {
     throw new AdbException('window size', -1, 'Match device size failed');
+  } else if (res.groups.ow && res.groups.oh) {
+    width = Number.parseInt(res.groups.ow);
+    height = Number.parseInt(res.groups.oh);
+  } else if (res.groups.pw && res.groups.pw) {
+    width = Number.parseInt(res.groups.pw);
+    height = Number.parseInt(res.groups.ph);
   } else {
-    /* eslint-disable */
-    width = Number.parseInt(res.groups.w!);
-    height = Number.parseInt(res.groups.h!);
+    throw new AdbException('window size', -1, 'Match device size failed');
   }
-  out = (await cmd("window density", gOpt)).trim().split('\n')[0];
+  out = (await unsafeExecOut('wm density', gOpt)).trim();
   res = PAT_DEVICE_DENS.exec(out);
   if (!res || !res.groups) {
-    throw new AdbException("window density", -1, "Match device density failed");
+    throw new AdbException('window density', -1, 'Match device density failed');
+  } else if (res.groups.od) {
+    dpi = Number.parseInt(res.groups.od);
+  } else if (res.groups.pd) {
+    dpi = Number.parseInt(res.groups.pd);
   } else {
-    /* eslint-disable */
-    density = Number.parseInt(res.groups.d!);
+    throw new AdbException('window density', -1, 'Match device density failed');
   }
-
-  return {
-    board: await getprop('ro.product.board', gOpt),
-    brand: await getprop('ro.product.brand', gOpt),
-    model: await getprop('ro.product.device', gOpt),
-    abi: await getprop('ro.product.cpu.abi', gOpt),
-    sdk: Number.parseInt(await getprop('ro.system.build.version.sdk', gOpt)),
-    release: Number.parseFloat(await getprop('ro.system.build.version.release', gOpt)),
-    width, height, density
-  }
+  return new DevInfo(
+    await getprop('ro.product.board', gOpt),
+    await getprop('ro.product.brand', gOpt),
+    await getprop('ro.product.device', gOpt),
+    await getprop('ro.product.cpu.abi', gOpt),
+    Number.parseInt(await getprop('ro.system.build.version.sdk', gOpt)),
+    Number.parseFloat(await getprop('ro.system.build.version.release', gOpt)),
+    width, height, dpi
+  );
 }
 
 if (import.meta.main) {

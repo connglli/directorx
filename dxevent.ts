@@ -11,6 +11,7 @@ export default DxEvent;
 interface DxEvent {
   readonly a: DxActivity;
   readonly ty: DxEventType;
+  readonly t: number;
   copy(a: DxActivity): DxEvent;
 }
 
@@ -61,6 +62,7 @@ export class DxDoubleTapEvent implements DxEvent {
 
 export class DxSwipeEvent implements DxEvent {
   public readonly ty = 'swipe';
+  public readonly t: number;
   constructor(
     public readonly a: DxActivity,
     public readonly x: number,
@@ -69,7 +71,9 @@ export class DxSwipeEvent implements DxEvent {
     public readonly dy: number,
     public readonly t0: number,
     public readonly t1: number,
-  ) {}
+  ) {
+    this.t = t0;
+  }
   copy(a: DxActivity = this.a): DxEvent {
     return new DxSwipeEvent(
       a, 

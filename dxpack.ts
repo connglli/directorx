@@ -77,12 +77,7 @@ class DXPK {
     const vpool: DxView[] = [];
     const eseq: EventPack[] = [];
     let app = '';
-    let dev: DevInfo = {
-      brand: '', model: '',
-      abi: '', board: '',
-      width: -1, height: -1, density: -1,
-      sdk: -1, release: -1
-    };
+    let dev: DevInfo | null = null;
 
     const dxpk = await Deno.open(path, {read: true});
 
@@ -91,17 +86,17 @@ class DXPK {
     for await (const l of readLines(dxpk)) {
       if (state == DXPK.STATE_DEV) {
         const tokens = l.trim().split(';');
-        dev = {
-          brand: tokens[0],
-          model: tokens[1],
-          abi: tokens[2],
-          board: tokens[3],
-          width: Number(tokens[4]),
-          height: Number(tokens[5]),
-          density: Number(tokens[6]),
-          sdk: Number(tokens[7]),
-          release: Number(tokens[8])
-        };
+        dev = new DevInfo(
+          tokens[0],
+          tokens[1],
+          tokens[2],
+          tokens[3],
+          Number(tokens[4]),
+          Number(tokens[5]),
+          Number(tokens[6]),
+          Number(tokens[7]),
+          Number(tokens[8])
+        );
         state = DXPK.STATE_APP;
       } else if (state == DXPK.STATE_APP) {
         app = l.trim();
@@ -243,7 +238,7 @@ class DXPK {
 
     await dxpk.close();
 
-    return { app, dev, vpool, eseq };
+    return { app, dev: dev!, vpool, eseq }; // eslint-disable-line
   }
 
   /** Dump dxpk to file
@@ -267,7 +262,7 @@ class DXPK {
 
     await DXPK.writeString(buf, `${dxpk.dev.brand};${dxpk.dev.model};`, false);
     await DXPK.writeString(buf, `${dxpk.dev.abi};${dxpk.dev.board};`, false);
-    await DXPK.writeString(buf, `${dxpk.dev.width};${dxpk.dev.height};${dxpk.dev.density};`, false);
+    await DXPK.writeString(buf, `${dxpk.dev.width};${dxpk.dev.height};${dxpk.dev.dpi};`, false);
     await DXPK.writeString(buf, `${dxpk.dev.sdk};${dxpk.dev.release}`);
     await DXPK.writeString(buf, dxpk.app);
     await DXPK.writeNumber(buf, dxpk.vpool.length);
@@ -469,34 +464,13 @@ export default class DxPacker {
     );
   }
 
-  private findHitViews(v: DxView, x: number, y: number): DxView[] {
-    if (!this.hitView(v, x, y)) {
-      return [];
-    }
-    let hits: DxView[] = [v];
-    for (const c of v.children) {
-      hits = [...this.findHitViews(c, x, y), ...hits];
-    }
-    return hits;
-  }
-
-  private hitView(v: DxView, x: number, y: number): boolean {
-    const { flags, left, right, top, bottom } = v;
-    return (
-      flags.v == DxViewVisibility.VISIBLE && 
-      left <= x && x <= right && 
-      top <= y && y <= bottom
-    );
-  }
-
   private infoLog(e: DxEvent) {
     /* eslint-disable */
     switch (e.ty) {
     case 'tap':
       this.infoLogInner(
         e,
-        this.findHitViews(
-          e.a.decorView!,
+        e.a.decorView!.findViewsByXY(
           (e as DxTapEvent).x,
           (e as DxTapEvent).y
         )
@@ -506,8 +480,7 @@ export default class DxPacker {
     case 'double-tap':
       this.infoLogInner(
         e,
-        this.findHitViews(
-          e.a.decorView!,
+        e.a.decorView!.findViewsByXY(
           (e as DxDoubleTapEvent).x,
           (e as DxDoubleTapEvent).y
         )
@@ -517,8 +490,7 @@ export default class DxPacker {
     case 'long-tap':
       this.infoLogInner(
         e,
-        this.findHitViews(
-          e.a.decorView!,
+        e.a.decorView!.findViewsByXY(
           (e as DxLongTapEvent).x,
           (e as DxLongTapEvent).y
         )
@@ -528,8 +500,7 @@ export default class DxPacker {
     case 'swipe':
       this.infoLogInner(
         e,
-        this.findHitViews(
-          e.a.decorView!,
+        e.a.decorView!.findViewsByXY(
           (e as DxSwipeEvent).x,
           (e as DxSwipeEvent).y
         )

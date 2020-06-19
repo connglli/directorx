@@ -132,6 +132,71 @@ export default class DxView {
     }
   }
 
+  /** Walk the hierarchy up to find a horizontally scrollable parent. 
+   * A scrollable parent indicates that this node may be in a content
+   * where it is partially visible due to scrolling. its clickable 
+   * center maybe invisible and adjustments should be made to the 
+   * click coordinates.
+   */
+  findHScrollableParent(): DxView | null {
+    let v = this.parent;
+    while (v != null) {
+      if (v.flags.hs) {
+        return v;
+      }
+      v = v.parent;
+    }
+    return null;
+  }
+
+  /** Walk the hierarchy up to find a vertically scrollable parent. 
+   * A scrollable parent indicates that this node may be in a content
+   * where it is partially visible due to scrolling. its clickable 
+   * center maybe invisible and adjustments should be made to the 
+   * click coordinates.
+   */
+  findVScrollableParent(): DxView | null {
+    let v = this.parent;
+    while (v != null) {
+      if (v.flags.vs) {
+        return v;
+      }
+      v = v.parent;
+    }
+    return null;
+  }
+
+  /** Find a most detailed view by x, y coordinate, set visible to false 
+   * if need to find invisible also */
+  findViewByXY(x: number, y: number, visible = true): DxView | null {
+    const views = this.findViewsByXY(x, y, visible);
+    if (views.length > 0) {
+      return views[0];
+    } else {
+      return null;
+    }
+  }
+
+  /** Find all views by x, y coordinate, set visible to false 
+   * if need to find invisible ones also */
+  findViewsByXY(x: number, y: number, visible = true): DxView[] {
+    let hit = (
+      this.left <= x && x <= this.right &&
+      this.top <= y && y <= this.bottom
+    );
+    if (visible) {
+      hit = hit && this.flags.v == DxViewVisibility.VISIBLE;
+    }
+    let hitViews = [];
+    if (hit) {
+      hitViews.push(this);
+    }
+    for (const c of this.children) {
+      hitViews = [...c.findViewsByXY(x, y), ...hitViews];
+    }
+    return hitViews;
+  }
+
   reset(
     cls: string,
     flags: DxViewFlags,
@@ -216,6 +281,10 @@ export class DxActivity {
     public readonly name: string  // activity name
   ) {}
 
+  get decorView(): DxDecorView | null {
+    return this.decor;
+  }
+
   installDecor(
     left: number,
     top: number,
@@ -229,7 +298,10 @@ export class DxActivity {
     this.decor = decor;
   }
 
-  get decorView(): DxDecorView | null {
-    return this.decor;
+  findViewByXY(x: number, y: number, visible = true): DxView | null {
+    if (!this.decor) {
+      return null;
+    }
+    return this.decor.findViewByXY(x, y, visible);
   }
 }
