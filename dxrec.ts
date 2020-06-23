@@ -21,7 +21,7 @@ class DxRecParser {
   private static readonly PAT_DROID = /--------- beginning of (?<type>\w+)/;
   // FIX: some apps/devices often output non-standard attributes 
   // for example aid=1073741824 following resource-id
-  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s[\w.]{8}\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+)\s.*?)?dx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
+  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+)\s.*?)?dx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
 
   private static readonly STATE_NEV = 0; // next is event
   private static readonly STATE_NAV = 1; // next is activity
@@ -213,7 +213,7 @@ class DxRecParser {
         throw new IllegalStateException('Expect DecorView');
       }
       /* eslint-disable */
-      this.curr.a!.installDecor(0, 0, this.dev.width, this.dev.height);
+      this.curr.a!.installDecor(this.dev.width, this.dev.height);
       return [this.curr.a!.decorView!, 0];
     }
 
@@ -225,10 +225,12 @@ class DxRecParser {
 
     const {
       dep: sDep, 
-      cls, flags: sFlags,
+      cls, flags: sFlags, pflags: sPflags,
       left: sOffL, top: sOffT, 
       right: sOffR, bottom: sOffB,
       rpkg = '', rtype = '', rentry = '',
+      tx: sTx, ty: sTy, tz: sTz,
+      sx: sSx, sy: sSy,
       desc: sDesc = '', text: sText = ''
     } = res.groups;
 
@@ -254,13 +256,15 @@ class DxRecParser {
 
     // parse and construct the view
     const flags: DxViewFlags = {
-      v: sFlags[0] == 'V' 
+      V: sFlags[0] == 'V' 
         ? DxViewVisibility.VISIBLE
         : sFlags[0] == 'I' 
           ? DxViewVisibility.INVISIBLE
           : DxViewVisibility.GONE,
       f: sFlags[1] == 'F',
-      e: sFlags[2] == 'E',
+      F: sPflags[1] == 'F',
+      E: sFlags[2] == 'E',
+      S: sPflags[2] == 'S',
       d: sFlags[3] == 'D',
       hs: sFlags[4] == 'H',
       vs: sFlags[5] == 'V',
@@ -270,12 +274,12 @@ class DxRecParser {
     };
 
     // tune visibility according its parent's visibility
-    if (parent.flags.v == DxViewVisibility.INVISIBLE) {
-      if (flags.v == DxViewVisibility.VISIBLE) {
-        flags.v = DxViewVisibility.INVISIBLE;
+    if (parent.flags.V == DxViewVisibility.INVISIBLE) {
+      if (flags.V == DxViewVisibility.VISIBLE) {
+        flags.V = DxViewVisibility.INVISIBLE;
       }
-    } else if (parent.flags.v == DxViewVisibility.GONE) {
-      flags.v = DxViewVisibility.GONE;
+    } else if (parent.flags.V == DxViewVisibility.GONE) {
+      flags.V = DxViewVisibility.GONE;
     }
 
     // calculate absolute bounds
@@ -283,6 +287,11 @@ class DxRecParser {
     const top = parent.top + Number(sOffT);
     const right = parent.left + Number(sOffR);
     const bottom = parent.top + Number(sOffB);
+    const tx = parent.translationX + Number(sTx);
+    const ty = parent.translationY + Number(sTy);
+    const tz = parent.translationZ + Number(sTz);
+    const sx = Number(sSx);
+    const sy = Number(sSy);
 
     // decode if necessary
     let text: string;
@@ -300,6 +309,8 @@ class DxRecParser {
     view.reset(
       cls, flags, 
       left, top, right, bottom,
+      tx, ty, tz,
+      sx, sy,
       rpkg, rtype, rentry,
       desc, text
     );

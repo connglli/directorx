@@ -24,7 +24,7 @@ class ViewCache {
 
   get(): DxView {
     if (this.cache.isEmpty()) {
-      return new DxView('', DefaultFlags, 0, 0, 0, 0);
+      return new DxView('', DefaultFlags, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
     return this.cache.remove(0);
   }
@@ -87,10 +87,10 @@ class DXPK {
       if (state == DXPK.STATE_DEV) {
         const tokens = l.trim().split(';');
         dev = new DevInfo(
+          tokens[3],
           tokens[0],
           tokens[1],
           tokens[2],
-          tokens[3],
           Number(tokens[4]),
           Number(tokens[5]),
           Number(tokens[6]),
@@ -108,38 +108,43 @@ class DXPK {
         const tokens = l.trim().split(';');
         if (tokens[0] == DxDecorView.NAME) {
           vpool.push(new DxDecorView(
-            Number(tokens[4]),
-            Number(tokens[5]),
             Number(tokens[6]),
-            Number(tokens[7]),
+            Number(tokens[7])
           ));
         } else {
           vpool.push(new DxView(
             tokens[0],
             {
-              v: tokens[10][0] == 'V' 
+              V: tokens[15][0] == 'V' 
                 ? DxViewVisibility.VISIBLE 
-                : tokens[10][0] == 'I'
+                : tokens[15][0] == 'I'
                   ? DxViewVisibility.INVISIBLE
                   : DxViewVisibility.GONE,
-              f: tokens[10][1] == 'F',
-              e: tokens[10][2] == 'E',
-              d: tokens[10][3] == 'D',
-              hs: tokens[10][4] == 'H',
-              vs: tokens[10][5] == 'V',
-              c: tokens[10][6] == 'C',
-              lc: tokens[10][7] == 'L',
-              cc: tokens[10][8] == 'X'
+              f: tokens[15][1] == 'F',
+              F: tokens[15][2] == 'F',
+              S: tokens[15][3] == 'S',
+              E: tokens[15][4] == 'E',
+              d: tokens[15][5] == 'D',
+              hs: tokens[15][6] == 'H',
+              vs: tokens[15][7] == 'V',
+              c: tokens[15][8] == 'C',
+              lc: tokens[15][9] == 'L',
+              cc: tokens[15][10] == 'X'
             },
             Number(tokens[4]),
             Number(tokens[5]),
             Number(tokens[6]),
             Number(tokens[7]),
+            Number(tokens[8]),
+            Number(tokens[9]),
+            Number(tokens[10]),
+            Number(tokens[11]),
+            Number(tokens[12]),
             tokens[1],
             tokens[2],
             tokens[3],
-            base64.decode(tokens[8]),
-            base64.decode(tokens[9])
+            base64.decode(tokens[13]),
+            base64.decode(tokens[14])
           ));
         }
         size -= 1;
@@ -269,15 +274,19 @@ class DXPK {
     for (const v of dxpk.vpool) {
       await DXPK.writeString(buf, `${v.cls};${v.resPkg};${v.resType};${v.resEntry};`, false);
       await DXPK.writeString(buf, `${v.left};${v.top};${v.right};${v.bottom};`, false);
+      await DXPK.writeString(buf, `${v.translationX};${v.translationY};${v.translationZ};`, false);
+      await DXPK.writeString(buf, `${v.scrollX};${v.scrollY};`, false);
       await DXPK.writeString(buf, `${base64.encode(v.desc)};${base64.encode(v.text)};`, false);
       let flags = '';
-      flags += v.flags.v == DxViewVisibility.VISIBLE 
+      flags += v.flags.V == DxViewVisibility.VISIBLE 
         ? 'V' 
-        : v.flags.v == DxViewVisibility.INVISIBLE 
+        : v.flags.V == DxViewVisibility.INVISIBLE 
           ? 'I' 
           : 'G';
       flags += v.flags.f ? 'F' : '.';
-      flags += v.flags.e ? 'E' : '.';
+      flags += v.flags.F ? 'F' : '.';
+      flags += v.flags.S ? 'S' : '.';
+      flags += v.flags.E ? 'E' : '.';
       flags += v.flags.d ? 'D' : '.';
       flags += v.flags.hs ? 'H' : '.';
       flags += v.flags.vs ? 'V' : '.';
@@ -449,12 +458,19 @@ export default class DxPacker {
       a.right == b.right &&
       a.top == b.top &&
       a.bottom == b.bottom &&
+      a.translationX == b.translationX &&
+      a.translationY == b.translationY &&
+      a.translationZ == b.translationZ &&
+      a.scrollX == b.scrollX &&
+      a.scrollY == b.scrollY &&
       a.resId == b.resId &&
       a.desc == b.desc &&
       a.text == b.text &&
-      a.flags.v == b.flags.v &&
+      a.flags.V == b.flags.V &&
       a.flags.f == b.flags.f &&
-      a.flags.e == b.flags.e &&
+      a.flags.F == b.flags.F &&
+      a.flags.S == b.flags.S &&
+      a.flags.E == b.flags.E &&
       a.flags.d == b.flags.d &&
       a.flags.hs == b.flags.hs &&
       a.flags.vs == b.flags.vs &&
@@ -516,14 +532,14 @@ export default class DxPacker {
   private infoLogInner(e: DxEvent, views: DxView[]) {
     if (views.length != 0) {
       const v = views[0];
-      DxLog.debug(`${e.ty} cls=${v.cls} text="${v.text}" desc="${v.desc}"`);
+      DxLog.debug(`${e.toString()} cls=${v.cls} text="${v.text}" desc="${v.desc}" x=${v.x} y=${v.y} z=${v.z}`);
     } else if (e.ty == 'key') {
-      DxLog.debug(`${e.ty} ${(e as DxKeyEvent).k}`);
+      DxLog.debug(e.toString());
     }
   }
 }
 
 if (import.meta.main) {
-  const dxpk = await DXPK.load('./gooexcal.dxpk');
-  await DXPK.dump('./gooexcal2.dxpk', dxpk);
+  const dxpk = await DXPK.load('./calculator2.dxpk');
+  await DXPK.dump('./calculator22.dxpk', dxpk);
 }
