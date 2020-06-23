@@ -267,7 +267,7 @@ class DXPK {
     await DXPK.writeString(buf, dxpk.app);
     await DXPK.writeNumber(buf, dxpk.vpool.length);
     for (const v of dxpk.vpool) {
-      await DXPK.writeString(buf, `${v.cls};${v.resPkg};${v.resType};${v.resId};`, false);
+      await DXPK.writeString(buf, `${v.cls};${v.resPkg};${v.resType};${v.resEntry};`, false);
       await DXPK.writeString(buf, `${v.left};${v.top};${v.right};${v.bottom};`, false);
       await DXPK.writeString(buf, `${base64.encode(v.desc)};${base64.encode(v.text)};`, false);
       let flags = '';
@@ -449,7 +449,7 @@ export default class DxPacker {
       a.right == b.right &&
       a.top == b.top &&
       a.bottom == b.bottom &&
-      a.res == b.res &&
+      a.resId == b.resId &&
       a.desc == b.desc &&
       a.text == b.text &&
       a.flags.v == b.flags.v &&

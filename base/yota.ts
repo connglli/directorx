@@ -10,55 +10,79 @@ export class YotaException {
 export type InputType = 
   | 'tap' 
   | 'longtap' 
+  | 'doubletap'
   | 'swipe' 
   | 'key' 
   | 'text'
   | 'view';
 
-async function _input(type: InputType, ...args: string[]): Promise<number> {
-  return (await adb.shell(`/data/local/tmp/yota input ${type} ${args}`)).code;
+async function yotaInput(type: InputType, args: string): Promise<adb.AdbResult> {
+  return await adb.shell(`/data/local/tmp/yota input ${type} ${args}`);
 }
 
-async function tap(x: number, y: number): Promise<boolean> {
-  return await _input('tap', `-x ${x} -y ${y}`) == 0;
+/** Quotes shell command string with "" */
+function q(s: string | number): string {
+  return `\\"${s}\\"`;
 }
 
-async function longTap(x: number, y: number): Promise<boolean> {
-  return await _input('longtap', `-x ${x} -y ${y}`) == 0;
+async function tap(x: number, y: number): Promise<void> {
+  const {code, out} = await yotaInput('tap', `-x ${q(x)} -y ${q(y)}"`);
+  if (code != 0) {
+    throw new YotaException('input tap', code, out);
+  }
 }
 
-async function doubleTap(x: number, y: number): Promise<boolean> {
+async function longTap(x: number, y: number): Promise<void> {
+  const {code, out} = await yotaInput('longtap', `-x ${q(x)} -y ${q(y)}`);
+  if (code != 0) {
+    throw new YotaException('input longtap', code, out);
+  }
+}
+
+// eslint-disable-next-line
+async function doubleTap(x: number, y: number): Promise<void> {
   throw 'Not implemented by far';
 }
 
-async function swipe(x: number, y: number, dx: number, dy: number, ms: number): Promise<boolean> {
-  const steps = ms / 5;
+async function swipe(x: number, y: number, dx: number, dy: number): Promise<void> {
+  const steps = 1;
   const toX = x + dx;
   const toY = y + dy;
-  return await _input(
+  const {code, out} = await yotaInput(
     'swipe',
-    `--from-x ${x} --from-y ${y} --to-x ${toX} --to-y ${toY} --steps ${steps}`,
-  ) == 0;
+    `--from-x ${q(x)} --from-y ${q(y)} --to-x ${q(toX)} --to-y ${q(toY)} --steps ${q(steps)}`,
+  );
+  if (code != 0) {
+    throw new YotaException('input swipe', code, out);
+  }
 }
 
-async function key(key: string): Promise<boolean> {
-  return await _input('key', key) == 0;
+async function key(key: string): Promise<void> {
+  const {code, out} = await yotaInput('key', key);
+  if (code != 0) {
+    throw new YotaException('input key', code, out);
+  }
 }
 
-async function text(text: string): Promise<boolean> {
-  return await _input('text', text) == 0;
+async function text(text: string): Promise<void> {
+  const {code, out} = await yotaInput('text', text);
+  if (code != 0) {
+    throw new YotaException('input text', code, out);
+  }
 }
 
 export type ViewInputType = 
   | 'tap'
-  | 'longtap';
+  | 'longtap'
+  | 'doubletap'
+  | 'swipe';
 
 export type ViewInputOptions = {
   cls?: string;
   pkg?: string;
-  resId?: string;
-  text?: string;
-  desc?: string;
+  resIdContains?: string;
+  textContains?: string;
+  descContains?: string;
   clickable?: boolean;
   longClickable?: boolean;
   scrollable?: boolean;
@@ -67,28 +91,29 @@ export type ViewInputOptions = {
   focusable?: boolean;
   focused?: boolean;
   selected?: boolean;
+  dx?: number; // for swipe only
+  dy?: number; // for swipe only
 }
 
-export enum ViewInputRetCode {
-  OK, NOK, NO_SUCH_VIEW
-}
-
-async function view(type: InputType, opt: ViewInputOptions = {}): Promise<ViewInputRetCode> {
+function makeViewInputOpts(type: ViewInputType, opt: ViewInputOptions): string {
+  if (type == 'doubletap') {
+    throw 'Not implemented by far';
+  }
   let args = `--type ${type}`;
   if (opt.cls) {
-    args += ` --cls "${opt.cls}"`;
+    args += ` --cls ${opt.cls}`;
   }
   if (opt.pkg) {
-    args += ` --pkg "${opt.pkg}"`;
+    args += ` --pkg ${opt.pkg}`;
   }
-  if (opt.resId) {
-    args += ` --res-id "${opt.resId}"`;
+  if (opt.resIdContains) {
+    args += ` --res-id-contains ${q(opt.resIdContains)}`;
   }
-  if (opt.text) {
-    args += ` --txt "${opt.text}"`;
+  if (opt.textContains) {
+    args += ` --txt-contains ${q(opt.textContains)}`;
   }
-  if (opt.desc) {
-    args += ` --desc "${opt.desc}"`;
+  if (opt.descContains) {
+    args += ` --desc-contains ${q(opt.descContains)}`;
   }
   if (opt.clickable) {
     args += ' --clickable';
@@ -114,17 +139,35 @@ async function view(type: InputType, opt: ViewInputOptions = {}): Promise<ViewIn
   if (opt.selected) {
     args += ' --selected';
   }
-  let retry = 3, code = 0;
+  if (type == 'swipe') {
+    if (opt.dx) {
+      args += ` --dx ${q(opt.dx)}`;
+    }
+    if (opt.dy) {
+      args += ` --dy ${q(opt.dy)}`;
+    }
+    args += ' --steps 1';
+  }
+  return args;
+}
+
+class YotaNoSuchViewException extends YotaException {
+  constructor() {
+    super('yota input view', 5, 'No such view found');
+  }
+}
+
+async function view(type: ViewInputType, opt: ViewInputOptions = {}): Promise<void> {
+  const args = makeViewInputOpts(type, opt);
+  let retry = 3, status: adb.AdbResult;
   do {
     retry -= 1; // code == 6 means root is null, retry
-    code = await _input('view', args);
-  } while (code == 6 && retry > 0);
-  if (code == 0) {
-    return ViewInputRetCode.OK;
-  } else if (code == 5) {
-    return ViewInputRetCode.NO_SUCH_VIEW;
-  } else {
-    return ViewInputRetCode.NOK;
+    status = await yotaInput('view', args);
+  } while (status.code == 6 && retry > 0);
+  if (status.code == 5) {
+    throw new YotaNoSuchViewException();
+  } else if (status.code != 0) {
+    throw new YotaException('yota input view', status.code, status.out);
   }
 }
 
