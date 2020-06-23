@@ -5,9 +5,11 @@ export enum DxViewVisibility {
 }
 
 export type DxViewFlags = {
-  v: DxViewVisibility; // visibility
+  V: DxViewVisibility; // visibility
   f: boolean;          // focusable
-  e: boolean;          // enabled
+  F: boolean;          // focused
+  S: boolean;          // selected
+  E: boolean;          // enabled
   d: boolean;          // will draw?
   hs: boolean;         // horizontal scrollable
   vs: boolean;         // vertical scrollable
@@ -17,9 +19,11 @@ export type DxViewFlags = {
 }
 
 export const DefaultFlags: DxViewFlags = {
-  v: DxViewVisibility.VISIBLE,
+  V: DxViewVisibility.VISIBLE,
   f: false,
-  e: true,
+  F: false,
+  S: false,
+  E: true,
   d: true,
   hs: false,
   vs: false,
@@ -28,6 +32,32 @@ export const DefaultFlags: DxViewFlags = {
   cc: false,
 };
 
+/** DxView represents a View or a ViewGroup on Android.
+ * 
+ * The drawing of an view is sequencialized to three steps:
+ * 1. layout: which calculate the left/top/right/bottom of 
+ *    the view
+ * 2. translation: translate the view on the canvas (children
+ *    is at the same time translated)
+ * 3. scroll: scroll the view to its children on the canvas
+ *    (the children does not move)
+ * So, the actual drawing coordinate of a view is actually
+ * calculated by `left + translationX - scrollX`, so as the
+ * y axis.
+ * 
+ * The DxView#{left,right,top,bottom}() returns the absolute
+ * boundary coordinate after layout in pixel of the view
+ * 
+ * The DxView#translation{X,Y,Z}() returns the absolute 
+ * translation (recursively including its parent's translation)
+ * in pixel of the view
+ * 
+ * The DxView#{x, y, z}() returns the absolute coordinate 
+ * of the view after translation
+ * 
+ * The DxView#scroll{X, Y}() returns the the scroll x and y
+ * of the view itself to its children
+ */
 export default class DxView {
   constructor(
     private cls_: string,
@@ -36,6 +66,11 @@ export default class DxView {
     private top_: number,
     private right_: number,
     private bottom_: number,
+    private tx_ = 0,
+    private ty_ = 0,
+    private tz_ = 0,
+    private sx_ = 0,
+    private sy_ = 0,
     private rpkg_ = '',
     private rtype_ = '',
     private rentry_ = '',
@@ -61,6 +96,18 @@ export default class DxView {
     return this.children_;
   }
 
+  get x(): number {
+    return this.left + this.translationX;
+  }
+
+  get y(): number {
+    return this.top + this.translationY;
+  }
+
+  get z(): number {
+    return this.translationZ;
+  }
+
   get left(): number {
     return this.left_;
   }
@@ -75,6 +122,34 @@ export default class DxView {
   
   get bottom(): number {
     return this.bottom_;
+  }
+
+  get width(): number {
+    return this.right - this.left;
+  }
+
+  get height(): number {
+    return this.bottom - this.top;
+  }
+
+  get translationX(): number {
+    return this.tx_;
+  }
+
+  get translationY(): number {
+    return this.ty_;
+  }
+
+  get translationZ(): number {
+    return this.tz_;
+  }
+
+  get scrollX(): number {
+    return this.sx_;
+  }
+
+  get scrollY(): number {
+    return this.sy_;
   }
 
   get resId(): string {
@@ -168,8 +243,8 @@ export default class DxView {
 
   /** Find a most detailed view by x, y coordinate, set visible to false 
    * if need to find invisible also */
-  findViewByXY(x: number, y: number, visible = true): DxView | null {
-    const views = this.findViewsByXY(x, y, visible);
+  findViewByXY(x: number, y: number, visible = true, enabled = true): DxView | null {
+    const views = this.findViewsByXY(x, y, visible, enabled);
     if (views.length > 0) {
       return views[0];
     } else {
@@ -179,24 +254,30 @@ export default class DxView {
 
   /** Find all views by x, y coordinate, set visible to false 
    * if need to find invisible ones also */
-  findViewsByXY(x: number, y: number, visible = true): DxView[] {
+  findViewsByXY(x: number, y: number, visible = true, enabled = true): DxView[] {
     let hit = (
-      this.left <= x && x <= this.right &&
-      this.top <= y && y <= this.bottom
+      this.x <= x && x <= (this.x + this.width) &&
+      this.y <= y && y <= (this.y + this.height)
     );
     if (visible) {
-      hit = hit && this.flags.v == DxViewVisibility.VISIBLE;
+      hit = hit && this.flags.V == DxViewVisibility.VISIBLE;
+    }
+    if (enabled) {
+      hit = hit && this.flags.E;
     }
     let hitViews = [];
     if (hit) {
       hitViews.push(this);
     }
+    const xInChild = x + this.scrollX;
+    const yInChild = y + this.scrollY;
     for (const c of this.children) {
-      hitViews = [...c.findViewsByXY(x, y), ...hitViews];
+      hitViews = [...c.findViewsByXY(xInChild, yInChild), ...hitViews];
     }
     return hitViews;
   }
 
+  /** Reset view properties: remember to detach from parents first */
   reset(
     cls: string,
     flags: DxViewFlags,
@@ -204,6 +285,11 @@ export default class DxView {
     top: number,
     right: number,
     bottom: number,
+    tx: number,
+    ty: number,
+    tz: number,
+    sx: number,
+    sy: number,
     rpkg = '',
     rtype = '',
     rentry = '',
@@ -218,6 +304,11 @@ export default class DxView {
     this.top_ = top;
     this.right_ = right;
     this.bottom_ = bottom;
+    this.tx_ = tx;
+    this.ty_ = ty;
+    this.tz_ = tz;
+    this.sx_ = sx;
+    this.sy_ = sy;
     this.rpkg_ = rpkg;
     this.rtype_ = rtype;
     this.rentry_ = rentry;
@@ -227,6 +318,7 @@ export default class DxView {
     this.children_ = children;
   }
 
+  /** Return a new DxView that are copied from this */
   copy(
     parent: DxView | null = null, 
     children: DxView[] = []
@@ -238,6 +330,11 @@ export default class DxView {
       this.top_,
       this.right_,
       this.bottom_,
+      this.tx_,
+      this.ty_,
+      this.tz_,
+      this.sx_,
+      this.sy_,
       this.rpkg_,
       this.rtype_,
       this.rentry_,
@@ -251,24 +348,18 @@ export default class DxView {
 
 export class DxDecorView extends DxView {
   public static readonly NAME = 'com.android.internal.policy.DecorView';
-  constructor(
-    left: number,
-    top: number,
-    right: number,
-    bottom: number,
-  ) {
+  constructor(width: number, height: number) {
     super(
       DxDecorView.NAME,
       DefaultFlags,
-      left, top, right, bottom
+      0, 0, width, height,
+      0, 0, 0, 0, 0
     );
   }
   copy(): DxDecorView {
     return new DxDecorView(
-      this.left,
-      this.top,
-      this.right,
-      this.bottom
+      this.width,
+      this.height
     );
   }
 }
@@ -285,13 +376,8 @@ export class DxActivity {
     return this.decor;
   }
 
-  installDecor(
-    left: number,
-    top: number,
-    right: number,
-    bottom: number
-  ): void {
-    this.decor = new DxDecorView(left, top, right, bottom);
+  installDecor(width: number, height: number): void {
+    this.decor = new DxDecorView(width, height);
   }
 
   replaceDecor(decor: DxDecorView): void {

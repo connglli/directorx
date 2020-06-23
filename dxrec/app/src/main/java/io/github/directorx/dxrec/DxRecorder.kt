@@ -1,18 +1,14 @@
 package io.github.directorx.dxrec
 
 import android.app.Activity
-import android.util.Base64
-import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.View
-import android.widget.TextView
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.directorx.dxrec.ctx.ViewContext
 import io.github.directorx.dxrec.utils.accessors.contains
-import io.github.directorx.dxrec.utils.accessors.getFieldValue
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -47,7 +43,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         if (pkgName !in whitelist) { return }
 
         try {
-            initialize(pkgName, encode)
+            prepare(pkgName, encode)
         } catch (t: Throwable) {
             if (t.message != null) {
                 DxLogger.e(t.message!!, t.stackTrace)
@@ -136,7 +132,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         broker.commit()
     }
 
-    private fun initialize(pkgName: String, encode: Boolean) {
+    private fun prepare(pkgName: String, encode: Boolean) {
         DxLogger.pkgName = pkgName
 
         // initialize components
@@ -145,57 +141,10 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         dumper = DxDumper(broker.staged)
 
         try { // initialize hooking context
-            initView(encode)
+            ViewContext(encode).prepare()
         } catch (ignored: Throwable) {}
 
         // start the dump thread
         dumper.start()
-    }
-
-    private fun initView(encode: Boolean) {
-        val method = View::class.java.getMethod("toString")
-        XposedBridge.hookMethod(method, object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam?) {
-                if (param == null || param.hasThrowable()) {
-                    return
-                }
-
-                // append desc and text
-                val view = param.thisObject as View
-                val mContentDescription = View::class.java.getFieldValue<View, CharSequence>(view, "mContentDescription")
-                val mText = if (view is TextView) {
-                    TextView::class.java.getFieldValue<TextView, CharSequence>(view, "mText")
-                } else {
-                    null
-                }
-                val result = param.result as String
-
-                var info = result.substring(0 until result.length - 1)
-                // FIX: some custom view may invoke View#toString() more than once
-                if ("dx-desc=" !in info) {
-                    if (mContentDescription != null && mContentDescription.isNotEmpty()) {
-                        info += " dx-desc=\"${asString(mContentDescription, encode)}\""
-                    } else {
-                        info += " dx-desc=\"\""
-                    }
-                }
-                if ("dx-text=" !in info) {
-                    if (mText != null && mText.isNotEmpty()) {
-                        info += " dx-text=\"${asString(mText, encode)}\""
-                    } else {
-                        info += " dx-text=\"\""
-                    }
-                }
-                info += "}"
-
-                param.result = info
-            }
-        })
-    }
-
-    private fun asString(cs: CharSequence, encode: Boolean) = if (encode) {
-        Base64.encodeToString(cs.toString().toByteArray(), Base64.NO_WRAP).trim()
-    } else {
-        cs.toString() 
     }
 }
