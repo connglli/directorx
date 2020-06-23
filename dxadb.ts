@@ -106,9 +106,9 @@ export async function fetchInfo(
     await getprop('ro.product.brand', gOpt),
     await getprop('ro.product.device', gOpt),
     await getprop('ro.product.cpu.abi', gOpt),
+    width, height, dpi,
     Number.parseInt(await getprop('ro.system.build.version.sdk', gOpt)),
     Number.parseFloat(await getprop('ro.system.build.version.release', gOpt)),
-    width, height, dpi
   );
 }
 

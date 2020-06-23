@@ -28,6 +28,9 @@ export class DxTapEvent implements DxEvent {
       a, this.x, this.y, this.t
     );
   }
+  toString(): string {
+    return `tap (${this.x}, ${this.y})`;
+  }
 }
 
 export class DxLongTapEvent implements DxEvent {
@@ -43,6 +46,9 @@ export class DxLongTapEvent implements DxEvent {
       a, this.x, this.y, this.t
     );
   }
+  toString(): string {
+    return `long-tap (${this.x}, ${this.y})`;
+  }
 }
 
 export class DxDoubleTapEvent implements DxEvent {
@@ -57,6 +63,9 @@ export class DxDoubleTapEvent implements DxEvent {
     return new DxDoubleTapEvent(
       a, this.x, this.y, this.t
     );
+  }
+  toString(): string {
+    return `double-tap (${this.x}, ${this.y})`;
   }
 }
 
@@ -82,6 +91,9 @@ export class DxSwipeEvent implements DxEvent {
       this.t0, this.t1
     );
   }
+  toString(): string {
+    return `swipe (${this.x}, ${this.y}) + (${this.dx}, ${this.dy})`;
+  }
 }
 
 export class DxKeyEvent implements DxEvent {
@@ -96,5 +108,8 @@ export class DxKeyEvent implements DxEvent {
     return new DxKeyEvent(
       a, this.c, this.k, this.t 
     );
+  }
+  toString(): string {
+    return `key ${this.k}`;
   }
 }

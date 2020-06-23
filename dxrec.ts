@@ -21,7 +21,7 @@ class DxRecParser {
   private static readonly PAT_DROID = /--------- beginning of (?<type>\w+)/;
   // FIX: some apps/devices often output non-standard attributes 
   // for example aid=1073741824 following resource-id
-  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s[\w.]{8}\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rid>\w+)\s.*?)?dx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
+  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s[\w.]{8}\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+)\s.*?)?dx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
 
   private static readonly STATE_NEV = 0; // next is event
   private static readonly STATE_NAV = 1; // next is activity
@@ -228,7 +228,7 @@ class DxRecParser {
       cls, flags: sFlags,
       left: sOffL, top: sOffT, 
       right: sOffR, bottom: sOffB,
-      rpkg = '', rtype = '', rid = '',
+      rpkg = '', rtype = '', rentry = '',
       desc: sDesc = '', text: sText = ''
     } = res.groups;
 
@@ -300,7 +300,7 @@ class DxRecParser {
     view.reset(
       cls, flags, 
       left, top, right, bottom,
-      rpkg, rtype, rid,
+      rpkg, rtype, rentry,
       desc, text
     );
 

@@ -38,7 +38,7 @@ export default class DxView {
     private bottom_: number,
     private rpkg_ = '',
     private rtype_ = '',
-    private rid_ = '',
+    private rentry_ = '',
     private desc_ = '',
     private text_ = '',
     private parent_: DxView | null = null,
@@ -77,8 +77,8 @@ export default class DxView {
     return this.bottom_;
   }
 
-  get res(): string {
-    return `${this.resPkg}:${this.resType}/${this.resId}`;
+  get resId(): string {
+    return `${this.resPkg}:${this.resType}/${this.resEntry}`;
   }
 
   get resPkg(): string {
@@ -89,8 +89,8 @@ export default class DxView {
     return this.rtype_;
   }
 
-  get resId(): string {
-    return this.rid_;
+  get resEntry(): string {
+    return this.rentry_;
   }
 
   get desc(): string {
@@ -206,7 +206,7 @@ export default class DxView {
     bottom: number,
     rpkg = '',
     rtype = '',
-    rid = '',
+    rentry = '',
     desc = '',
     text = '',
     parent: DxView | null = null,
@@ -220,7 +220,7 @@ export default class DxView {
     this.bottom_ = bottom;
     this.rpkg_ = rpkg;
     this.rtype_ = rtype;
-    this.rid_ = rid;
+    this.rentry_ = rentry;
     this.desc_ = desc;
     this.text_ = text;
     this.parent_ = parent;
@@ -240,7 +240,7 @@ export default class DxView {
       this.bottom_,
       this.rpkg_,
       this.rtype_,
-      this.rid_,
+      this.rentry_,
       this.desc_,
       this.text_,
       parent,

@@ -12,6 +12,7 @@
     "knary tree node",
     "node",
     "prio",
+    "succ",
     "tree"
   ],
   "eslint.enable": true,
