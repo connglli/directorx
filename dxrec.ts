@@ -282,7 +282,7 @@ class DxRecParser {
       flags.V = DxViewVisibility.GONE;
     }
 
-    // calculate absolute bounds
+    // calculate absolute bounds, translation, and scroll
     const left = parent.left + Number(sOffL);
     const top = parent.top + Number(sOffT);
     const right = parent.left + Number(sOffR);
@@ -290,8 +290,8 @@ class DxRecParser {
     const tx = parent.translationX + Number(sTx);
     const ty = parent.translationY + Number(sTy);
     const tz = parent.translationZ + Number(sTz);
-    const sx = Number(sSx);
-    const sy = Number(sSy);
+    const sx = parent.scrollX + Number(sSx);
+    const sy = parent.scrollY + Number(sSy);
 
     // decode if necessary
     let text: string;
@@ -307,10 +307,9 @@ class DxRecParser {
     // create the view
     const view = this.packer.newView();
     view.reset(
-      cls, flags, 
+      parent.pkg, cls, flags,
       left, top, right, bottom,
-      tx, ty, tz,
-      sx, sy,
+      tx, ty, tz, sx, sy,
       rpkg, rtype, rentry,
       desc, text
     );
@@ -325,9 +324,9 @@ class DxRecParser {
 // HERE WE GOES
 
 export type DxRecordOptions = {
-  tag:  string;    // logcat tag
-  app:  string;    // app package
-  dxpk: string;    // output dxpk path
+  tag:   string;   // logcat tag
+  app:   string;   // app package
+  dxpk:  string;   // output dxpk path
   decode: boolean; // flag: decode string or not
 }
 
