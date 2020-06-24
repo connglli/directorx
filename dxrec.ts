@@ -1,5 +1,5 @@
 import { signal } from './deps.ts';
-import * as adb from './dxadb.ts';
+import { DxAdb, DevInfo, ProcessException } from './dxadb.ts';
 import DxPacker from './dxpack.ts';
 import DxEvent, {
   DxTapEvent,
@@ -40,7 +40,7 @@ class DxRecParser {
 
   constructor(
     private readonly app: string,
-    private readonly dev: adb.DevInfo,
+    private readonly dev: DevInfo,
     private readonly decode: boolean,
     private readonly packer: DxPacker
   ) {}
@@ -324,16 +324,18 @@ class DxRecParser {
 // HERE WE GOES
 
 export type DxRecordOptions = {
-  tag:   string;   // logcat tag
-  app:   string;   // app package
-  dxpk:  string;   // output dxpk path
-  decode: boolean; // flag: decode string or not
+  serial?: string;  // phone serial no
+  tag:     string;  // logcat tag
+  app:     string;  // app package
+  dxpk:    string;  // output dxpk path
+  decode:  boolean; // flag: decode string or not
 }
 
 export default async function dxRec(opt: DxRecordOptions): Promise<void> {
   const {
-    tag, app, dxpk, decode
+    serial, tag, app, dxpk, decode
   } = opt;
+  const adb = new DxAdb({ serial });
 
   // fetch basic information
   const dev = await adb.fetchInfo();
@@ -353,7 +355,7 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
   // prepare logger
   // clear all previous log
   await adb.clearLogcat();
-  const output = adb.pl.logcat(tag, {
+  const output = adb.raw.pl.logcat(tag, {
     prio: "D",
     silent: true,
     // disable formatted output
@@ -369,8 +371,8 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
       }
     }
   } catch (t) {
-    if (t instanceof adb.ProcessException) {
-      const e = t as adb.ProcessException;
+    if (t instanceof ProcessException) {
+      const e = t as ProcessException;
       // https://unix.stackexchange.com/questions/223189/what-does-exit-code-130-mean-for-postgres-command
       // many shell follows the convention that using 128+signal_number
       // as an exit number, use `kill -l exit_code` to see which signal

@@ -197,3 +197,53 @@ export const pl = {
     yield* poll(makeLogcatCmd(tag, opt), gOpt);
   }
 };
+
+export type AdbBindShape = {
+  shell(cmd: string): Promise<AdbResult>;
+  execOut(cmd: string): Promise<AdbResult>;
+  logcat(tag?: string, opt?: LogcatOptions): Promise<AdbResult>;
+  pl: {
+    shell(cmd: string): AsyncIterableIterator<string>;
+    execOut(cmd: string): AsyncIterableIterator<string>;
+    logcat(
+      tag?: string,
+      opt?: LogcatOptions,
+    ): AsyncIterableIterator<string>;
+  };
+};
+
+export function bindAdb(gOpt: AdbGlobalOptions): AdbBindShape {
+  return {
+    async shell(cmd: string): Promise<AdbResult> {
+      return await shell(cmd, gOpt);
+    },
+
+    async execOut(cmd: string): Promise<AdbResult> {
+      return await execOut(cmd, gOpt);
+    },
+
+    async logcat(
+      tag?: string,
+      opt?: LogcatOptions,
+    ): Promise<AdbResult> {
+      return await logcat(tag, opt, gOpt);
+    },
+
+    pl: {
+      async *shell(cmd: string): AsyncIterableIterator<string> {
+        yield* pl.shell(cmd, gOpt);
+      },
+
+      async *execOut(cmd: string): AsyncIterableIterator<string> {
+        yield* pl.execOut(cmd, gOpt);
+      },
+
+      async *logcat(
+        tag?: string,
+        opt?: LogcatOptions,
+      ): AsyncIterableIterator<string> {
+        yield* pl.logcat(tag, opt, gOpt);
+      },
+    },
+  };
+}
