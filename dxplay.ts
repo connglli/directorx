@@ -1,28 +1,32 @@
 import { DevInfo, DxAdb } from './dxadb.ts';
 import { 
   DxYota, 
-  ViewInputOptions as YotaViewInputOptions 
+  ViewInputOptions as YotaViewInputOptions, 
+  SelectOptions
 } from './dxyota.ts';
 import DxEvent, { 
+  DxXYEvent,
   DxKeyEvent, 
   DxLongTapEvent, 
   DxDoubleTapEvent, 
   DxSwipeEvent, 
-  DxTapEvent 
+  DxTapEvent, 
+  isXYEvent
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
 import * as time from './utils/time.ts';
-import DxView, { DxActivity } from './dxview.ts';
+import DxView, { DxActivity, DxViewMap } from './dxview.ts';
 
 abstract class DxPlayer {
   public readonly timeSensitive = true;
   constructor(
     public readonly rdev: DevInfo, // record device
-    public readonly pdev: DevInfo  // play device
+    public readonly pdev: DevInfo, // play device,
+    public readonly yota: DxYota
   ) {}
 
-  async play(seq: DxEvent[], yota: DxYota): Promise<void> {
+  async play(seq: DxEvent[]): Promise<void> {
     let lastMs = -1;
     for (const e of seq) {
       if (lastMs != -1) {
@@ -33,37 +37,30 @@ abstract class DxPlayer {
           }
         }
       }
-      await this.playEvent(e, yota);
+      await this.playEvent(e);
       DxLog.info(e.toString());
       lastMs = e.t;
     }
   }
 
-  abstract async playEvent(e: DxEvent, yota: DxYota): Promise<void>
+  abstract async playEvent(e: DxEvent): Promise<void>
 }
 
 /** DxPxPlayer plays each event pixel by pixel */
 class DxPxPlayer extends DxPlayer {
-  constructor(
-    rdev: DevInfo, // record device
-    pdev: DevInfo  // play device
-  ) {
-    super(rdev, pdev);
-  }
-
-  async playEvent(e: DxEvent, yota: DxYota): Promise<void> {
+  async playEvent(e: DxEvent): Promise<void> {
     switch (e.ty) {
     case 'tap':
-      await yota.tap((e as DxTapEvent).x, (e as DxTapEvent).y);
+      await this.yota.tap((e as DxTapEvent).x, (e as DxTapEvent).y);
       break;
     case 'long-tap':
-      await yota.longTap((e as DxLongTapEvent).x, (e as DxLongTapEvent).y);
+      await this.yota.longTap((e as DxLongTapEvent).x, (e as DxLongTapEvent).y);
       break;
     case 'double-tap':
-      await yota.doubleTap((e as DxDoubleTapEvent).x, (e as DxDoubleTapEvent).y);
+      await this.yota.doubleTap((e as DxDoubleTapEvent).x, (e as DxDoubleTapEvent).y);
       break;
     case 'swipe':
-      await yota.swipe(
+      await this.yota.swipe(
         (e as DxSwipeEvent).x, 
         (e as DxSwipeEvent).y, 
         (e as DxSwipeEvent).dx, 
@@ -71,7 +68,7 @@ class DxPxPlayer extends DxPlayer {
       );
       break;
     case 'key':
-      await yota.key((e as DxKeyEvent).k);
+      await this.yota.key((e as DxKeyEvent).k);
       break;
     }
   }
@@ -79,29 +76,22 @@ class DxPxPlayer extends DxPlayer {
 
 /** DxPtPlayer plays each event percentage by percentage */
 class DxPtPlayer extends DxPlayer {
-  constructor(
-    rdev: DevInfo, // record device
-    pdev: DevInfo  // play device
-  ) {
-    super(rdev, pdev);
-  }
-
-  async playEvent(e: DxEvent, yota: DxYota): Promise<void> {
+  async playEvent(e: DxEvent): Promise<void> {
     if (e.ty == 'tap') {
       const {x, y} = (e as DxTapEvent);      
-      await yota.tap(
+      await this.yota.tap(
         this.rec2play(x, false),
         this.rec2play(y, true)
       );
     } else if (e.ty == 'long-tap') {
       const {x, y} = (e as DxLongTapEvent);      
-      await yota.longTap(
+      await this.yota.longTap(
         this.rec2play(x, false),
         this.rec2play(y, true)
       );
     } else if (e.ty == 'double-tap') {
       const {x, y} = (e as DxDoubleTapEvent);      
-      await yota.doubleTap(
+      await this.yota.doubleTap(
         this.rec2play(x, false),
         this.rec2play(y, true)
       );
@@ -109,14 +99,14 @@ class DxPtPlayer extends DxPlayer {
       const {
         x, y, dx, dy
       } = (e as DxSwipeEvent);
-      await yota.swipe(
+      await this.yota.swipe(
         this.rec2play(x, false),
         this.rec2play(y, true),
         this.rec2play(dx, false),
         this.rec2play(dy, true)
       );
     } else if (e.ty == 'key') {
-      await yota.key((e as DxKeyEvent).k);
+      await this.yota.key((e as DxKeyEvent).k);
     }
   }
 
@@ -129,33 +119,27 @@ class DxPtPlayer extends DxPlayer {
   }
 }
 
-/** DxWdgPlayer plays each event according to its view widget,
- * and matches each view according to its:
+/** DxWdgPlayer plays each event according to its view widget.
+ * It matches each view according to its:
  * 1. resId (contains-ignore-case)
  * 2. desc (contains-ignore-case)
  * 3. text (contains-ignore-case)
+ * If no views are found, a YotaNoSuchViewException is thrown.
  */
 class DxWdgPlayer extends DxPlayer {
-  constructor(
-    rdev: DevInfo, // record device
-    pdev: DevInfo  // play device
-  ) {
-    super(rdev, pdev);
-  }
-
-  async playEvent(e: DxEvent, yota: DxYota): Promise<void> {
+  async playEvent(e: DxEvent): Promise<void> {
     if (e.ty == 'tap') {
       const {x, y} = (e as DxTapEvent);
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
-      await yota.view('tap', opt);
+      await this.yota.view('tap', opt);
     } else if (e.ty == 'long-tap') {
       const {x, y} = (e as DxLongTapEvent);
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
-      await yota.view('longtap', opt);
+      await this.yota.view('longtap', opt);
     } else if (e.ty == 'double-tap') {
       const {x, y} = (e as DxDoubleTapEvent);
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
-      await yota.view('doubletap', opt);
+      await this.yota.view('doubletap', opt);
     } else if (e.ty == 'swipe') {
       const { x, y } = (e as DxSwipeEvent);
       let  { dx, dy } = (e as DxSwipeEvent);
@@ -174,9 +158,9 @@ class DxWdgPlayer extends DxPlayer {
         dy = this.pdev.height - vCenter;
       }
       opt.dx = dx; opt.dy = dy;
-      await yota.view('swipe', opt);
+      await this.yota.view('swipe', opt);
     } else if (e.ty == 'key') {
-      await yota.key((e as DxKeyEvent).k);
+      await this.yota.key((e as DxKeyEvent).k);
     }
   }
 
@@ -200,6 +184,71 @@ class DxWdgPlayer extends DxPlayer {
       opt.descContains = v.desc;
     }
     return [opt, v];
+  }
+}
+
+/** DxResPlayer plays each event responsively */
+class DxResPlayer extends DxPlayer {
+  async playEvent(e: DxEvent): Promise<void> {
+    if (!isXYEvent(e)) {
+      if (e.ty == 'key') {
+        await this.yota.key((e as DxKeyEvent).k);
+      } else {
+        throw 'Not implemented by far';
+      }
+      return;
+    }
+    const v = await this.find(e);
+    if (v != null) {
+      return await this.fireOnViewMap(e, v);
+    }
+
+    throw 'Not implemented by far';
+  }
+
+  async find(e: DxXYEvent): Promise<DxViewMap | null> {
+    const { a, x, y } = e;
+    const v = a.findViewByXY(x, y);
+    if (v == null) {
+      throw `No visible view found on rec tree at (${x}, ${y})`;
+    }
+    const opt: SelectOptions = {
+      n: 1
+    };
+    // TODO what if resId, text, and desc are all empty
+    if (v.resId.length != 0) {
+      opt.resIdContains = v.resEntry;
+    }
+    if (v.text.length != 0) {
+      opt.textContains = v.text;
+    }
+    if (v.desc.length != 0) {
+      opt.descContains = v.desc;
+    }
+    const vms = await this.yota.select(opt);
+    if (vms.length == 0) {
+      return null;
+    } else {
+      return vms[0];
+    }
+  }
+
+  async fireOnViewMap(e: DxEvent, v: DxViewMap) {
+    const { bounds: { left, right, top, bottom } } = v;
+    const x = (left + right) / 2;
+    const y = (top + bottom) / 2;
+    switch (e.ty) {
+    case 'tap':
+      return await this.yota.tap(x, y);
+    case 'double-tap':
+      return await this.yota.doubleTap(x, y);
+    case 'long-tap':
+      return await this.yota.longTap(x, y);
+    case 'swipe':
+      throw 'Not implemented by far';
+    default:
+      throw 'Cannot reach here';
+    }
   }
 }
 
@@ -240,21 +289,20 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
     ) {
       DxLog.warning('Screen setting is different, you\'d better use a more advanced player');
     }
-    player = new DxPxPlayer(packer.dev, dev);
+    player = new DxPxPlayer(packer.dev, dev, yota);
     break;
   case 'pt':
-    player = new DxPtPlayer(packer.dev, dev);
+    player = new DxPtPlayer(packer.dev, dev, yota);
     break;
   case 'wdg':
-    player = new DxWdgPlayer(packer.dev, dev);
+    player = new DxWdgPlayer(packer.dev, dev, yota);
+    break;
+  case 'res':
+    player = new DxResPlayer(packer.dev, dev, yota);
     break;
   default:
     throw 'Not implemented by far';
   }
 
-  try {
-    await player.play(seq, yota);
-  } catch (t) {
-    DxLog.critical(t);
-  }
+  await player.play(seq);
 }

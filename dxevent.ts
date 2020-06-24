@@ -15,7 +15,16 @@ interface DxEvent {
   copy(a: DxActivity): DxEvent;
 }
 
-export class DxTapEvent implements DxEvent {
+export interface DxXYEvent extends DxEvent {
+  readonly x: number;
+  readonly y: number;
+}
+
+export function isXYEvent(e: DxEvent): e is DxXYEvent {
+  return 'x' in e && 'y' in e;
+}
+
+export class DxTapEvent implements DxXYEvent {
   public readonly ty = 'tap';
   constructor(
     public readonly a: DxActivity,
@@ -33,7 +42,7 @@ export class DxTapEvent implements DxEvent {
   }
 }
 
-export class DxLongTapEvent implements DxEvent {
+export class DxLongTapEvent implements DxXYEvent {
   public readonly ty = 'long-tap';
   constructor(
     public readonly a: DxActivity,
@@ -51,7 +60,7 @@ export class DxLongTapEvent implements DxEvent {
   }
 }
 
-export class DxDoubleTapEvent implements DxEvent {
+export class DxDoubleTapEvent implements DxXYEvent {
   public readonly ty = 'double-tap';
   constructor(
     public readonly a: DxActivity,
@@ -69,7 +78,7 @@ export class DxDoubleTapEvent implements DxEvent {
   }
 }
 
-export class DxSwipeEvent implements DxEvent {
+export class DxSwipeEvent implements DxXYEvent {
   public readonly ty = 'swipe';
   public readonly t: number;
   constructor(

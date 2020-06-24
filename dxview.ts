@@ -265,7 +265,11 @@ export default class DxView {
   }
 
   get resId(): string {
-    return `${this.resPkg}:${this.resType}/${this.resEntry}`;
+    if (this.resPkg.length + this.resType.length + this.resEntry.length > 0) {
+      return `${this.resPkg}:${this.resType}/${this.resEntry}`;
+    } else {
+      return '';
+    }
   }
 
   get resPkg(): string {
