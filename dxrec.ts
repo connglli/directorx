@@ -1,5 +1,5 @@
 import { signal } from './deps.ts';
-import { DxAdb, DevInfo, ProcessException } from './dxadb.ts';
+import { DxAdb, DevInfo, ProcessError } from './dxadb.ts';
 import DxPacker from './dxpack.ts';
 import DxEvent, {
   DxTapEvent,
@@ -15,7 +15,7 @@ import DxView, {
 } from './dxview.ts';
 import DxLog from './dxlog.ts';
 import { decode as base64Decode } from './utils/base64.ts';
-import { IllegalStateException } from './utils/exp.ts';
+import { IllegalStateError } from './utils/error.ts';
 
 class DxRecParser {
   private static readonly PAT_DROID = /--------- beginning of (?<type>\w+)/;
@@ -55,7 +55,7 @@ class DxRecParser {
     switch (this.state) {
     case DxRecParser.STATE_NEV: {
       if (!this.curr.a) {
-        throw new IllegalStateException('Expect this.curr.a to be non-null');
+        throw new IllegalStateError('Expect this.curr.a to be non-null');
       }
       const e = this.parseEvent(line);
       this.packer.append(e); // pack it
@@ -69,7 +69,7 @@ class DxRecParser {
 
     case DxRecParser.STATE_NAV: {
       if (this.curr.a) {
-        throw new IllegalStateException('Expect this.curr.a to be null');
+        throw new IllegalStateError('Expect this.curr.a to be null');
       }
       const a = this.parseAvStart(line);
       this.state = DxRecParser.STATE_IAV;
@@ -82,7 +82,7 @@ class DxRecParser {
 
     case DxRecParser.STATE_IAV: {
       if (!this.curr.a) {
-        throw new IllegalStateException('Expect this.curr.a to be non-null');
+        throw new IllegalStateError('Expect this.curr.a to be non-null');
       }
       // no longer activity entry
       if (this.parseAvEnd(line)) {
@@ -99,7 +99,7 @@ class DxRecParser {
     }
 
     default:
-      throw new IllegalStateException(`Unexpected state ${this.state}`);
+      throw new IllegalStateError(`Unexpected state ${this.state}`);
     }
   }
 
@@ -111,7 +111,7 @@ class DxRecParser {
     const type = res.groups!.type; // eslint-disable-line
     if (type == 'crash') {
       // TODO collecting crash information
-      throw new IllegalStateException('App crashed');
+      throw new IllegalStateError('App crashed');
     }
     return true;
   }
@@ -119,7 +119,7 @@ class DxRecParser {
   private parseEvent(line: string): DxEvent {
     const [pkg, type, ...args] = line.split(/\s+/);
     if (pkg != this.app) {
-      throw new IllegalStateException(`Expected ${this.app}, got ${pkg}`);
+      throw new IllegalStateError(`Expected ${this.app}, got ${pkg}`);
     }
 
     switch (type) {
@@ -177,7 +177,7 @@ class DxRecParser {
       break;
 
     default:
-      throw new IllegalStateException(`Unexpected event type ${type}`);
+      throw new IllegalStateError(`Unexpected event type ${type}`);
     }
   }
 
@@ -185,10 +185,10 @@ class DxRecParser {
     // pkg ACTIVITY_BEGIN act
     const [pkg, verb, act] = line.split(/\s+/);
     if (pkg != this.app) {
-      throw new IllegalStateException(`Expected ${this.app}, got ${pkg}`);
+      throw new IllegalStateError(`Expected ${this.app}, got ${pkg}`);
     }
     if (verb != 'ACTIVITY_BEGIN') {
-      throw new IllegalStateException(`Expected ACTIVITY_BEGIN, got ${verb}`);
+      throw new IllegalStateError(`Expected ACTIVITY_BEGIN, got ${verb}`);
     }
     return new DxActivity(pkg, act);
   }
@@ -199,7 +199,7 @@ class DxRecParser {
     if (verb == 'ACTIVITY_END') {
       const currName = this.curr.a!.name; // eslint-disable-line
       if (pkg != this.app || act != currName) {
-        throw new IllegalStateException(`Expect ${this.app}/${currName}, got ${pkg}/${act}`);
+        throw new IllegalStateError(`Expect ${this.app}/${currName}, got ${pkg}/${act}`);
       }
       return true;
     }
@@ -210,7 +210,7 @@ class DxRecParser {
     // check and install decor if necessary
     if (!this.curr.v) {
       if (!line.startsWith('DecorView')) {
-        throw new IllegalStateException('Expect DecorView');
+        throw new IllegalStateError('Expect DecorView');
       }
       /* eslint-disable */
       this.curr.a!.installDecor(this.dev.width, this.dev.height);
@@ -220,7 +220,7 @@ class DxRecParser {
     // parse view line by line
     const res = DxRecParser.PAT_AV_VIEW.exec(line);
     if (!res || !res.groups) {
-      throw new IllegalStateException(`No activity entries match: ${line}`);
+      throw new IllegalStateError(`No activity entries match: ${line}`);
     }
 
     const {
@@ -242,7 +242,7 @@ class DxRecParser {
       parent = this.curr.v.parent as DxView;
     } else if (diff > 0) { // child of curr
       if (diff != 1) {
-        throw new IllegalStateException(`Expect a direct child, but got an indirect (+${diff}) child`);
+        throw new IllegalStateError(`Expect a direct child, but got an indirect (+${diff}) child`);
       }
       parent = this.curr.v;
     } else { // sibling of an ancestor
@@ -370,17 +370,14 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
         parser.parse(ln);
       }
     }
-  } catch (t) {
-    if (t instanceof ProcessException) {
-      const e = t as ProcessException;
+  } catch (e) {
+    if (e instanceof ProcessError) {
       // https://unix.stackexchange.com/questions/223189/what-does-exit-code-130-mean-for-postgres-command
       // many shell follows the convention that using 128+signal_number
       // as an exit number, use `kill -l exit_code` to see which signal
       // exit_code stands for
-      if (e.code == undefined || e.code == 2 || e.code == 130) {
-        return;
-      }
+      if (e.code == undefined || e.code == 2 || e.code == 130) { return; }
     }
-    throw t;
+    throw e;
   }
 }

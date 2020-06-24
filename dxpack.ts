@@ -17,7 +17,7 @@ import { DevInfo } from './dxadb.ts';
 import * as base64 from './utils/base64.ts';
 import LinkedList from './utils/linked_list.ts';
 import KnaryTree from './utils/knary_tree.ts';
-import { IllegalStateException } from './utils/exp.ts';
+import { IllegalStateError } from './utils/error.ts';
 
 class ViewCache {
   private cache: LinkedList<DxView> = new LinkedList<DxView>();
@@ -233,7 +233,7 @@ class DXPK {
           );
           break;
         default:
-          throw new IllegalStateException(`Unsupported event type: ${tokens[i]}`);
+          throw new IllegalStateError(`Unsupported event type: ${tokens[i]}`);
         }
         eseq.push(new EventPack(e, ap));
         size -= 1;
@@ -320,7 +320,7 @@ class DXPK {
         const e = ep.e as DxKeyEvent;
         await DXPK.writeString(buf, `${e.k};${e.c};${e.t}`);
       } else {
-        throw new IllegalStateException(`Unsupported event type: ${ep.e.ty}`);
+        throw new IllegalStateError(`Unsupported event type: ${ep.e.ty}`);
       }
     }
 
@@ -366,7 +366,7 @@ export default class DxPacker {
 
   pack(e: DxEvent): EventPack {
     if (e.a.app != this.app) {
-      throw new IllegalStateException(`Cannot pack events from other apps, the expected app is ${this.app}`);
+      throw new IllegalStateError(`Cannot pack events from other apps, the expected app is ${this.app}`);
     }
     const ap = this.packAct(e.a);
     return new EventPack(e, ap);
@@ -374,7 +374,7 @@ export default class DxPacker {
 
   unpack(ep: EventPack): DxEvent {
     if (ep.ap.app != this.app) {
-      throw new IllegalStateException(`Cannot unpack events from other apps, the expected app is ${this.app}`);
+      throw new IllegalStateError(`Cannot unpack events from other apps, the expected app is ${this.app}`);
     }
     const a = this.unpackActP(ep.ap);
     return ep.e.copy(a);
@@ -438,7 +438,7 @@ export default class DxPacker {
     const a = new DxActivity(ap.app, ap.name);
     const v = this.unpackViewP(ap.indTree);
     if (!(v instanceof DxDecorView)) {
-      throw new IllegalStateException('Expect a DxDecorView as root');
+      throw new IllegalStateError('Expect a DxDecorView as root');
     }
     a.replaceDecor(v as DxDecorView);
     return a;

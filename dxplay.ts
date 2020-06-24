@@ -17,6 +17,11 @@ import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
 import * as time from './utils/time.ts';
 import DxView, { DxActivity, DxViewMap } from './dxview.ts';
+import { 
+  IllegalStateError, 
+  NotImplementedError, 
+  CannotReachHereError 
+} from './utils/error.ts';
 
 abstract class DxPlayer {
   public readonly timeSensitive = true;
@@ -171,7 +176,7 @@ class DxWdgPlayer extends DxPlayer {
   ): [YotaViewInputOptions, DxView] {
     const v = a.findViewByXY(x, y);
     if (v == null) {
-      throw `No visible view found at (${x}, ${y}) on rec tree`;
+      throw new IllegalStateError(`No visible view found at (${x}, ${y}) on rec tree`);
     }
     const opt: YotaViewInputOptions = {};
     if (v.resId.length != 0) {
@@ -194,7 +199,7 @@ class DxResPlayer extends DxPlayer {
       if (e.ty == 'key') {
         await this.yota.key((e as DxKeyEvent).k);
       } else {
-        throw 'Not implemented by far';
+        throw new NotImplementedError();
       }
       return;
     }
@@ -203,14 +208,14 @@ class DxResPlayer extends DxPlayer {
       return await this.fireOnViewMap(e, v);
     }
 
-    throw 'Not implemented by far';
+    throw new NotImplementedError();
   }
 
   async find(e: DxXYEvent): Promise<DxViewMap | null> {
     const { a, x, y } = e;
     const v = a.findViewByXY(x, y);
     if (v == null) {
-      throw `No visible view found on rec tree at (${x}, ${y})`;
+      throw new IllegalStateError(`No visible view found on rec tree at (${x}, ${y})`);
     }
     const opt: SelectOptions = {
       n: 1
@@ -245,9 +250,9 @@ class DxResPlayer extends DxPlayer {
     case 'long-tap':
       return await this.yota.longTap(x, y);
     case 'swipe':
-      throw 'Not implemented by far';
+      throw new NotImplementedError();
     default:
-      throw 'Cannot reach here';
+      throw new CannotReachHereError();
     }
   }
 }
@@ -301,7 +306,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
     player = new DxResPlayer(packer.dev, dev, yota);
     break;
   default:
-    throw 'Not implemented by far';
+    throw new CannotReachHereError();
   }
 
   await player.play(seq);

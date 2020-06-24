@@ -12,17 +12,12 @@ export type AdbResult = {
   out: string;
 }
 
-export class ProcessException {
-  public readonly code: number;
-  public readonly err: string;
-
-  constructor(code: number, err: string) {
-    this.code = code;
-    this.err = err;
-  }
-
-  toString(): string {
-    return `ProcessException[code=${this.code}]: ${this.err}`;
+export class ProcessError extends Error {
+  constructor(
+    public readonly code: number,
+    public readonly err: string
+  ) {
+    super(`ProcessException[code=${code}]: ${err}`);
   }
 }
 
@@ -73,7 +68,7 @@ async function* poll(
     if (code != 0) {
       const err = new TextDecoder().decode(await proc.stderrOutput());
       proc.stdout.close();
-      throw new ProcessException(code, err);
+      throw new ProcessError(code, err);
     }
     proc.stdout.close();
     proc.stderr.close();
