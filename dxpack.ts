@@ -24,7 +24,7 @@ class ViewCache {
 
   get(): DxView {
     if (this.cache.isEmpty()) {
-      return new DxView('', DefaultFlags, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      return new DxView('', '', DefaultFlags, 0, 0, 0, 0);
     }
     return this.cache.remove(0);
   }
@@ -108,30 +108,31 @@ class DXPK {
         const tokens = l.trim().split(';');
         if (tokens[0] == DxDecorView.NAME) {
           vpool.push(new DxDecorView(
-            Number(tokens[6]),
-            Number(tokens[7])
+            tokens[0],
+            Number(tokens[7]),
+            Number(tokens[8])
           ));
         } else {
           vpool.push(new DxView(
             tokens[0],
+            tokens[1],
             {
-              V: tokens[15][0] == 'V' 
+              V: tokens[16][0] == 'V' 
                 ? DxViewVisibility.VISIBLE 
-                : tokens[15][0] == 'I'
+                : tokens[16][0] == 'I'
                   ? DxViewVisibility.INVISIBLE
                   : DxViewVisibility.GONE,
-              f: tokens[15][1] == 'F',
-              F: tokens[15][2] == 'F',
-              S: tokens[15][3] == 'S',
-              E: tokens[15][4] == 'E',
-              d: tokens[15][5] == 'D',
-              hs: tokens[15][6] == 'H',
-              vs: tokens[15][7] == 'V',
-              c: tokens[15][8] == 'C',
-              lc: tokens[15][9] == 'L',
-              cc: tokens[15][10] == 'X'
+              f: tokens[16][1] == 'F',
+              F: tokens[16][2] == 'F',
+              S: tokens[16][3] == 'S',
+              E: tokens[16][4] == 'E',
+              d: tokens[16][5] == 'D',
+              hs: tokens[16][6] == 'H',
+              vs: tokens[16][7] == 'V',
+              c: tokens[16][8] == 'C',
+              lc: tokens[16][9] == 'L',
+              cc: tokens[16][10] == 'X'
             },
-            Number(tokens[4]),
             Number(tokens[5]),
             Number(tokens[6]),
             Number(tokens[7]),
@@ -140,11 +141,12 @@ class DXPK {
             Number(tokens[10]),
             Number(tokens[11]),
             Number(tokens[12]),
-            tokens[1],
+            Number(tokens[13]),
             tokens[2],
             tokens[3],
-            base64.decode(tokens[13]),
-            base64.decode(tokens[14])
+            tokens[4],
+            base64.decode(tokens[14]),
+            base64.decode(tokens[15])
           ));
         }
         size -= 1;
@@ -272,7 +274,7 @@ class DXPK {
     await DXPK.writeString(buf, dxpk.app);
     await DXPK.writeNumber(buf, dxpk.vpool.length);
     for (const v of dxpk.vpool) {
-      await DXPK.writeString(buf, `${v.cls};${v.resPkg};${v.resType};${v.resEntry};`, false);
+      await DXPK.writeString(buf, `${v.pkg};${v.cls};${v.resPkg};${v.resType};${v.resEntry};`, false);
       await DXPK.writeString(buf, `${v.left};${v.top};${v.right};${v.bottom};`, false);
       await DXPK.writeString(buf, `${v.translationX};${v.translationY};${v.translationZ};`, false);
       await DXPK.writeString(buf, `${v.scrollX};${v.scrollY};`, false);
