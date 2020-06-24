@@ -23,33 +23,39 @@ prog
 prog
   .command('rec <app>')
   .description('Record as a dxpk')
+  .option('-s, --serial <type:string>', 'serial no')
   .option('-o, --output <type:string>', 'output dxpk', {
     default: 'out.dxpk'
   })
-  .action(async ({ output }: IFlags, app: string): Promise<void> => {
+  .action(async ({ serial, output }: IFlags, app: string): Promise<void> => {
     try {
       await dxRec({
+        serial: serial as (string | undefined),
         app,
         dxpk: output as string,
         decode: DECODE,
         tag: TAG
       });
     } catch (t) {
-      DxLog.critical(t);
+      DxLog.critical(t.toString());
     }
   });
 
 prog
   .command('play <dxpk>')
   .description('Replay an dxpk')
+  .option('-s, --serial <type:string>', 'serial no')
   .option('-p, --player <type:string>', 'which player to use', {
     default: 'px'
   })
-  .action(async ({ player }: IFlags, dxpk: string): Promise<void> => {
+  .action(async ({ serial, player }: IFlags, dxpk: string): Promise<void> => {
     try {
-      await dxPlay({ pty: player as DxPlayerType, dxpk });
+      await dxPlay({ 
+        serial: serial as (string | undefined),
+        pty: player as DxPlayerType, 
+        dxpk });
     } catch (t) {
-      DxLog.critical(t);
+      DxLog.critical(t.toString());
     }
   });
 
