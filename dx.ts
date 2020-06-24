@@ -3,7 +3,6 @@
 import { Command, IFlags } from './deps.ts';
 import dxRec from './dxrec.ts';
 import dxPlay, { DxPlayerType } from './dxplay.ts';
-import DxLog from './dxlog.ts';
 
 const NAME = 'dx.ts';
 const VERSION = '0.1';
@@ -18,7 +17,8 @@ prog
 
 prog
   .description('directorx: record and replay for Android Platform')
-  .allowEmpty(false);
+  .allowEmpty(false)
+  .throwErrors();
 
 prog
   .command('rec <app>')
@@ -28,17 +28,13 @@ prog
     default: 'out.dxpk'
   })
   .action(async ({ serial, output }: IFlags, app: string): Promise<void> => {
-    try {
-      await dxRec({
-        serial: serial as (string | undefined),
-        app,
-        dxpk: output as string,
-        decode: DECODE,
-        tag: TAG
-      });
-    } catch (t) {
-      DxLog.critical(t.toString());
-    }
+    await dxRec({
+      serial: serial as (string | undefined),
+      app,
+      dxpk: output as string,
+      decode: DECODE,
+      tag: TAG
+    });
   });
 
 prog
@@ -49,14 +45,15 @@ prog
     default: 'px'
   })
   .action(async ({ serial, player }: IFlags, dxpk: string): Promise<void> => {
-    try {
-      await dxPlay({ 
-        serial: serial as (string | undefined),
-        pty: player as DxPlayerType, 
-        dxpk });
-    } catch (t) {
-      DxLog.critical(t.toString());
-    }
+    await dxPlay({ 
+      serial: serial as (string | undefined),
+      pty: player as DxPlayerType, 
+      dxpk 
+    });
   });
 
-await prog.parse(Deno.args);
+try {
+  await prog.parse(Deno.args);
+} catch (t) {
+  console.error(t);
+}

@@ -3,6 +3,7 @@ import {
   AdbException, 
   DxAdb
 } from './dxadb.ts';
+import { DxViewMap } from './dxview.ts';
 
 /** Quotes shell command string with "" */
 function q(s: string | number): string {
@@ -24,7 +25,7 @@ export type ViewInputType =
   | 'doubletap'
   | 'swipe';
 
-export type ViewInputOptions = {
+export interface ViewOptions {
   cls?: string;
   pkg?: string;
   resIdContains?: string;
@@ -38,15 +39,19 @@ export type ViewInputOptions = {
   focusable?: boolean;
   focused?: boolean;
   selected?: boolean;
+}
+
+export interface ViewInputOptions extends ViewOptions {
   dx?: number; // for swipe only
   dy?: number; // for swipe only
 }
 
-function makeViewInputOpts(type: ViewInputType, opt: ViewInputOptions): string {
-  if (type == 'doubletap') {
-    throw 'Not implemented by far';
-  }
-  let args = `--type ${type}`;
+export interface SelectOptions extends ViewOptions {
+  n?: number; // which one
+}
+
+function makeViewOpts(opt: ViewOptions): string {
+  let args = '';
   if (opt.cls) {
     args += ` --cls ${opt.cls}`;
   }
@@ -86,6 +91,17 @@ function makeViewInputOpts(type: ViewInputType, opt: ViewInputOptions): string {
   if (opt.selected) {
     args += ' --selected';
   }
+
+  return args;
+}
+
+function makeViewInputOpts(type: string, opt: ViewInputOptions): string {
+  if (type == 'doubletap') {
+    throw 'Not implemented by far';
+  }
+
+  let args = `--type ${type} `;
+  args += makeViewOpts(opt as ViewOptions);
   if (type == 'swipe') {
     if (opt.dx) {
       args += ` --dx ${q(opt.dx)}`;
@@ -94,6 +110,15 @@ function makeViewInputOpts(type: ViewInputType, opt: ViewInputOptions): string {
       args += ` --dy ${q(opt.dy)}`;
     }
     args += ' --steps 1';
+  }
+
+  return args;
+}
+
+function makeSelectOpts(opt: SelectOptions): string {
+  let args = makeViewOpts(opt as ViewOptions);
+  if (opt.n) {
+    args += ` -n ${q(opt.n)}`;
   }
   return args;
 }
@@ -152,5 +177,19 @@ export class DxYota {
     } else if (status.code != 0) {
       throw new AdbException('yota input view', status.code, status.out);
     }
+  }
+
+  async select(opt: ViewOptions): Promise<DxViewMap[]> {
+    const args = makeSelectOpts(opt);
+    let retry = 3, status: AdbResult;
+    do {
+      retry -= 1; // code == 2 means root is null, retry
+      status = await this.adb.raw.shell(`${DxYota.BIN} select ${args}`);
+    } while (status.code == 2 && retry > 0);
+    if (status.code != 0) {
+      throw new AdbException('yota select', status.code, status.out);
+    }
+    const map = JSON.parse(status.out);
+    return map as DxViewMap[];
   }
 }
