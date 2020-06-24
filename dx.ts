@@ -54,6 +54,6 @@ prog
 
 try {
   await prog.parse(Deno.args);
-} catch (t) {
-  console.error(t);
+} catch (e) {
+  console.error(e);
 }

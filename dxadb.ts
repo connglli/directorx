@@ -1,10 +1,13 @@
 import { AdbBindShape, bindAdb, AdbGlobalOptions } from './base/adb.ts';
 export * from './base/adb.ts';
 
-export class AdbException {
-  constructor(public cmd: string, public code: number, public msg: string) {}
-  toString(): string {
-    return `AdbException: command \`${this.cmd}\` exited with ${this.code}; ${this.msg}`;
+export class AdbError extends Error {
+  constructor(
+    public cmd: string, 
+    public code: number, 
+    public msg: string
+  ) {
+    super(`AdbError[\`${cmd}\`=>${code}] ${msg}`);
   }
 }
 
@@ -46,7 +49,7 @@ export class DxAdb {
   async unsafeShell(cmd: string): Promise<string> {
     const { code, out } = await this.raw.shell(cmd);
     if (code != 0) {
-      throw new AdbException(cmd, code, out);
+      throw new AdbError(cmd, code, out);
     }
     return out;
   }
@@ -54,7 +57,7 @@ export class DxAdb {
   async unsafeExecOut(cmd: string): Promise<string> {
     const { code, out } = await this.raw.execOut(cmd);
     if (code != 0) {
-      throw new AdbException(cmd, code, out);
+      throw new AdbError(cmd, code, out);
     }
     return out;
   }
@@ -78,7 +81,7 @@ export class DxAdb {
     let out = (await this.unsafeExecOut('wm size')).trim();
     let res = PAT_DEVICE_SIZE.exec(out);
     if (!res || !res.groups) {
-      throw new AdbException('window size', -1, 'Match device size failed');
+      throw new AdbError('window size', -1, 'Match device size failed');
     } else if (res.groups.ow && res.groups.oh) {
       width = Number.parseInt(res.groups.ow);
       height = Number.parseInt(res.groups.oh);
@@ -86,18 +89,18 @@ export class DxAdb {
       width = Number.parseInt(res.groups.pw);
       height = Number.parseInt(res.groups.ph);
     } else {
-      throw new AdbException('window size', -1, 'Match device size failed');
+      throw new AdbError('window size', -1, 'Match device size failed');
     }
     out = (await this.unsafeExecOut('wm density')).trim();
     res = PAT_DEVICE_DENS.exec(out);
     if (!res || !res.groups) {
-      throw new AdbException('window density', -1, 'Match device density failed');
+      throw new AdbError('window density', -1, 'Match device density failed');
     } else if (res.groups.od) {
       dpi = Number.parseInt(res.groups.od);
     } else if (res.groups.pd) {
       dpi = Number.parseInt(res.groups.pd);
     } else {
-      throw new AdbException('window density', -1, 'Match device density failed');
+      throw new AdbError('window density', -1, 'Match device density failed');
     }
     return new DevInfo(
       await this.getprop('ro.product.board'),

@@ -1,9 +1,10 @@
 import { 
   AdbResult, 
-  AdbException, 
+  AdbError, 
   DxAdb
 } from './dxadb.ts';
 import { DxViewMap } from './dxview.ts';
+import { NotImplementedError } from './utils/error.ts';
 
 /** Quotes shell command string with "" */
 function q(s: string | number): string {
@@ -97,7 +98,7 @@ function makeViewOpts(opt: ViewOptions): string {
 
 function makeViewInputOpts(type: string, opt: ViewInputOptions): string {
   if (type == 'doubletap') {
-    throw 'Not implemented by far';
+    throw new NotImplementedError();
   }
 
   let args = `--type ${type} `;
@@ -123,9 +124,9 @@ function makeSelectOpts(opt: SelectOptions): string {
   return args;
 }
 
-export class YotaNoSuchViewException extends AdbException {
-  constructor() {
-    super('yota input view', 5, 'No such view found');
+export class YotaNoSuchViewError extends AdbError {
+  constructor(code: number) {
+    super('yota input view', code, 'No such view found');
   }
 }
 
@@ -145,7 +146,7 @@ export class DxYota {
 
   // eslint-disable-next-line
   async doubleTap(x: number, y: number): Promise<void> {
-    throw 'Not implemented by far';
+    throw new NotImplementedError();
   }
 
   async swipe(x: number, y: number, dx: number, dy: number): Promise<void> {
@@ -173,9 +174,9 @@ export class DxYota {
       status = await this.adb.raw.shell(`${DxYota.BIN} input view ${args}`);
     } while (status.code == 6 && retry > 0);
     if (status.code == 5) {
-      throw new YotaNoSuchViewException();
+      throw new YotaNoSuchViewError(5);
     } else if (status.code != 0) {
-      throw new AdbException('yota input view', status.code, status.out);
+      throw new AdbError('yota input view', status.code, status.out);
     }
   }
 
@@ -187,7 +188,7 @@ export class DxYota {
       status = await this.adb.raw.shell(`${DxYota.BIN} select ${args}`);
     } while (status.code == 2 && retry > 0);
     if (status.code != 0) {
-      throw new AdbException('yota select', status.code, status.out);
+      throw new AdbError('yota select', status.code, status.out);
     }
     const map = JSON.parse(status.out);
     return map as DxViewMap[];
