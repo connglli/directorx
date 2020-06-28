@@ -1,12 +1,20 @@
 export class NotImplementedError extends Error {
-  constructor() {
-    super('Not implemented by far');
+  constructor(component = '') {
+    if (component.length > 0) {
+      super(`Not implemented by far: ${component}`);
+    } else {
+      super('Not implemented by far');
+    }
   }
 }
 
 export class CannotReachHereError extends Error {
-  constructor() {
-    super('Cannot reach here');
+  constructor(msg = '') {
+    if (msg.length > 0) {
+      super(`Cannot reach here: ${msg}`);
+    } else {
+      super('Cannot reach here');
+    }
   }
 }
 

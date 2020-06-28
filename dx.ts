@@ -10,7 +10,7 @@ const TAG = 'DxRecorder';
 const DECODE = true;
 
 const prog = new Command();
-  
+
 prog
   .name(NAME)
   .version(VERSION);
@@ -41,14 +41,16 @@ prog
   .command('play <dxpk>')
   .description('Replay an dxpk')
   .option('-s, --serial <type:string>', 'serial no')
-  .option('-p, --player <type:string>', 'which player to use', {
+  .option('-p, --player <type:string>', 'which player to use, one of [px, pt, wdg, res]', {
     default: 'px'
   })
-  .action(async ({ serial, player }: IFlags, dxpk: string): Promise<void> => {
+  .option('-K, --lookahead [type:number]', 'Look ahead constant, required when player is res')
+  .action(async ({ serial, player, lookahead }: IFlags, dxpk: string): Promise<void> => {
     await dxPlay({ 
       serial: serial as (string | undefined),
       pty: player as DxPlayerType, 
-      dxpk 
+      dxpk,
+      K: lookahead as (number | undefined)
     });
   });
 
