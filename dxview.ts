@@ -95,25 +95,25 @@ export type DxViewMap = {
  */
 export default class DxView {
   constructor(
-    private pkg_: string,
-    private cls_: string,
-    private flags_: DxViewFlags,
-    private left_: number,
-    private top_: number,
-    private right_: number,
-    private bottom_: number,
-    private tx_ = 0,
-    private ty_ = 0,
-    private tz_ = 0,
-    private sx_ = 0,
-    private sy_ = 0,
-    private rpkg_ = '',
-    private rtype_ = '',
-    private rentry_ = '',
-    private desc_ = '',
-    private text_ = '',
-    private parent_: DxView | null = null,
-    private children_: DxView[] = []
+    protected pkg_: string,
+    protected cls_: string,
+    protected flags_: DxViewFlags,
+    protected left_: number,
+    protected top_: number,
+    protected right_: number,
+    protected bottom_: number,
+    protected tx_ = 0,
+    protected ty_ = 0,
+    protected tz_ = 0,
+    protected sx_ = 0,
+    protected sy_ = 0,
+    protected rpkg_ = '',
+    protected rtype_ = '',
+    protected rentry_ = '',
+    protected desc_ = '',
+    protected text_ = '',
+    protected parent_: DxView | null = null,
+    protected children_: DxView[] = []
   ) {}
 
   get pkg(): string {
@@ -193,11 +193,19 @@ export default class DxView {
   }
 
   get drawingX(): number {
-    return this.x - this.scrollX;
+    if (this.parent) {
+      return this.x - this.parent.scrollX;
+    } else {
+      return this.x;
+    }
   }
 
   get drawingY(): number {
-    return this.y - this.scrollY;
+    if (this.parent) {
+      return this.y - this.parent.scrollY;
+    } else {
+      return this.y;
+    }
   }
 
   get myLeft(): number {
@@ -371,6 +379,17 @@ export default class DxView {
   /** Find all views by x, y coordinate, set visible to false 
    * if need to find invisible ones also */
   findViewsByXY(x: number, y: number, visible = true, enabled = true): DxView[] {
+    let hitViews = [];
+    if (this.hitSelf(x, y, visible, enabled)) {
+      hitViews.push(this);
+    }
+    for (const c of this.children) {
+      hitViews = [...c.findViewsByXY(x, y), ...hitViews];
+    }
+    return hitViews;
+  }
+
+  hitSelf(x: number, y: number, visible = true, enabled = true): boolean {
     let hit = (
       this.drawingX <= x && x <= (this.drawingX + this.width) &&
       this.drawingY <= y && y <= (this.drawingY + this.height)
@@ -381,14 +400,7 @@ export default class DxView {
     if (enabled) {
       hit = hit && this.flags.E;
     }
-    let hitViews = [];
-    if (hit) {
-      hitViews.push(this);
-    }
-    for (const c of this.children) {
-      hitViews = [...c.findViewsByXY(x, y), ...hitViews];
-    }
-    return hitViews;
+    return hit;
   }
 
   /** Reset view properties: remember to detach from parents first */
@@ -500,8 +512,7 @@ export class DxDecorView extends DxView {
       pkg,
       DxDecorView.NAME,
       DefaultFlags,
-      0, 0, width, height,
-      0, 0, 0, 0, 0
+      0, 0, width, height
     );
   }
   copy(): DxDecorView {
@@ -510,6 +521,100 @@ export class DxDecorView extends DxView {
       this.width,
       this.height
     );
+  }
+}
+
+export class DxViewPager extends DxView {
+  private currItem_ = 0;
+
+  get currItem(): number {
+    return this.currItem_;
+  }
+
+  set currItem(newItem: number) {
+    this.currItem_ = newItem;
+  }
+
+  findViewsByXY(x: number, y: number, visible = true, enabled = true): DxView[] {
+    let hitViews: DxView[] = [];
+    if (this.hitSelf(x, y, visible, enabled)) {
+      hitViews.push(this);
+    }
+    if (this.currItem < this.children.length) {
+      const c = this.children[this.currItem];
+      hitViews = [...c.findViewsByXY(x, y, visible, enabled), ...hitViews];
+    }
+    return hitViews;
+  }
+
+  copy(
+    parent: DxView | null = null, 
+    children: DxView[] = []
+  ): DxView {
+    const view = new DxViewPager(
+      this.pkg_,
+      this.cls_,
+      this.flags_,
+      this.left_,
+      this.top_,
+      this.right_,
+      this.bottom_,
+      this.tx_,
+      this.ty_,
+      this.tz_,
+      this.sx_,
+      this.sy_,
+      this.rpkg_,
+      this.rtype_,
+      this.rentry_,
+      this.desc_,
+      this.text_,
+      parent,
+      children
+    );
+    view.currItem = this.currItem_;
+    return view;
+  }
+}
+
+export class DxTabHost extends DxView {
+  private currTab_ = 0;
+
+  get currTab(): number {
+    return this.currTab_;
+  }
+
+  set currTab(newTab: number) {
+    this.currTab_ = newTab;
+  }
+
+  copy(
+    parent: DxView | null = null, 
+    children: DxView[] = []
+  ): DxView {
+    const view = new DxTabHost(
+      this.pkg_,
+      this.cls_,
+      this.flags_,
+      this.left_,
+      this.top_,
+      this.right_,
+      this.bottom_,
+      this.tx_,
+      this.ty_,
+      this.tz_,
+      this.sx_,
+      this.sy_,
+      this.rpkg_,
+      this.rtype_,
+      this.rentry_,
+      this.desc_,
+      this.text_,
+      parent,
+      children
+    );
+    view.currTab = this.currTab_;
+    return view;
   }
 }
 

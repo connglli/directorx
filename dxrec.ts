@@ -1,6 +1,6 @@
 import { signal } from './deps.ts';
 import { DxAdb, DevInfo, ProcessError } from './dxadb.ts';
-import DxPacker from './dxpack.ts';
+import DxPacker, { DxViewType } from './dxpack.ts';
 import DxEvent, {
   DxTapEvent,
   DxLongTapEvent,
@@ -11,7 +11,9 @@ import DxEvent, {
 import DxView, { 
   DxViewFlags, 
   DxViewVisibility, 
-  DxActivity
+  DxActivity,
+  DxViewPager,
+  DxTabHost
 } from './dxview.ts';
 import DxLog from './dxlog.ts';
 import { decode as base64Decode } from './utils/base64.ts';
@@ -21,7 +23,7 @@ class DxRecParser {
   private static readonly PAT_DROID = /--------- beginning of (?<type>\w+)/;
   // FIX: some apps/devices often output non-standard attributes 
   // for example aid=1073741824 following resource-id
-  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+)\s.*?)?dx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\}/;
+  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+)\s.*?)?dx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
 
   private static readonly STATE_NEV = 0; // next is event
   private static readonly STATE_NAV = 1; // next is activity
@@ -231,7 +233,8 @@ class DxRecParser {
       rpkg = '', rtype = '', rentry = '',
       tx: sTx, ty: sTy, tz: sTz,
       sx: sSx, sy: sSy,
-      desc: sDesc = '', text: sText = ''
+      desc: sDesc = '', text: sText = '',
+      pcurr: sPcurr, tcurr: sTcurr
     } = res.groups;
 
     // find parent of current view
@@ -305,7 +308,16 @@ class DxRecParser {
     }
 
     // create the view
-    const view = this.packer.newView();
+    let view: DxView;
+    if (sPcurr) {
+      view = this.packer.newView(DxViewType.VIEW_PAGER);
+    } else if (sTcurr) {
+      view = this.packer.newView(DxViewType.TAB_HOST);
+    } else {
+      view = this.packer.newView(DxViewType.OTHERS);
+    }
+
+    // reset common properties
     view.reset(
       parent.pkg, cls, flags,
       left, top, right, bottom,
@@ -313,6 +325,12 @@ class DxRecParser {
       rpkg, rtype, rentry,
       desc, text
     );
+    // set properties for specific views
+    if (sPcurr && view instanceof DxViewPager) {
+      view.currItem = Number(sPcurr);
+    } else if (sTcurr && view instanceof DxTabHost) {
+      view.currTab = Number(sTcurr);
+    }
 
     // add to parent
     parent.addView(view);

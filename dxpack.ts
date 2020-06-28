@@ -11,26 +11,93 @@ import DxView, {
   DefaultFlags, 
   DxViewVisibility, 
   DxActivity, 
-  DxDecorView
+  DxDecorView,
+  DxViewPager,
+  DxTabHost
 } from './dxview.ts';
 import { DevInfo } from './dxadb.ts';
 import * as base64 from './utils/base64.ts';
-import LinkedList from './utils/linked_list.ts';
 import KnaryTree from './utils/knary_tree.ts';
-import { IllegalStateError } from './utils/error.ts';
+import { IllegalStateError, CannotReachHereError } from './utils/error.ts';
+import LinkedList from './utils/linked_list.ts';
+
+export enum DxViewType {
+  DECOR = 1, VIEW_PAGER, TAB_HOST, OTHERS
+}
+
+export class DxPackerViewFactory { 
+  public static viewOf(type: DxViewType): DxView {
+    switch (type) {
+    case DxViewType.DECOR:
+      return new DxDecorView('', -1, -1);
+    case DxViewType.VIEW_PAGER:
+      return new DxViewPager('', '', DefaultFlags, -1, -1, -1, -1);
+    case DxViewType.TAB_HOST:
+      return new DxTabHost('', '', DefaultFlags, -1, -1, -1, -1);
+    case DxViewType.OTHERS:
+      return new DxView('', '', DefaultFlags, -1, -1, -1, -1);
+    default:
+      throw new CannotReachHereError();
+    }
+  }
+
+  public static typeOf(v: DxView): DxViewType {
+    if (v instanceof DxDecorView) {
+      return DxViewType.DECOR;
+    } else if (v instanceof DxViewPager) {
+      return DxViewType.VIEW_PAGER;
+    } else if (v instanceof DxTabHost) {
+      return DxViewType.TAB_HOST;
+    } else {
+      return DxViewType.OTHERS;
+    }
+  }
+}
 
 class ViewCache {
-  private cache: LinkedList<DxView> = new LinkedList<DxView>();
+  private decorCache = new LinkedList<DxDecorView>();
+  private pagerCache = new LinkedList<DxViewPager>();
+  private tabCache = new LinkedList<DxTabHost>();
+  private otherCache = new LinkedList<DxView>();
 
-  get(): DxView {
-    if (this.cache.isEmpty()) {
-      return new DxView('', '', DefaultFlags, 0, 0, 0, 0);
+  get(type: DxViewType): DxView {
+    let cache: LinkedList<DxView>;
+    switch (type) {
+    case DxViewType.DECOR:
+      cache = this.decorCache;
+      break;
+    case DxViewType.VIEW_PAGER:
+      cache = this.pagerCache;
+      break;
+    case DxViewType.TAB_HOST:
+      cache = this.tabCache;
+      break;
+    case DxViewType.OTHERS:
+      cache = this.otherCache;
+      break;
+    default:
+      throw new CannotReachHereError();
     }
-    return this.cache.remove(0);
+    if (cache.isEmpty()) {
+      return DxPackerViewFactory.viewOf(type);
+    } else {
+      return cache.remove(0);
+    }
   }
 
   put(v: DxView): void {
-    this.cache.push_front(v);
+    switch (DxPackerViewFactory.typeOf(v)) {
+    case DxViewType.DECOR:
+      return this.decorCache.push_front(v as DxDecorView);
+    case DxViewType.VIEW_PAGER:
+      return this.pagerCache.push_front(v as DxViewPager);
+    case DxViewType.TAB_HOST:
+      return this.tabCache.push_front(v as DxTabHost);
+    case DxViewType.OTHERS:
+      return this.otherCache.push_front(v);
+    default:
+      throw new CannotReachHereError();
+    }
   }
 }
 
@@ -69,6 +136,27 @@ class DXPK {
   private static readonly STATE_SSZ = 4; // read seq_size next
   private static readonly STATE_SEQ = 5; // read seq item (event) next
   private static readonly STATE_DNE = 6; // no long read
+
+  private static type2str(t: DxViewType): string {
+    switch (t) {
+    case DxViewType.DECOR: return 'd';
+    case DxViewType.VIEW_PAGER: return 'p';
+    case DxViewType.TAB_HOST: return 't';
+    case DxViewType.OTHERS: return '.';
+    default: throw new CannotReachHereError();
+    }
+  }
+
+  private static str2type(s: string): DxViewType {
+    switch (s) {
+    case 'd': return DxViewType.DECOR;
+    case 'p': return DxViewType.VIEW_PAGER;
+    case 't': return DxViewType.TAB_HOST;
+    case '.': return DxViewType.OTHERS;
+    default: throw new CannotReachHereError();
+    }
+  }
+
 
   /** Parse an dxpk file and return */
   static async load(path: string): Promise<DxpkFields> {
@@ -109,31 +197,32 @@ class DXPK {
         if (tokens[0] == DxDecorView.NAME) {
           vpool.push(new DxDecorView(
             app,
-            Number(tokens[6]),
-            Number(tokens[7])
+            Number(tokens[7]),
+            Number(tokens[8])
           ));
         } else {
-          vpool.push(new DxView(
+          const type = DXPK.str2type(tokens[0]);
+          const view = DxPackerViewFactory.viewOf(type);
+          view.reset(
             app,
-            tokens[0],
+            tokens[1],
             {
-              V: tokens[15][0] == 'V' 
+              V: tokens[16][0] == 'V' 
                 ? DxViewVisibility.VISIBLE 
-                : tokens[15][0] == 'I'
+                : tokens[16][0] == 'I'
                   ? DxViewVisibility.INVISIBLE
                   : DxViewVisibility.GONE,
-              f: tokens[15][1] == 'F',
-              F: tokens[15][2] == 'F',
-              S: tokens[15][3] == 'S',
-              E: tokens[15][4] == 'E',
-              d: tokens[15][5] == 'D',
-              hs: tokens[15][6] == 'H',
-              vs: tokens[15][7] == 'V',
-              c: tokens[15][8] == 'C',
-              lc: tokens[15][9] == 'L',
-              cc: tokens[15][10] == 'X'
+              f: tokens[16][1] == 'F',
+              F: tokens[16][2] == 'F',
+              S: tokens[16][3] == 'S',
+              E: tokens[16][4] == 'E',
+              d: tokens[16][5] == 'D',
+              hs: tokens[16][6] == 'H',
+              vs: tokens[16][7] == 'V',
+              c: tokens[16][8] == 'C',
+              lc: tokens[16][9] == 'L',
+              cc: tokens[16][10] == 'X'
             },
-            Number(tokens[4]),
             Number(tokens[5]),
             Number(tokens[6]),
             Number(tokens[7]),
@@ -142,12 +231,19 @@ class DXPK {
             Number(tokens[10]),
             Number(tokens[11]),
             Number(tokens[12]),
-            tokens[1],
+            Number(tokens[13]),
             tokens[2],
             tokens[3],
-            base64.decode(tokens[13]),
-            base64.decode(tokens[14])
-          ));
+            tokens[4],
+            base64.decode(tokens[14]),
+            base64.decode(tokens[15])
+          );
+          if (view instanceof DxViewPager) {
+            view.currItem = Number(tokens[17]);
+          } else if (view instanceof DxTabHost) {
+            view.currTab = Number(tokens[17]);
+          }
+          vpool.push(view);
         }
         size -= 1;
         if (size == 0) {
@@ -274,6 +370,8 @@ class DXPK {
     await DXPK.writeString(buf, dxpk.app);
     await DXPK.writeNumber(buf, dxpk.vpool.length);
     for (const v of dxpk.vpool) {
+      const type = DxPackerViewFactory.typeOf(v);
+      await DXPK.writeString(buf, `${DXPK.type2str(type)};`, false);
       await DXPK.writeString(buf, `${v.cls};${v.resPkg};${v.resType};${v.resEntry};`, false);
       await DXPK.writeString(buf, `${v.left};${v.top};${v.right};${v.bottom};`, false);
       await DXPK.writeString(buf, `${v.translationX};${v.translationY};${v.translationZ};`, false);
@@ -295,7 +393,15 @@ class DXPK {
       flags += v.flags.c ? 'C' : '.';
       flags += v.flags.lc ? 'L' : '.';
       flags += v.flags.cc ? 'X' : '.';
-      await DXPK.writeString(buf, flags);
+      if (v instanceof DxViewPager) {
+        await DXPK.writeString(buf, `${flags};`, false);
+        await DXPK.writeString(buf, `${v.currItem}`);
+      } else if (v instanceof DxTabHost) {
+        await DXPK.writeString(buf, `${flags};`, false);
+        await DXPK.writeString(buf, `${v.currTab}`);
+      } else {
+        await DXPK.writeString(buf, flags);
+      }
     }
     await DXPK.writeNumber(buf, dxpk.eseq.length);
     for (const ep of dxpk.eseq) {
@@ -380,8 +486,8 @@ export default class DxPacker {
     return ep.e.copy(a);
   }
 
-  newView(): DxView {
-    return this.cache.get();
+  newView(type: DxViewType): DxView {
+    return this.cache.get(type);
   }
 
   async save(path: string): Promise<void> {
