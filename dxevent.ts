@@ -1,4 +1,5 @@
 import { DxActivity } from './dxview.ts';
+import Stack from './utils/stack.ts';
 
 export type DxEventType = 
   | 'tap'
@@ -120,5 +121,11 @@ export class DxKeyEvent implements DxEvent {
   }
   toString(): string {
     return `key ${this.k}`;
+  }
+}
+
+export class DxEvSeq extends Stack<DxEvent> {
+  constructor(eventArray: DxEvent[]) {
+    super(eventArray.reverse());
   }
 }

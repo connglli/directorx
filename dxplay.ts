@@ -11,7 +11,8 @@ import DxEvent, {
   DxDoubleTapEvent, 
   DxSwipeEvent, 
   DxTapEvent, 
-  isXYEvent
+  isXYEvent,
+  DxEvSeq
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
@@ -25,15 +26,18 @@ import {
 
 abstract class DxPlayer {
   public readonly timeSensitive = true;
+  protected seq: DxEvSeq | null = null;
   constructor(
     public readonly rdev: DevInfo, // record device
     public readonly pdev: DevInfo, // play device,
-    public readonly yota: DxYota
+    public readonly yota: DxYota   // input command
   ) {}
 
-  async play(seq: DxEvent[]): Promise<void> {
+  async play(seq: DxEvSeq): Promise<void> {
+    this.seq = seq;
     let lastMs = -1;
-    for (const e of seq) {
+    while (!this.seq.empty()) {
+      const e = this.seq.pop();
       if (lastMs != -1) {
         if (this.timeSensitive) {
           const wait = e.t - lastMs;
@@ -48,12 +52,12 @@ abstract class DxPlayer {
     }
   }
 
-  abstract async playEvent(e: DxEvent): Promise<void>
+  protected abstract async playEvent(e: DxEvent): Promise<void>
 }
 
 /** DxPxPlayer plays each event pixel by pixel */
 class DxPxPlayer extends DxPlayer {
-  async playEvent(e: DxEvent): Promise<void> {
+  protected async playEvent(e: DxEvent): Promise<void> {
     switch (e.ty) {
     case 'tap':
       await this.yota.tap((e as DxTapEvent).x, (e as DxTapEvent).y);
@@ -81,7 +85,7 @@ class DxPxPlayer extends DxPlayer {
 
 /** DxPtPlayer plays each event percentage by percentage */
 class DxPtPlayer extends DxPlayer {
-  async playEvent(e: DxEvent): Promise<void> {
+  protected async playEvent(e: DxEvent): Promise<void> {
     if (e.ty == 'tap') {
       const {x, y} = (e as DxTapEvent);      
       await this.yota.tap(
@@ -132,7 +136,7 @@ class DxPtPlayer extends DxPlayer {
  * If no views are found, a YotaNoSuchViewException is thrown.
  */
 class DxWdgPlayer extends DxPlayer {
-  async playEvent(e: DxEvent): Promise<void> {
+  protected async playEvent(e: DxEvent): Promise<void> {
     if (e.ty == 'tap') {
       const {x, y} = (e as DxTapEvent);
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
@@ -194,7 +198,16 @@ class DxWdgPlayer extends DxPlayer {
 
 /** DxResPlayer plays each event responsively */
 class DxResPlayer extends DxPlayer {
-  async playEvent(e: DxEvent): Promise<void> {
+  constructor(
+    rdev: DevInfo,
+    pdev: DevInfo,
+    yota: DxYota,
+    public readonly K: number
+  ) {
+    super(rdev, pdev, yota);
+  }
+
+  protected async playEvent(e: DxEvent): Promise<void> {
     if (!isXYEvent(e)) {
       if (e.ty == 'key') {
         await this.yota.key((e as DxKeyEvent).k);
@@ -203,15 +216,31 @@ class DxResPlayer extends DxPlayer {
       }
       return;
     }
-    const v = await this.find(e);
+
+    // find the widget first
+    let v = await this.find(e);
     if (v != null) {
       return await this.fireOnViewMap(e, v);
     }
 
-    throw new NotImplementedError();
+    // try to look ahead next K events
+    const nextK = this.seq!.topN(this.K); // eslint-disable-line
+    for (const i in nextK) {
+      const ne = nextK[i];
+      if (!isXYEvent(ne)) { continue; }
+      v = await this.find(ne);
+      if (v != null) { // find one, directly skip all previously
+        this.seq!.popN(Number(i) + 1); // eslint-disable-line
+        DxLog.info(`/* skip ${e.toString()} */`);
+        return await this.fireOnViewMap(ne, v);
+      }
+    }
+
+    // ui segmentation -> area matching -> synthesis
+    throw new NotImplementedError('Ui Segmentation -> Area Matching -> Synthesis');
   }
 
-  async find(e: DxXYEvent): Promise<DxViewMap | null> {
+  private async find(e: DxXYEvent): Promise<DxViewMap | null> {
     const { a, x, y } = e;
     const v = a.findViewByXY(x, y);
     if (v == null) {
@@ -220,7 +249,6 @@ class DxResPlayer extends DxPlayer {
     const opt: SelectOptions = {
       n: 1
     };
-    // TODO what if resId, text, and desc are all empty
     if (v.resId.length != 0) {
       opt.resIdContains = v.resEntry;
     }
@@ -230,6 +258,9 @@ class DxResPlayer extends DxPlayer {
     if (v.desc.length != 0) {
       opt.descContains = v.desc;
     }
+    if (!opt.resIdContains && !opt.textContains && !opt.descContains) {
+      throw new NotImplementedError('resId, text and desc are all empty');
+    }
     const vms = await this.yota.select(opt);
     if (vms.length == 0) {
       return null;
@@ -238,7 +269,7 @@ class DxResPlayer extends DxPlayer {
     }
   }
 
-  async fireOnViewMap(e: DxEvent, v: DxViewMap) {
+  private async fireOnViewMap(e: DxEvent, v: DxViewMap) {
     const { bounds: { left, right, top, bottom } } = v;
     const x = (left + right) / 2;
     const y = (top + bottom) / 2;
@@ -267,6 +298,7 @@ export type DxPlayOptions = {
   serial?: string;       // phone serial no
   pty:     DxPlayerType; // player type
   dxpk:    string;       // path to dxpk
+  K?:       number;      // look ahead, if use res
 };
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
@@ -278,11 +310,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
   
   const packer = await DxPacker.load(dxpk);
   const dev = await adb.fetchInfo();
-  const seq: DxEvent[] = [];
-
-  for (const ep of packer.eventSeq) {
-    seq.push(packer.unpack(ep));
-  }
+  const seq = new DxEvSeq(packer.eventSeq.map(e => packer.unpack(e)));
 
   let player: DxPlayer;
   switch (pty) {
@@ -303,7 +331,11 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
     player = new DxWdgPlayer(packer.dev, dev, yota);
     break;
   case 'res':
-    player = new DxResPlayer(packer.dev, dev, yota);
+    if (!opt.K) {
+      DxLog.critical('Lookahead K is not specified, use -K or --lookahead to specify it');
+      Deno.exit(1);
+    }
+    player = new DxResPlayer(packer.dev, dev, yota, opt.K);
     break;
   default:
     throw new CannotReachHereError();
