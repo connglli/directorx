@@ -2,10 +2,14 @@ package io.github.directorx.dxrec.ctx
 
 import android.util.Base64
 import android.view.View
+import android.widget.TabHost
 import android.widget.TextView
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import io.github.directorx.dxrec.DxContext
+import io.github.directorx.dxrec.utils.accessors.getFieldValue
+import io.github.directorx.dxrec.utils.accessors.isInstanceOf
+import java.lang.StringBuilder
 
 class ViewContext(val encode: Boolean) : DxContext {
 
@@ -17,53 +21,55 @@ class ViewContext(val encode: Boolean) : DxContext {
                     return
                 }
 
-                // append desc and text
+                val result = param.result as String
+                val info = StringBuilder(result.substring(0 until result.length - 1))
+
+                // general view properties
                 val view = param.thisObject as View
                 val desc = view.contentDescription ?: ""
-                val text = if (view is TextView) {
-                    view.text ?: ""
-                } else {
-                    ""
+                val text = if (view is TextView) { view.text ?: "" } else { "" }
+                appendKV(info, "tx", view.translationX)
+                appendKV(info, "ty", view.translationY)
+                appendKV(info, "tz", view.translationZ)
+                appendKV(info, "sx", view.scrollX)
+                appendKV(info, "sy", view.scrollY)
+                appendKString(info, "desc", asString(desc, encode))
+                appendKString(info, "text", asString(text, encode))
+
+                // tab host properties
+                if (view is TabHost) {
+                    val curTab = view.currentTab
+                    appendKV(info, "tab-curr", curTab)
                 }
 
-                val result = param.result as String
-
-                var info = result.substring(0 until result.length - 1)
-                // FIX: some custom view may invoke View#toString() more than once
-                if ("dx-tx" !in info) {
-                    info += " dx-tx=${view.translationX}"
-                }
-                if ("dx-ty" !in info) {
-                    info += " dx-ty=${view.translationY}"
-                }
-                if ("dx-tz" !in info) {
-                    info += " dx-tz=${view.translationZ}"
-                }
-                if ("dx-sx" !in info) {
-                    info += " dx-sx=${view.scrollX}"
-                }
-                if ("dx-sy" !in info) {
-                    info += " dx-sy=${view.scrollY}"
-                }
-                if ("dx-desc=" !in info) {
-                    info += if (desc.isNotEmpty()) {
-                        " dx-desc=\"${asString(desc, encode)}\""
+                // view pager properties: alert don't use `is` operator, 'cause
+                // ViewPager is not in framework, but in androidx (a 2nd party
+                // library)
+                if (view.isInstanceOf("androidx.widget.ViewPager") ||
+                    view.isInstanceOf("android.support.v4.view.ViewPager")) {
+                    val curItem = view.javaClass.getFieldValue<Int>(view, "mCurItem")
+                    if (curItem != null) {
+                        appendKV(info, "pgr-curr", curItem)
                     } else {
-                        " dx-desc=\"\""
+                        appendKV(info, "pgr-curr", 0)
                     }
                 }
-                if ("dx-text=" !in info) {
-                    info += if (text.isNotEmpty()) {
-                        " dx-text=\"${asString(text, encode)}\""
-                    } else {
-                        " dx-text=\"\""
-                    }
-                }
-                info += "}"
 
-                param.result = info
+                param.result = "$info}"
             }
         })
+    }
+
+    private fun appendKString(info: StringBuilder, key: String, value: String) {
+        appendKV(info, key, "\"${value}\"")
+    }
+
+    private fun appendKV(info: StringBuilder, key: String, value: Any) {
+        // FIX: some custom view may invoke View#toString() more than once
+        val dxKey = "dx-$key"
+        if (dxKey !in info) {
+            info.append(" $dxKey=$value")
+        }
     }
 
     private fun asString(cs: CharSequence, encode: Boolean) = if (encode) {
