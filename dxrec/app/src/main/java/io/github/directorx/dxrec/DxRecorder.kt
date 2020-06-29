@@ -23,8 +23,8 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
     }
 
     // FIX: different from VirtualXposed, Xposed only load and
-    // initialize DxRecorder once, so we have to do them in the
-    // #handleLoadPackage method
+    // initialize DxRecorder once when zygote is initialized,
+    // so we have to do them in the #handleLoadPackage method
     private lateinit var config: JSONObject
     private lateinit var broker: DxBroker
     private lateinit var detector: EvDetector
@@ -42,15 +42,11 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         val encode = config.optBoolean("encode", false)
         if (pkgName !in whitelist) { return }
 
-        try {
+        DxLogger.catchAndLog {
             prepare(pkgName, encode)
-        } catch (t: Throwable) {
-            if (t.message != null) {
-                DxLogger.e(t.message!!, t.stackTrace)
-            }
         }
 
-        try {
+        DxLogger.catchAndLog {
             val method = Activity::class.java.getMethod("dispatchTouchEvent", MotionEvent::class.java)
             XposedBridge.hookMethod(method, object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam?) {
@@ -59,13 +55,9 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                     detector.next(act, evt)
                 }
             })
-        } catch (t: Throwable) {
-            if (t.message != null) {
-                DxLogger.e(t.message!!, t.stackTrace)
-            }
         }
 
-        try {
+        DxLogger.catchAndLog {
             val method = Activity::class.java.getMethod("dispatchKeyEvent", KeyEvent::class.java)
             XposedBridge.hookMethod(method, object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam?) {
@@ -74,25 +66,32 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                     detector.next(act, evt)
                 }
             })
-        } catch (t: Throwable) {
-            if (t.message != null) {
-                DxLogger.e(t.message!!, t.stackTrace)
-            }
         }
     }
 
+    // Fix: GestureDetector invokes the onSingleTapConfirmed() and
+    // onLongPress() callback in its handler, and thus makes our
+    // dump later after the firing event
+    //
+    // Considering each event starts very from a down event, and
+    // onDown() is run synchronously, we dump the hierarchy each time
+    // a down is detected
+    override fun onDown(down: MotionEvent, act: Activity) {
+        broker.addActivity(act)
+    }
+
     override fun onTap(down: MotionEvent, act: Activity) {
-        broker.add(act, DxTapEvent(down.x, down.y, down.downTime))
+        broker.addEvent(DxTapEvent(down.x, down.y, down.downTime))
         broker.commit()
     }
 
     override fun onLongTap(down: MotionEvent, act: Activity) {
-        broker.add(act, DxLongTapEvent(down.x, down.y, down.downTime))
+        broker.addEvent(DxLongTapEvent(down.x, down.y, down.downTime))
         broker.commit()
     }
 
     override fun onDoubleTap(down: MotionEvent, act: Activity) {
-        broker.add(act, DxDoubleTapEvent(down.x, down.y, down.downTime))
+        broker.addEvent(DxDoubleTapEvent(down.x, down.y, down.downTime))
         broker.commit()
     }
 
@@ -105,18 +104,16 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
     ) {
         val last = broker.curr
         // pending to dump until the corresponding UP event happens
-        if (last == null || last.evt !is DxSwipeEvent || last.evt.t0 != down.downTime) {
-            val evt = DxSwipeEvent(down.x, down.y, deltaX, deltaY, down.downTime, move.eventTime)
-            broker.add(act, evt)
+        val evt = if (last == null || last.evt !is DxSwipeEvent || last.evt.t0 != down.downTime) {
+            DxSwipeEvent(down.x, down.y, deltaX, deltaY, down.downTime, move.eventTime)
         } else {
-            val evt = DxSwipeEvent(
+            DxSwipeEvent(
                 down.x, down.y,
                 last.evt.dx + deltaX,
                 last.evt.dy + deltaY,
                 down.downTime, move.eventTime)
-            DxLogger.e("(${down.x}, ${down.y}) + (${evt.dx}, ${evt.dy})")
-            broker.add(last.act, last.dump, evt, refresh = true)
         }
+        broker.addEvent(evt)
     }
 
     override fun onUp(up: MotionEvent, act: Activity) {
@@ -128,7 +125,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
     }
 
     override fun onKey(down: KeyEvent, act: Activity) {
-        broker.add(act, DxKeyEvent(down.keyCode, KeyEvent.keyCodeToString(down.keyCode), down.downTime))
+        broker.addPair(act, DxKeyEvent(down.keyCode, KeyEvent.keyCodeToString(down.keyCode), down.downTime))
         broker.commit()
     }
 

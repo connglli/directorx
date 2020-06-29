@@ -1,3 +1,5 @@
+import { CannotReachHereError } from './utils/error.ts';
+
 export enum DxViewVisibility {
   VISIBLE,
   INVISIBLE,
@@ -57,6 +59,13 @@ export type DxViewMap = {
     'top': number;
     'bottom': number;
   }
+}
+
+export enum DxViewType {
+  DECOR = 1,
+  VIEW_PAGER,
+  TAB_HOST,
+  OTHERS,
 }
 
 /** DxView represents a View or a ViewGroup on Android.
@@ -193,35 +202,19 @@ export default class DxView {
   }
 
   get drawingX(): number {
-    if (this.parent) {
-      return this.x - this.parent.scrollX;
-    } else {
-      return this.x;
-    }
+    return this.x - (this.parent?.scrollX ?? 0);
   }
 
   get drawingY(): number {
-    if (this.parent) {
-      return this.y - this.parent.scrollY;
-    } else {
-      return this.y;
-    }
+    return this.y - (this.parent?.scrollY ?? 0);
   }
 
   get myLeft(): number {
-    if (this.parent != null) {
-      return this.left - this.parent.left;
-    } else {
-      return this.left;
-    }
+    return this.left - (this.parent?.left ?? 0);
   }
 
   get myTop(): number {
-    if (this.parent != null) {
-      return this.top - this.parent.top;
-    } else {
-      return this.top;
-    }
+    return this.top - (this.parent?.top ?? 0);
   }
 
   get myRight(): number {
@@ -233,43 +226,23 @@ export default class DxView {
   }
 
   get myTranslationX(): number {
-    if (this.parent != null) {
-      return this.translationX - this.parent.translationX;
-    } else {
-      return this.translationX;
-    }
+    return this.translationX - (this.parent?.translationX ?? 0);
   }
 
   get myTranslationY(): number {
-    if (this.parent != null) {
-      return this.translationY - this.parent.translationY;
-    } else {
-      return this.translationY;
-    }
+    return this.translationY - (this.parent?.translationY ?? 0);
   }
 
   get myTranslationZ(): number {
-    if (this.parent != null) {
-      return this.translationZ - this.parent.translationZ;
-    } else {
-      return this.translationZ;
-    }
+    return this.translationZ - (this.parent?.translationZ ?? 0);
   }
 
   get myScrollX(): number {
-    if (this.parent != null) {
-      return this.scrollX - this.parent.scrollX;
-    } else {
-      return this.scrollX;
-    }
+    return this.scrollX - (this.parent?.scrollX ?? 0);
   }
 
   get myScrollY(): number {
-    if (this.parent != null) {
-      return this.scrollY - this.parent.scrollY;
-    } else {
-      return this.scrollY;
-    }
+    return this.scrollY - (this.parent?.scrollY ?? 0);
   }
 
   get resId(): string {
@@ -326,9 +299,7 @@ export default class DxView {
 
   /** Detach self from parent */
   detach(): void {
-    if (this.parent) {
-      this.parent.removeView(this);
-    }
+    this.parent?.removeView(this);
   }
 
   /** Walk the hierarchy up to find a horizontally scrollable parent. 
@@ -639,9 +610,35 @@ export class DxActivity {
   }
 
   findViewByXY(x: number, y: number, visible = true): DxView | null {
-    if (!this.decor) {
-      return null;
+    return this.decor?.findViewByXY(x, y, visible) ?? null;
+  }
+}
+
+export class DxViewFactory { 
+  public static create(type: DxViewType): DxView {
+    switch (type) {
+    case DxViewType.DECOR:
+      return new DxDecorView('', -1, -1);
+    case DxViewType.VIEW_PAGER:
+      return new DxViewPager('', '', DefaultFlags, -1, -1, -1, -1);
+    case DxViewType.TAB_HOST:
+      return new DxTabHost('', '', DefaultFlags, -1, -1, -1, -1);
+    case DxViewType.OTHERS:
+      return new DxView('', '', DefaultFlags, -1, -1, -1, -1);
+    default:
+      throw new CannotReachHereError();
     }
-    return this.decor.findViewByXY(x, y, visible);
+  }
+
+  public static typeOf(v: DxView): DxViewType {
+    if (v instanceof DxDecorView) {
+      return DxViewType.DECOR;
+    } else if (v instanceof DxViewPager) {
+      return DxViewType.VIEW_PAGER;
+    } else if (v instanceof DxTabHost) {
+      return DxViewType.TAB_HOST;
+    } else {
+      return DxViewType.OTHERS;
+    }
   }
 }

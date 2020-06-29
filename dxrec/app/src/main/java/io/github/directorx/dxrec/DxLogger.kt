@@ -20,6 +20,15 @@ object DxLogger {
                 Log.d(DxRecorder.LOG_ETAG, s.toString())
             }
         }
+    }
 
+    fun catchAndLog(block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            if (t.message != null) {
+                e(t.message!!, t.stackTrace)
+            }
+        }
     }
 }

@@ -15,22 +15,27 @@ class DxBroker(private val capacity: Int) {
     val curr: Item?
         get() = indexed.lastOrNull()
 
-    fun add(act: Activity, evt: DxEvent, refresh: Boolean = false) {
-        buffer.setLength(0)
-        act.dump(buffer)
-        if (refresh) {
-            refresh(act.javaClass.name, buffer.toString(), evt)
-        } else {
-            push(act.javaClass.name, buffer.toString(), evt)
-        }
+    fun addActivity(act: Activity) {
+        // each time an activity is added, a new item should
+        // be created, and pushed
+        addPair(act, DxDummyEvent(-1))
     }
 
-    fun add(act: String, tree: String, evt: DxEvent, refresh: Boolean = false) =
-        if (refresh) {
-            refresh(act, tree, evt)
-        } else {
-            push(act, tree, evt)
+    fun addEvent(evt: DxEvent) {
+        // each time an event is added, last item should
+        // be refreshed, and re-pushed
+        val item = indexed.removeAt(indexed.size - 1)
+        indexed.add(Item(item.act, evt, item.dump))
+    }
+
+    fun addPair(act: Activity, evt: DxEvent) {
+        buffer.setLength(0)
+        act.dump(buffer)
+        if (indexed.size >= capacity) {
+            indexed.removeAt(0)
         }
+        indexed.add(Item(act.javaClass.name, evt, buffer.toString()))
+    }
 
     fun commit() {
         for (i in indexed) {
@@ -39,20 +44,6 @@ class DxBroker(private val capacity: Int) {
                 staged.put(i)
             }
         }
-    }
-
-    // replace the newest with the new evt
-    private fun refresh(act: String, tree: String, evt: DxEvent) {
-        indexed.removeAt(indexed.size - 1)
-        indexed.add(Item(act, evt, tree))
-    }
-
-    // push new, if full pop head
-    private fun push(act: String, tree: String, evt: DxEvent) {
-        if (indexed.size >= capacity) {
-            indexed.removeAt(0)
-        }
-        indexed.add(Item(act, evt, tree))
     }
 
     // activity, event, decor_view

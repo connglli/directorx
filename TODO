@@ -7,6 +7,7 @@ FEATURES:
 3. save dxpk in a binary compressed format
 4. in DXPK.load() and DXPK.dump() throw meaningful exception and add semantic checking
 5. bundle and minify (uglify)
+6. some views in an app are overlapped, which makes a single (x, y) points to multiple views; and some app  intercepts events that passes to its children, which makes the (x, y) points to the parent instead of the child; Calculator is such an app, the CalculatorPadViewPager intercepts the tap event that passes to pad_numeric/pad_operator (page1) and pad_avanced (page2), and if the the tap event occurs on the different page (mCurItem != tapped_item), it returns true to intercept the event and hanldes the event itself
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 
