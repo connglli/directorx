@@ -1,6 +1,6 @@
 import { signal } from './deps.ts';
 import { DxAdb, DevInfo, ProcessError } from './dxadb.ts';
-import DxPacker, { DxViewType } from './dxpack.ts';
+import DxPacker from './dxpack.ts';
 import DxEvent, {
   DxTapEvent,
   DxLongTapEvent,
@@ -13,7 +13,8 @@ import DxView, {
   DxViewVisibility, 
   DxActivity,
   DxViewPager,
-  DxTabHost
+  DxTabHost,
+  DxViewType
 } from './dxview.ts';
 import DxLog from './dxlog.ts';
 import { decode as base64Decode } from './utils/base64.ts';

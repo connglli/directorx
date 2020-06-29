@@ -1,8 +1,6 @@
 package io.github.directorx.dxrec
 
 import android.app.Activity
-import android.os.Handler
-import android.os.HandlerThread
 import android.view.GestureDetector
 import android.view.InputEvent
 import android.view.KeyEvent
@@ -28,38 +26,49 @@ class EvDetector(
         open fun onKey(down: KeyEvent, act: Activity) = Unit
     }
 
-    // FIX: different from VirtualXposed, Xposed runs in a separate
-    // process than the app process, so we have to create a handler
-    // thread for the gesture detector
-    private val gdThread: HandlerThread = HandlerThread("$pkgName.eventd")
     private lateinit var activity: Activity
-    private val detector: GestureDetector
-    init {
-        gdThread.start()
-        detector = GestureDetector(null, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onSingleTapConfirmed(down: MotionEvent): Boolean {
-                listener.onTap(down, activity)
-                return false
-            }
+    private val detector: GestureDetector = GestureDetector(null, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(down: MotionEvent): Boolean {
+            listener.onDown(down, activity)
+            return false
+        }
 
-            override fun onLongPress(down: MotionEvent) {
-                listener.onLongTap(down, activity)
-            }
+        // onSingleTapConfirmed() is invoked whenever a tap
+        // (except double-tap) is fired; and onSingleTapConfirmed()
+        // is invoked in the handler thread of GestureDetector instead
+        // of the thread which invokes GestureDetector#onTouchEvent()
+        override fun onSingleTapConfirmed(down: MotionEvent): Boolean {
+            listener.onTap(down, activity)
+            return false
+        }
 
-            override fun onScroll(
-                down: MotionEvent, move: MotionEvent,
-                deltaX: Float, deltaY: Float // delta since last call to onScroll
-            ): Boolean {
-                listener.onSwipeMove(down, move, -deltaX, -deltaY, activity)
-                return false
-            }
+        // onSingleTapUp() is invoked when a tap is fired; however,
+        // when a double-tap is fired, the onSingleTapUp() is also
+        // invoked right after the first tap (but not after the second)
+        override fun onSingleTapUp(e: MotionEvent?): Boolean {
+            return super.onSingleTapUp(e)
+        }
 
-            override fun onDoubleTap(down: MotionEvent): Boolean {
-                listener.onDoubleTap(down, activity)
-                return false
-            }
-        }, Handler(gdThread.looper))
-    }
+        // onLongPress() is invoked in the handler thread of
+        // GestureDetector instead of the thread which invokes
+        // GestureDetector#onTouchEvent()
+        override fun onLongPress(down: MotionEvent) {
+            listener.onLongTap(down, activity)
+        }
+
+        override fun onScroll(
+            down: MotionEvent, move: MotionEvent,
+            deltaX: Float, deltaY: Float // delta since last call to onScroll
+        ): Boolean {
+            listener.onSwipeMove(down, move, -deltaX, -deltaY, activity)
+            return false
+        }
+
+        override fun onDoubleTap(down: MotionEvent): Boolean {
+            listener.onDoubleTap(down, activity)
+            return false
+        }
+    })
 
     fun next(act: Activity, evt: InputEvent) {
         updateActivity(act)
@@ -71,9 +80,7 @@ class EvDetector(
     }
 
     private fun nextMotion(event: MotionEvent) {
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            listener.onDown(event, activity)
-        } else if (event.action == MotionEvent.ACTION_UP) {
+        if (event.action == MotionEvent.ACTION_UP) {
             listener.onUp(event, activity)
         }
         detector.onTouchEvent(event)
