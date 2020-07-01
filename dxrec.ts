@@ -17,7 +17,8 @@ import DxView, {
   DxViewType
 } from './dxview.ts';
 import DxLog from './dxlog.ts';
-import { decode as base64Decode } from './utils/base64.ts';
+import * as base64 from './utils/base64.ts';
+import * as gzip from './utils/gzip.ts';
 import { IllegalStateError } from './utils/error.ts';
 
 class DxRecParser {
@@ -26,6 +27,7 @@ class DxRecParser {
   // for example aid=1073741824 following resource-id
   private static readonly PAT_AV_DECOR = /DecorView@[a-fA-F0-9]+\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
   private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
+  private static readonly PAT_AV_ENCODED_LINE = /[a-zA-Z0-9+/=]{1,76}/;
 
   private static readonly STATE_NEV = 0; // next is event
   private static readonly STATE_NAV = 1; // next is activity
@@ -35,10 +37,12 @@ class DxRecParser {
     a: DxActivity | null;
     v: DxView | null;
     d: number;
+    b: string;
   } = {
     a: null,
     v: null,
     d: -1,
+    b: ''
   };
   private state = DxRecParser.STATE_NAV;
 
@@ -66,7 +70,7 @@ class DxRecParser {
       this.state = DxRecParser.STATE_NAV;
       // reset curr
       this.curr = { 
-        a: null, v: null, d: -1
+        a: null, v: null, d: -1, b: ''
       };
       break;
     }
@@ -79,7 +83,7 @@ class DxRecParser {
       this.state = DxRecParser.STATE_IAV;
       // update curr
       this.curr = {
-        a, v: null, d: -1,
+        a, v: null, d: -1, b: ''
       };
       break;
     }
@@ -91,14 +95,16 @@ class DxRecParser {
       // no longer activity entry
       if (this.parseAvEnd(line)) {
         this.state = DxRecParser.STATE_NEV;
-        break;
+      } 
+      // parse encoded activity entries
+      else {
+        const next = this.parseAvEncoded(line);
+        // update curr
+        this.curr = {
+          ...this.curr,
+          b: this.curr.b + next
+        };
       }
-      // parse an activity entry
-      const [view, dep] = this.parseAvEntry(line);
-      // update curr
-      this.curr = {
-        ...this.curr, v: view, d: dep,
-      };
       break;
     }
 
@@ -200,14 +206,43 @@ class DxRecParser {
   private parseAvEnd(line: string): boolean {
     // pkg ACTIVITY_END act
     const [pkg, verb, act] = line.split(/\s+/);
-    if (verb == 'ACTIVITY_END') {
-      const currName = this.curr.a!.name; // eslint-disable-line
-      if (pkg != this.app || act != currName) {
-        throw new IllegalStateError(`Expect ${this.app}/${currName}, got ${pkg}/${act}`);
-      }
-      return true;
+    if (verb != 'ACTIVITY_END') {
+      return false;
     }
-    return false;
+
+    // build the view tree
+    const currName = this.curr.a!.name; // eslint-disable-line
+    if (pkg != this.app || act != currName) {
+      throw new IllegalStateError(`Expect ${this.app}/${currName}, got ${pkg}/${act}`);
+    }
+
+    // decode the encoded entries and parse line by line
+    const decoded = base64.decodeToArrayBuffer(this.curr.b);
+    // ungzip the decoded entries
+    const entries = gzip.unzip(new Uint8Array(decoded)).split('\n');
+
+    for (const curr of entries) {
+      const entry = curr.trimEnd();
+      if (entry.length == 0) {
+        continue;
+      }
+      // parse an activity entry
+      const [view, dep] = this.parseAvEntry(entry);
+      // update curr
+      this.curr = {
+        ...this.curr, v: view, d: dep,
+      };
+    }
+
+    return true;
+  }
+
+  private parseAvEncoded(line: string): string {
+    if (DxRecParser.PAT_AV_ENCODED_LINE.test(line)) {
+      return line;
+    } else {
+      throw new IllegalStateError('Expect an encoded base64 line');
+    }
   }
 
   private parseAvEntry(line: string): [DxView, number] {
@@ -325,8 +360,8 @@ class DxRecParser {
     const sy = parent.scrollY + Number(sSy);
 
     // decode if necessary
-    const text: string = this.decode ? base64Decode(sText) : sText;
-    const desc: string = this.decode ? base64Decode(sDesc) : sDesc; 
+    const text: string = this.decode ? base64.decode(sText) : sText;
+    const desc: string = this.decode ? base64.decode(sDesc) : sDesc; 
     
     // create the view
     let view: DxView;
@@ -394,9 +429,11 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
 
   // prepare logger
   // clear all previous log
-  await adb.clearLogcat();
+  await adb.clearLogcat(['main', 'crash']);
+  // reset logcat size to 16M
+  await adb.setLogcatSize({ size: 16, unit: 'M' }, ['main'])
   const output = adb.raw.pl.logcat(tag, {
-    prio: "D",
+    prio: 'I',
     silent: true,
     // disable formatted output
     formats: ['raw'],
@@ -406,7 +443,7 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
 
   try {
     for await (const line of output) {
-      const ln = line.trimEnd();
+      const ln = line.trim();
       if (ln.length != 0) {
         // DxLog.debug(ln);
         parser.parse(ln);

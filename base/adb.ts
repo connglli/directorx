@@ -132,6 +132,11 @@ export type LogcatBuffer =
   | 'default'
   | 'all';
 
+export type LogcatBufferSize = {
+  size: number;
+  unit: 'K' | 'M';
+}
+
 export type LogcatOptions = {
   prio?: LogcatPrio;
   /** Set default filter to silent */
@@ -140,9 +145,11 @@ export type LogcatOptions = {
   formats?: LogcatFormat[];
   /** Clear and exit */
   clear?: boolean;
-  /** Buffers to be logged */
+  /** Ring buffers to be logged */
   buffers?: LogcatBuffer[];
-};
+  /** Size of log ring buffer */
+  bufSize?: LogcatBufferSize;
+}
 
 function makeLogcatCmd(
   tag = '*',
@@ -153,12 +160,18 @@ function makeLogcatCmd(
     silent = false,
     formats = [],
     clear = false,
-    buffers = []
+    buffers = [],
+    bufSize = null,
   } = opt;
-  if (clear) {
-    return 'logcat --clear';
-  }
   let cmd = 'logcat ';
+  if (buffers.length > 0) {
+    for (const buf of buffers) {
+      cmd += `-b ${buf} `;
+    }
+  }
+  if (clear) {
+    return cmd + '--clear';
+  }
   if (silent) {
     cmd += '-s ';
   }
@@ -167,10 +180,8 @@ function makeLogcatCmd(
       cmd += `-v ${fm} `;
     }
   }
-  if (buffers.length > 0) {
-    for (const buf of buffers) {
-      cmd += `-b ${buf} `;
-    }
+  if (bufSize) {
+    cmd += `-G ${bufSize.size}${bufSize.unit} `;
   }
   cmd += `${tag}:${prio}`;
   return cmd;

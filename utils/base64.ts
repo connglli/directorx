@@ -10,3 +10,7 @@ export function decode(str: string): string {
   return new TextDecoder().decode(base64.decode(str));
 }
 
+/** Decode a base64 string to an array buffer */
+export function decodeToArrayBuffer(str: string): ArrayBuffer {
+  return base64.decode(str);
+}

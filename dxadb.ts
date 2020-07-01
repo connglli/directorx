@@ -1,4 +1,10 @@
-import { AdbBindShape, bindAdb, AdbGlobalOptions } from './base/adb.ts';
+import { 
+  AdbBindShape, 
+  bindAdb, 
+  AdbGlobalOptions, 
+  LogcatBuffer, 
+  LogcatBufferSize 
+} from './base/adb.ts';
 export * from './base/adb.ts';
 
 export class AdbError extends Error {
@@ -62,8 +68,18 @@ export class DxAdb {
     return out;
   }
 
-  async clearLogcat(): Promise<void> {
-    await this.raw.logcat(undefined, { clear: true });
+  async clearLogcat(buffers: LogcatBuffer[] = ['all']): Promise<void> {
+    await this.raw.logcat(undefined, { 
+      clear: true, 
+      buffers 
+    });
+  }
+
+  async setLogcatSize(size: LogcatBufferSize, buffers: LogcatBuffer[] = ['all']): Promise<void> {
+    await this.raw.logcat(undefined, {
+      buffers,
+      bufSize: size
+    });
   }
 
   async getprop(prop: string): Promise<string> {

@@ -1,6 +1,9 @@
 package io.github.directorx.dxrec
 
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.BlockingQueue
+import java.util.zip.GZIPOutputStream
 
 class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
 
@@ -15,10 +18,11 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
 
     private fun doDump(item: DxBroker.Item) {
         val (act, evt, dump) = item
+        val eDump = gzipThenBase64(dump)
 
         // ACTIVITY act
         DxLogger.i("ACTIVITY_BEGIN $act")
-        DxLogger.i(dump)
+        DxLogger.i(eDump, noPrefix = true)
         DxLogger.i("ACTIVITY_END $act")
         when (evt) {
             // TAP act down_time x y
@@ -37,5 +41,15 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
             is DxKeyEvent ->
                 DxLogger.i("KEY $act ${evt.t} ${evt.c} ${evt.k}")
         }
+    }
+
+    private fun gzipThenBase64(input: String): String {
+        // compress using gzip
+        val bos = ByteArrayOutputStream()
+        GZIPOutputStream(bos).bufferedWriter(Charsets.UTF_8).use { it.write(input) }
+        // encode using base64
+        val output = Base64.encodeToString(bos.toByteArray(), Base64.DEFAULT).trim()
+        bos.close()
+        return output
     }
 }
