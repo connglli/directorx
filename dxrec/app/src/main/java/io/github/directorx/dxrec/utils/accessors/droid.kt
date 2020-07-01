@@ -1,6 +1,9 @@
 package io.github.directorx.dxrec.utils.accessors
 
 import android.app.Activity
+import android.content.res.ColorStateList
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.RippleDrawable
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.iterator
@@ -22,4 +25,21 @@ private fun View.dumpInner(repeat: Int, buf: StringBuffer) {
             v.dumpInner(repeat+1, buf)
         }
     }
+}
+
+fun getBackgroundColor(view: View): Pair<String?, Int?> {
+    val bg = view.background ?: null
+    var type: String? = null
+    var color: Int? = null
+    if (bg != null) {
+        type = bg.javaClass.simpleName
+        if (bg is ColorDrawable) {
+            color = bg.color
+        } else if (bg is RippleDrawable) {
+            val constantState = bg.constantState
+            val mColor = constantState?.javaClass?.getFieldValue<ColorStateList>(constantState, "mColor")
+            color = mColor?.getColorForState(bg.state, mColor.defaultColor)
+        }
+    }
+    return Pair(type, color)
 }

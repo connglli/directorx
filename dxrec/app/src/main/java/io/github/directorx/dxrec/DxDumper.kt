@@ -18,12 +18,7 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
 
         // ACTIVITY act
         DxLogger.i("ACTIVITY_BEGIN $act")
-        for (line in dump.split("\n")) {
-            // FIX: each log entry is limited to 8192 bytes
-            if (line.isNotEmpty()) {
-                DxLogger.i(line, noPrefix=true)
-            }
-        }
+        DxLogger.i(dump)
         DxLogger.i("ACTIVITY_END $act")
         when (evt) {
             // TAP act down_time x y

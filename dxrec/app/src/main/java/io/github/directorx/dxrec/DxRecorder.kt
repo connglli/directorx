@@ -7,6 +7,7 @@ import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.directorx.dxrec.ctx.DecorViewContext
 import io.github.directorx.dxrec.ctx.ViewContext
 import io.github.directorx.dxrec.utils.accessors.contains
 import org.json.JSONArray
@@ -139,6 +140,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
 
         try { // initialize hooking context
             ViewContext(encode).prepare()
+            DecorViewContext().prepare()
         } catch (ignored: Throwable) {}
 
         // start the dump thread

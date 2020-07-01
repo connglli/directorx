@@ -7,11 +7,25 @@ import android.widget.TextView
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import io.github.directorx.dxrec.DxContext
+import io.github.directorx.dxrec.utils.accessors.getBackgroundColor
 import io.github.directorx.dxrec.utils.accessors.getFieldValue
 import io.github.directorx.dxrec.utils.accessors.isInstanceOf
-import java.lang.StringBuilder
 
 class ViewContext(val encode: Boolean) : DxContext {
+
+    companion object {
+        fun appendKString(info: StringBuilder, key: String, value: String, prefix: String =" ") {
+            appendKV(info, key, "\"${value}\"", prefix)
+        }
+
+        fun appendKV(info: StringBuilder, key: String, value: Any, prefix: String =" ") {
+            // FIX: some custom view may invoke View#toString() more than once
+            val dxKeyEquals = "dx-$key="
+            if (dxKeyEquals !in info) {
+                info.append("$prefix$dxKeyEquals$value")
+            }
+        }
+    }
 
     override fun prepare() {
         val method = View::class.java.getMethod("toString")
@@ -28,6 +42,7 @@ class ViewContext(val encode: Boolean) : DxContext {
                 val view = param.thisObject as View
                 val desc = view.contentDescription ?: ""
                 val text = if (view is TextView) { view.text ?: "" } else { "" }
+                val bg = getBackgroundColor(view)
                 appendKV(info, "tx", view.translationX)
                 appendKV(info, "ty", view.translationY)
                 appendKV(info, "tz", view.translationZ)
@@ -35,6 +50,20 @@ class ViewContext(val encode: Boolean) : DxContext {
                 appendKV(info, "sy", view.scrollY)
                 appendKString(info, "desc", asString(desc, encode))
                 appendKString(info, "text", asString(text, encode))
+                when {
+                    bg.first == null -> { // no background, then inherits from parent
+                        appendKV(info, "bg-class", ".")
+                        appendKV(info, "bg-color", ".")
+                    }
+                    bg.second == null -> { // no color, maybe a layer, a shape, an image
+                        appendKV(info, "bg-class", bg.first!!)
+                        appendKV(info, "bg-color", ".")
+                    }
+                    else -> { // has color, but maybe color from ripple (often used in animation)
+                        appendKV(info, "bg-class", bg.first!!)
+                        appendKV(info, "bg-color", bg.second!!)
+                    }
+                }
 
                 // tab host properties
                 if (view is TabHost) {
@@ -58,18 +87,6 @@ class ViewContext(val encode: Boolean) : DxContext {
                 param.result = "$info}"
             }
         })
-    }
-
-    private fun appendKString(info: StringBuilder, key: String, value: String) {
-        appendKV(info, key, "\"${value}\"")
-    }
-
-    private fun appendKV(info: StringBuilder, key: String, value: Any) {
-        // FIX: some custom view may invoke View#toString() more than once
-        val dxKey = "dx-$key"
-        if (dxKey !in info) {
-            info.append(" $dxKey=$value")
-        }
     }
 
     private fun asString(cs: CharSequence, encode: Boolean) = if (encode) {

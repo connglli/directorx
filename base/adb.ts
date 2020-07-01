@@ -123,6 +123,15 @@ export type LogcatPrio =
   | 'F'
   | 'S';
 
+export type LogcatBuffer = 
+  | 'main'
+  | 'system'
+  | 'radio'
+  | 'events'
+  | 'crash'
+  | 'default'
+  | 'all';
+
 export type LogcatOptions = {
   prio?: LogcatPrio;
   /** Set default filter to silent */
@@ -131,6 +140,8 @@ export type LogcatOptions = {
   formats?: LogcatFormat[];
   /** Clear and exit */
   clear?: boolean;
+  /** Buffers to be logged */
+  buffers?: LogcatBuffer[];
 };
 
 function makeLogcatCmd(
@@ -142,6 +153,7 @@ function makeLogcatCmd(
     silent = false,
     formats = [],
     clear = false,
+    buffers = []
   } = opt;
   if (clear) {
     return 'logcat --clear';
@@ -153,6 +165,11 @@ function makeLogcatCmd(
   if (formats.length > 0) {
     for (const fm of formats) {
       cmd += `-v ${fm} `;
+    }
+  }
+  if (buffers.length > 0) {
+    for (const buf of buffers) {
+      cmd += `-b ${buf} `;
     }
   }
   cmd += `${tag}:${prio}`;

@@ -13,7 +13,7 @@ class DxBroker(private val capacity: Int) {
     val indexed: LinkedList<Item> = LinkedList()
 
     val curr: Item?
-        get() = indexed.lastOrNull()
+    get() = indexed.lastOrNull()
 
     fun addActivity(act: Activity) {
         // each time an activity is added, a new item should
@@ -25,7 +25,7 @@ class DxBroker(private val capacity: Int) {
         // each time an event is added, last item should
         // be refreshed, and re-pushed
         val item = indexed.removeAt(indexed.size - 1)
-        indexed.add(Item(item.act, evt, item.dump))
+        indexed.add(item.copy(evt = evt))
     }
 
     fun addPair(act: Activity, evt: DxEvent) {
