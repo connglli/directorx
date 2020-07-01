@@ -40,10 +40,17 @@ async function exec(
     stdout: 'piped',
     stderr: 'piped',
   });
+  // Fix: see also https://github.com/denoland/deno/issues/2505
+  // the subprocess maintains a buffer up to 64K, and once the 
+  // buffer is full, the subprocess is blocked until someone
+  // reads some; so for non-blocking, read all output firstly
+  // even though it is so space-consuming (considering most
+  // commands are succeeded, it is not that space-consuming)
+  const rawOut = await proc.output();
   const { code } = await proc.status();
   let out: string;
   if (code == 0) {
-    out = new TextDecoder().decode(await proc.output());
+    out = new TextDecoder().decode(rawOut);
     proc.stderr.close(); // eslint-disable-line
   } else {
     out = new TextDecoder().decode(await proc.stderrOutput());
@@ -85,12 +92,15 @@ export async function shell(
   return exec(`shell ${cmd}`, gOpt);
 }
 
-/** Execute shell commands by (1) exec-out and (2) returning its code and outputs */
+/** Execute shell commands by 
+ * (1) exec-out and 
+ * (2) returning its outputs (exec-out always return 0)
+ */
 export async function execOut(
   cmd: string,
   gOpt?: AdbGlobalOptions,
-): Promise<AdbResult> {
-  return exec(`exec-out ${cmd}`, gOpt);
+): Promise<string> {
+  return (await exec(`exec-out ${cmd}`, gOpt)).out;
 }
 
 export type LogcatFormat =
@@ -223,7 +233,7 @@ export const pl = {
 
 export type AdbBindShape = {
   shell(cmd: string): Promise<AdbResult>;
-  execOut(cmd: string): Promise<AdbResult>;
+  execOut(cmd: string): Promise<string>;
   logcat(tag?: string, opt?: LogcatOptions): Promise<AdbResult>;
   pl: {
     shell(cmd: string): AsyncIterableIterator<string>;
@@ -241,7 +251,7 @@ export function bindAdb(gOpt: AdbGlobalOptions): AdbBindShape {
       return await shell(cmd, gOpt);
     },
 
-    async execOut(cmd: string): Promise<AdbResult> {
+    async execOut(cmd: string): Promise<string> {
       return await execOut(cmd, gOpt);
     },
 

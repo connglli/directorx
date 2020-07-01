@@ -20,54 +20,6 @@ import { DevInfo } from './dxadb.ts';
 import * as base64 from './utils/base64.ts';
 import KnaryTree from './utils/knary_tree.ts';
 import { IllegalStateError, CannotReachHereError } from './utils/error.ts';
-import LinkedList from './utils/linked_list.ts';
-
-class ViewCache {
-  private decorCache = new LinkedList<DxDecorView>();
-  private pagerCache = new LinkedList<DxViewPager>();
-  private tabCache = new LinkedList<DxTabHost>();
-  private otherCache = new LinkedList<DxView>();
-
-  get(type: DxViewType): DxView {
-    let cache: LinkedList<DxView>;
-    switch (type) {
-    case DxViewType.DECOR:
-      cache = this.decorCache;
-      break;
-    case DxViewType.VIEW_PAGER:
-      cache = this.pagerCache;
-      break;
-    case DxViewType.TAB_HOST:
-      cache = this.tabCache;
-      break;
-    case DxViewType.OTHERS:
-      cache = this.otherCache;
-      break;
-    default:
-      throw new CannotReachHereError();
-    }
-    if (cache.isEmpty()) {
-      return DxViewFactory.create(type);
-    } else {
-      return cache.remove(0);
-    }
-  }
-
-  put(v: DxView): void {
-    switch (DxViewFactory.typeOf(v)) {
-    case DxViewType.DECOR:
-      return this.decorCache.push_front(v as DxDecorView);
-    case DxViewType.VIEW_PAGER:
-      return this.pagerCache.push_front(v as DxViewPager);
-    case DxViewType.TAB_HOST:
-      return this.tabCache.push_front(v as DxTabHost);
-    case DxViewType.OTHERS:
-      return this.otherCache.push_front(v);
-    default:
-      throw new CannotReachHereError();
-    }
-  }
-}
 
 class ActivityPack extends DxActivity {
   constructor(
@@ -408,9 +360,6 @@ class DXPK {
 }
 
 export default class DxPacker {
-  // cache unused views
-  private readonly cache: ViewCache = new ViewCache();
-
   // view pool: views that are same 
   // are saved only 1 copy
   private readonly vpool: DxView[] = [];
@@ -451,10 +400,6 @@ export default class DxPacker {
     return ep.e.copy(a);
   }
 
-  newView(type: DxViewType): DxView {
-    return this.cache.get(type);
-  }
-
   async save(path: string): Promise<void> {
     await DXPK.dump(path, {
       app: this.app,
@@ -492,11 +437,12 @@ export default class DxPacker {
         break;
       }
     }
-    if (ind == -1) {
+    if (ind == -1) { // not in pool, put to pool
       ind = this.vpool.length;
       this.vpool.push(v);
-    } else {
-      this.cache.put(v);
+    } else { // in pool, drop it
+      // this.cache.put(v);
+      /* do nothing, maybe put to cache */
     }
     const node = new KnaryTree<number>(ind);
     for (const c of v.children.slice(0)) {

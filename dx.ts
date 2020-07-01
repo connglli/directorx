@@ -50,7 +50,8 @@ prog
       serial: serial as (string | undefined),
       pty: player as DxPlayerType, 
       dxpk,
-      K: lookahead as (number | undefined)
+      K: lookahead as (number | undefined),
+      decode: DECODE
     });
   });
 

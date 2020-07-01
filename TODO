@@ -10,6 +10,7 @@ FEATURES:
 6. detect text using OCR, and add as a ocr-text attribute to each leaf view
 7. consider rotation, scale, elevation in coordinate of view
 8. segment similarity: (1) word bag (2) background
+9. findViewByXY should not return the first, but (1) the first with text (2) if not 1, then first with desc, (3) the first
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 

@@ -1,3 +1,4 @@
+import LinkedList from './utils/linked_list.ts';
 import { CannotReachHereError } from './utils/error.ts';
 
 export enum DxViewVisibility {
@@ -671,6 +672,53 @@ export class DxViewFactory {
       return DxViewType.TAB_HOST;
     } else {
       return DxViewType.OTHERS;
+    }
+  }
+}
+
+export class DxViewCache {
+  private decorCache = new LinkedList<DxDecorView>();
+  private pagerCache = new LinkedList<DxViewPager>();
+  private tabCache = new LinkedList<DxTabHost>();
+  private otherCache = new LinkedList<DxView>();
+
+  get(type: DxViewType): DxView {
+    let cache: LinkedList<DxView>;
+    switch (type) {
+    case DxViewType.DECOR:
+      cache = this.decorCache;
+      break;
+    case DxViewType.VIEW_PAGER:
+      cache = this.pagerCache;
+      break;
+    case DxViewType.TAB_HOST:
+      cache = this.tabCache;
+      break;
+    case DxViewType.OTHERS:
+      cache = this.otherCache;
+      break;
+    default:
+      throw new CannotReachHereError();
+    }
+    if (cache.isEmpty()) {
+      return DxViewFactory.create(type);
+    } else {
+      return cache.remove(0);
+    }
+  }
+
+  put(v: DxView): void {
+    switch (DxViewFactory.typeOf(v)) {
+    case DxViewType.DECOR:
+      return this.decorCache.push_front(v as DxDecorView);
+    case DxViewType.VIEW_PAGER:
+      return this.pagerCache.push_front(v as DxViewPager);
+    case DxViewType.TAB_HOST:
+      return this.tabCache.push_front(v as DxTabHost);
+    case DxViewType.OTHERS:
+      return this.otherCache.push_front(v);
+    default:
+      throw new CannotReachHereError();
     }
   }
 }

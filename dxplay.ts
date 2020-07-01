@@ -26,12 +26,16 @@ import {
 
 abstract class DxPlayer {
   public readonly timeSensitive = true;
+  public readonly adb: DxAdb;
   protected seq: DxEvSeq | null = null;
   constructor(
+    public readonly app: string,   // app to play
     public readonly rdev: DevInfo, // record device
     public readonly pdev: DevInfo, // play device,
     public readonly yota: DxYota   // input command
-  ) {}
+  ) {
+    this.adb = yota.adb;
+  }
 
   async play(seq: DxEvSeq): Promise<void> {
     this.seq = seq;
@@ -199,12 +203,14 @@ class DxWdgPlayer extends DxPlayer {
 /** DxResPlayer plays each event responsively */
 class DxResPlayer extends DxPlayer {
   constructor(
+    app: string,
     rdev: DevInfo,
     pdev: DevInfo,
     yota: DxYota,
+    public readonly decode: boolean,
     public readonly K: number
   ) {
-    super(rdev, pdev, yota);
+    super(app, rdev, pdev, yota);
   }
 
   protected async playEvent(e: DxEvent): Promise<void> {
@@ -236,8 +242,8 @@ class DxResPlayer extends DxPlayer {
       }
     }
 
-    // ui segmentation -> area matching -> synthesis
-    throw new NotImplementedError('Ui Segmentation -> Area Matching -> Synthesis');
+    // ui segmentation -> segment matching -> synthesis
+    throw new NotImplementedError('Ui Segmentation -> Segment Matching -> Synthesis');
   }
 
   private async find(e: DxXYEvent): Promise<DxViewMap | null> {
@@ -298,7 +304,8 @@ export type DxPlayOptions = {
   serial?: string;       // phone serial no
   pty:     DxPlayerType; // player type
   dxpk:    string;       // path to dxpk
-  K?:       number;      // look ahead, if use res
+  K?:      number;       // look ahead, if use res
+  decode:  boolean;      // decode or not
 };
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
@@ -322,20 +329,20 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
     ) {
       DxLog.warning('Screen setting is different, you\'d better use a more advanced player');
     }
-    player = new DxPxPlayer(packer.dev, dev, yota);
+    player = new DxPxPlayer(packer.app, packer.dev, dev, yota);
     break;
   case 'pt':
-    player = new DxPtPlayer(packer.dev, dev, yota);
+    player = new DxPtPlayer(packer.app, packer.dev, dev, yota);
     break;
   case 'wdg':
-    player = new DxWdgPlayer(packer.dev, dev, yota);
+    player = new DxWdgPlayer(packer.app, packer.dev, dev, yota);
     break;
   case 'res':
     if (!opt.K) {
       DxLog.critical('Lookahead K is not specified, use -K or --lookahead to specify it');
       Deno.exit(1);
     }
-    player = new DxResPlayer(packer.dev, dev, yota, opt.K);
+    player = new DxResPlayer(packer.app, packer.dev, dev, yota, opt.decode, opt.K);
     break;
   default:
     throw new CannotReachHereError();
