@@ -107,6 +107,8 @@ export default class DxView {
     protected pkg_: string,
     protected cls_: string,
     protected flags_: DxViewFlags,
+    protected bgClass_: string,
+    protected bgColor_: number | null,
     protected left_: number,
     protected top_: number,
     protected right_: number,
@@ -116,9 +118,9 @@ export default class DxView {
     protected tz_ = 0,
     protected sx_ = 0,
     protected sy_ = 0,
-    protected rpkg_ = '',
-    protected rtype_ = '',
-    protected rentry_ = '',
+    protected resPkg_ = '',
+    protected resType_ = '',
+    protected resEntry_ = '',
     protected desc_ = '',
     protected text_ = '',
     protected parent_: DxView | null = null,
@@ -135,6 +137,14 @@ export default class DxView {
 
   get flags(): DxViewFlags {
     return this.flags_;
+  }
+
+  get bgClass(): string {
+    return this.bgClass_;
+  }
+
+  get bgColor(): number | null {
+    return this.bgColor_;
   }
 
   get parent(): DxView | null {
@@ -254,15 +264,15 @@ export default class DxView {
   }
 
   get resPkg(): string {
-    return this.rpkg_;
+    return this.resPkg_;
   }
 
   get resType(): string {
-    return this.rtype_;
+    return this.resType_;
   }
 
   get resEntry(): string {
-    return this.rentry_;
+    return this.resEntry_;
   }
 
   get desc(): string {
@@ -379,6 +389,8 @@ export default class DxView {
     pkg: string,
     cls: string,
     flags: DxViewFlags,
+    bgClass: string,
+    bgColor: number | null,
     left: number,
     top: number,
     right: number,
@@ -399,6 +411,8 @@ export default class DxView {
     this.pkg_ = pkg;
     this.cls_ = cls;
     this.flags_ = flags;
+    this.bgClass_ = bgClass;
+    this.bgColor_ = bgColor;
     this.left_ = left;
     this.top_ = top;
     this.right_ = right;
@@ -408,9 +422,9 @@ export default class DxView {
     this.tz_ = tz;
     this.sx_ = sx;
     this.sy_ = sy;
-    this.rpkg_ = rpkg;
-    this.rtype_ = rtype;
-    this.rentry_ = rentry;
+    this.resPkg_ = rpkg;
+    this.resType_ = rtype;
+    this.resEntry_ = rentry;
     this.desc_ = desc;
     this.text_ = text;
     this.parent_ = parent;
@@ -426,6 +440,8 @@ export default class DxView {
       this.pkg_,
       this.cls_,
       this.flags_,
+      this.bgClass_,
+      this.bgColor_,
       this.left_,
       this.top_,
       this.right_,
@@ -435,9 +451,9 @@ export default class DxView {
       this.tz_,
       this.sx_,
       this.sy_,
-      this.rpkg_,
-      this.rtype_,
-      this.rentry_,
+      this.resPkg_,
+      this.resType_,
+      this.resEntry_,
       this.desc_,
       this.text_,
       parent,
@@ -478,11 +494,18 @@ export default class DxView {
 
 export class DxDecorView extends DxView {
   public static readonly NAME = 'com.android.internal.policy.DecorView';
-  constructor(pkg: string, width: number, height: number) {
+  constructor(
+    pkg: string, 
+    width: number, 
+    height: number,
+    bgClass: string,
+    bgColor: number | null
+  ) {
     super(
       pkg,
       DxDecorView.NAME,
       DefaultFlags,
+      bgClass, bgColor,
       0, 0, width, height
     );
   }
@@ -490,7 +513,9 @@ export class DxDecorView extends DxView {
     return new DxDecorView(
       this.pkg,
       this.width,
-      this.height
+      this.height,
+      this.bgClass,
+      this.bgColor
     );
   }
 }
@@ -526,6 +551,8 @@ export class DxViewPager extends DxView {
       this.pkg_,
       this.cls_,
       this.flags_,
+      this.bgClass_,
+      this.bgColor_,
       this.left_,
       this.top_,
       this.right_,
@@ -535,9 +562,9 @@ export class DxViewPager extends DxView {
       this.tz_,
       this.sx_,
       this.sy_,
-      this.rpkg_,
-      this.rtype_,
-      this.rentry_,
+      this.resPkg_,
+      this.resType_,
+      this.resEntry_,
       this.desc_,
       this.text_,
       parent,
@@ -567,6 +594,8 @@ export class DxTabHost extends DxView {
       this.pkg_,
       this.cls_,
       this.flags_,
+      this.bgClass_,
+      this.bgColor_,
       this.left_,
       this.top_,
       this.right_,
@@ -576,9 +605,9 @@ export class DxTabHost extends DxView {
       this.tz_,
       this.sx_,
       this.sy_,
-      this.rpkg_,
-      this.rtype_,
-      this.rentry_,
+      this.resPkg_,
+      this.resType_,
+      this.resEntry_,
       this.desc_,
       this.text_,
       parent,
@@ -601,8 +630,11 @@ export class DxActivity {
     return this.decor;
   }
 
-  installDecor(width: number, height: number): void {
-    this.decor = new DxDecorView(this.app, width, height);
+  installDecor(
+    width: number, height: number, 
+    bgClass: string, bgColor: number | null
+  ): void {
+    this.decor = new DxDecorView(this.app, width, height, bgClass, bgColor);
   }
 
   replaceDecor(decor: DxDecorView): void {
@@ -618,13 +650,13 @@ export class DxViewFactory {
   public static create(type: DxViewType): DxView {
     switch (type) {
     case DxViewType.DECOR:
-      return new DxDecorView('', -1, -1);
+      return new DxDecorView('', -1, -1, '', null);
     case DxViewType.VIEW_PAGER:
-      return new DxViewPager('', '', DefaultFlags, -1, -1, -1, -1);
+      return new DxViewPager('', '', DefaultFlags, '', null, -1, -1, -1, -1);
     case DxViewType.TAB_HOST:
-      return new DxTabHost('', '', DefaultFlags, -1, -1, -1, -1);
+      return new DxTabHost('', '', DefaultFlags, '', null, -1, -1, -1, -1);
     case DxViewType.OTHERS:
-      return new DxView('', '', DefaultFlags, -1, -1, -1, -1);
+      return new DxView('', '', DefaultFlags, '', null, -1, -1, -1, -1);
     default:
       throw new CannotReachHereError();
     }

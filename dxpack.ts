@@ -168,22 +168,26 @@ class DXPK {
           app,                               // pkg
           tokens[1],                         // cls
           {                                  // flags
-            V: tokens[16][0] == 'V' 
+            V: tokens[18][0] == 'V' 
               ? DxViewVisibility.VISIBLE
-              : tokens[16][0] == 'I'
+              : tokens[18][0] == 'I'
                 ? DxViewVisibility.INVISIBLE
                 : DxViewVisibility.GONE,
-            f:  tokens[16][1] == 'F',
-            F:  tokens[16][2] == 'F',
-            S:  tokens[16][3] == 'S',
-            E:  tokens[16][4] == 'E',
-            d:  tokens[16][5] == 'D',
-            hs: tokens[16][6] == 'H',
-            vs: tokens[16][7] == 'V',
-            c:  tokens[16][8] == 'C',
-            lc: tokens[16][9] == 'L',
-            cc: tokens[16][10] == 'X'
+            f:  tokens[18][1] == 'F',
+            F:  tokens[18][2] == 'F',
+            S:  tokens[18][3] == 'S',
+            E:  tokens[18][4] == 'E',
+            d:  tokens[18][5] == 'D',
+            hs: tokens[18][6] == 'H',
+            vs: tokens[18][7] == 'V',
+            c:  tokens[18][8] == 'C',
+            lc: tokens[18][9] == 'L',
+            cc: tokens[18][10] == 'X'
           },
+          tokens[16],                        // bgClass
+          tokens[17] == '.'                  // bgColor
+            ? null : 
+            Number(tokens[17]),
           Number(tokens[5]),                 // left
           Number(tokens[6]),                 // top
           Number(tokens[7]),                 // right
@@ -193,16 +197,16 @@ class DXPK {
           Number(tokens[11]),                // tz
           Number(tokens[12]),                // sx
           Number(tokens[13]),                // sy
-          tokens[2],                         // rpkg
-          tokens[3],                         // rtype
-          tokens[4],                         // rentry
+          tokens[2],                         // resPkg
+          tokens[3],                         // resType
+          tokens[4],                         // resEntry
           base64.decode(tokens[14]),         // desc
           base64.decode(tokens[15])          // text
         );
         if (view instanceof DxViewPager) {
-          view.currItem = Number(tokens[17]);
+          view.currItem = Number(tokens[19]);
         } else if (view instanceof DxTabHost) {
-          view.currTab = Number(tokens[17]);
+          view.currTab = Number(tokens[19]);
         }
         vpool.push(view);
         size -= 1;
@@ -337,6 +341,7 @@ class DXPK {
       await DXPK.writeString(buf, `${v.translationX};${v.translationY};${v.translationZ};`, false);
       await DXPK.writeString(buf, `${v.scrollX};${v.scrollY};`, false);
       await DXPK.writeString(buf, `${base64.encode(v.desc)};${base64.encode(v.text)};`, false);
+      await DXPK.writeString(buf, `${v.bgClass};${v.bgColor ?? '.'};`, false);
       let flags = '';
       flags += v.flags.V == DxViewVisibility.VISIBLE 
         ? 'V' 

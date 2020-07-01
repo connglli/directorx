@@ -24,7 +24,8 @@ class DxRecParser {
   private static readonly PAT_DROID = /--------- beginning of (?<type>\w+)/;
   // FIX: some apps/devices often output non-standard attributes 
   // for example aid=1073741824 following resource-id
-  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)\s(?:#(?<id>[a-fA-F0-9]+)\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+)\s.*?)?dx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
+  private static readonly PAT_AV_DECOR = /DecorView@[a-fA-F0-9]+\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
+  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
 
   private static readonly STATE_NEV = 0; // next is event
   private static readonly STATE_NAV = 1; // next is activity
@@ -212,11 +213,26 @@ class DxRecParser {
   private parseAvEntry(line: string): [DxView, number] {
     // check and install decor if necessary
     if (!this.curr.v) {
-      if (!line.startsWith('DecorView')) {
+      const res = DxRecParser.PAT_AV_DECOR.exec(line);
+      if (!res || !res.groups) {
         throw new IllegalStateError('Expect DecorView');
       }
+
+      const {
+        bgclass: bgClass,
+        bgcolor: sBgColor
+      } = res.groups;
+      if (bgClass == '.') {
+        throw new IllegalStateError('Expect DecorView to have at least a background');
+      }
+      
       /* eslint-disable */
-      this.curr.a!.installDecor(this.dev.width, this.dev.height);
+      this.curr.a!.installDecor(
+        this.dev.width, this.dev.height,
+        bgClass,
+        sBgColor == '.' ? null : Number(sBgColor)
+      );
+
       return [this.curr.a!.decorView!, 0];
     }
 
@@ -235,6 +251,7 @@ class DxRecParser {
       tx: sTx, ty: sTy, tz: sTz,
       sx: sSx, sy: sSy,
       desc: sDesc = '', text: sText = '',
+      bgclass: sBgClass, bgcolor: sBgColor,
       pcurr: sPcurr, tcurr: sTcurr
     } = res.groups;
 
@@ -286,6 +303,16 @@ class DxRecParser {
       flags.V = DxViewVisibility.GONE;
     }
 
+    // parse background
+    const bgClass = sBgClass == '.' 
+      ? parent.bgClass      // inherits from its parent
+      : sBgClass;
+    const bgColor = sBgClass == '.'
+      ? parent.bgColor      // inherits from its parent
+      : sBgColor == '.'
+        ? null              // not color, maybe ripple, images
+        : Number(sBgColor); // color int value
+
     // calculate absolute bounds, translation, and scroll
     const left = parent.left + Number(sOffL);
     const top = parent.top + Number(sOffT);
@@ -298,16 +325,9 @@ class DxRecParser {
     const sy = parent.scrollY + Number(sSy);
 
     // decode if necessary
-    let text: string;
-    let desc: string;
-    if (this.decode) {
-      text = base64Decode(sText);
-      desc = base64Decode(sDesc);
-    } else {
-      text = sText;
-      desc = sDesc;
-    }
-
+    const text: string = this.decode ? base64Decode(sText) : sText;
+    const desc: string = this.decode ? base64Decode(sDesc) : sDesc; 
+    
     // create the view
     let view: DxView;
     if (sPcurr) {
@@ -321,6 +341,7 @@ class DxRecParser {
     // reset common properties
     view.reset(
       parent.pkg, cls, flags,
+      bgClass, bgColor,
       left, top, right, bottom,
       tx, ty, tz, sx, sy,
       rpkg, rtype, rentry,
@@ -364,7 +385,7 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
   const parser = new DxRecParser(app, dev, decode, packer);
 
   // register SIGINT handler signal
-  DxLog.info("Type ^C to exit\n");
+  DxLog.info('Type ^C to exit\n');
   const handle = signal.onSignal(Deno.Signal.SIGINT, async () => {
     await packer.save(dxpk);
     DxLog.info(`\n\nEvent seq saved to ${dxpk}`);
@@ -378,7 +399,9 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
     prio: "D",
     silent: true,
     // disable formatted output
-    formats: ["raw"],
+    formats: ['raw'],
+    // log only the main and crash buffer
+    buffers: ['main', 'crash']
   });
 
   try {

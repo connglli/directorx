@@ -7,7 +7,9 @@ FEATURES:
 3. save dxpk in a binary compressed format
 4. in DXPK.load() and DXPK.dump() throw meaningful exception and add semantic checking
 5. bundle and minify (uglify)
-6. some views in an app are overlapped, which makes a single (x, y) points to multiple views; and some app  intercepts events that passes to its children, which makes the (x, y) points to the parent instead of the child; Calculator is such an app, the CalculatorPadViewPager intercepts the tap event that passes to pad_numeric/pad_operator (page1) and pad_avanced (page2), and if the the tap event occurs on the different page (mCurItem != tapped_item), it returns true to intercept the event and hanldes the event itself
+6. detect text using OCR, and add as a ocr-text attribute to each leaf view
+7. consider rotation, scale, elevation in coordinate of view
+8. segment similarity: (1) word bag (2) background
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 
@@ -23,5 +25,14 @@ BUGS:
    One will see, at the very start, the above logs appear very quickly; 
    but after sufficient number of operations, the above log does not 
    appear any more
-2. when the view hierarchy is too large, the dumped string often is cut
-   by logcat (some are not dumped)
+***3. some views in an app are overlapped, which makes a single (x, y) points 
+      to multiple views;  and some app intercepts events that passes to its 
+      children, which makes the (x, y) points to the parent instead of the 
+      child; Calculator is such an app, the CalculatorPadViewPager intercepts 
+      the tap event that passes to pad_numeric/pad_operator (page1) and 
+      pad_avanced (page2), and if the the tap event occurs on the different 
+      page (mCurItem != tapped_item), it returns true to intercept the event 
+      and hanldes the event itself
+****4. logs of logcat are often lost when the log is too large (even though 
+       we've already pre-truncated the log before logging), this makes the dump
+       incomplete and incorrect
