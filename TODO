@@ -36,3 +36,5 @@ BUGS:
 ****4. logs of logcat are often lost when the log is too large (even though 
        we've already pre-truncated the log before logging), this makes the dump
        incomplete and incorrect
+       + current partially fixed by gzip the view hierarchy then encode as base64,
+         but it can still fails when the output is large enough
