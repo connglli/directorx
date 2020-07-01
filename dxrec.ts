@@ -1,5 +1,5 @@
 import { signal } from './deps.ts';
-import { DxAdb, DevInfo, ProcessError } from './dxadb.ts';
+import { DxAdb, DevInfo, ProcessError, DxActivityDumpSysBuilder } from './dxadb.ts';
 import DxPacker from './dxpack.ts';
 import DxEvent, {
   DxTapEvent,
@@ -8,14 +8,7 @@ import DxEvent, {
   DxKeyEvent,
   DxSwipeEvent,
 } from './dxevent.ts';
-import DxView, { 
-  DxViewFlags, 
-  DxViewVisibility, 
-  DxActivity,
-  DxViewPager,
-  DxTabHost,
-  DxViewType
-} from './dxview.ts';
+import { DxActivity } from './dxview.ts';
 import DxLog from './dxlog.ts';
 import * as base64 from './utils/base64.ts';
 import * as gzip from './utils/gzip.ts';
@@ -34,16 +27,10 @@ class DxRecParser {
   private static readonly STATE_IAV = 2; // next is activity entry
 
   private curr: {
-    a: DxActivity | null;
-    v: DxView | null;
-    d: number;
-    b: string;
-  } = {
-    a: null,
-    v: null,
-    d: -1,
-    b: ''
-  };
+    name: string;
+    entries: string;
+    act: DxActivity | null;
+  } = { name: '', entries: '', act: null };
   private state = DxRecParser.STATE_NAV;
 
   constructor(
@@ -62,48 +49,44 @@ class DxRecParser {
     // dxrec output
     switch (this.state) {
     case DxRecParser.STATE_NEV: {
-      if (!this.curr.a) {
-        throw new IllegalStateError('Expect this.curr.a to be non-null');
+      if (this.curr.act == null || this.curr.name.length == 0 || this.curr.entries.length == 0) {
+        throw new IllegalStateError('Expect this.curr.name to be non-empty');
       }
       const e = this.parseEvent(line);
       this.packer.append(e); // pack it
       this.state = DxRecParser.STATE_NAV;
-      // reset curr
-      this.curr = { 
-        a: null, v: null, d: -1, b: ''
-      };
+      // reset curr activity info
+      this.curr = { name: '', entries: '', act: null };
       break;
     }
 
     case DxRecParser.STATE_NAV: {
-      if (this.curr.a) {
+      if (this.curr.act || this.curr.name.length != 0 || this.curr.entries.length != 0) {
         throw new IllegalStateError('Expect this.curr.a to be null');
       }
-      const a = this.parseAvStart(line);
+      const name = this.parseAvStart(line);
       this.state = DxRecParser.STATE_IAV;
-      // update curr
-      this.curr = {
-        a, v: null, d: -1, b: ''
-      };
+      // update activity name, reset entries and act
+      this.curr = { name, entries: '', act: null };
       break;
     }
 
     case DxRecParser.STATE_IAV: {
-      if (!this.curr.a) {
+      if (this.curr.name.length == 0) {
         throw new IllegalStateError('Expect this.curr.a to be non-null');
       }
       // no longer activity entry
-      if (this.parseAvEnd(line)) {
+      const act = this.parseAvEnd(line);
+      if (act != null) {
         this.state = DxRecParser.STATE_NEV;
+        // update curr activity
+        this.curr.act = act;
       } 
       // parse encoded activity entries
       else {
-        const next = this.parseAvEncoded(line);
-        // update curr
-        this.curr = {
-          ...this.curr,
-          b: this.curr.b + next
-        };
+        const nextEntry = this.parseAvEncoded(line);
+        // update curr activity entries
+        this.curr.entries += nextEntry;
       }
       break;
     }
@@ -136,7 +119,7 @@ class DxRecParser {
     case 'TAP':
       // TAP act t x y
       return new DxTapEvent(
-        this.curr.a!, // eslint-disable-line
+        this.curr.act!, // eslint-disable-line
         Number(args[2]),
         Number(args[3]),
         Number(args[1]),
@@ -146,7 +129,7 @@ class DxRecParser {
     case 'LONG_TAP':
       // LONG_TAP act t x y
       return new DxLongTapEvent(
-        this.curr.a!, // eslint-disable-line
+        this.curr.act!, // eslint-disable-line
         Number(args[2]),
         Number(args[3]),
         Number(args[1])
@@ -156,7 +139,7 @@ class DxRecParser {
     case 'DOUBLE_TAP':
       // LONG_TAP act t x y
       return new DxDoubleTapEvent(
-        this.curr.a!, // eslint-disable-line
+        this.curr.act!, // eslint-disable-line
         Number(args[2]),
         Number(args[3]),
         Number(args[1])
@@ -166,7 +149,7 @@ class DxRecParser {
     case 'SWIPE':
       // SWIPE act t0 x y dx dy t1
       return new DxSwipeEvent(
-        this.curr.a!, // eslint-disable-line
+        this.curr.act!, // eslint-disable-line
         Number(args[2]),
         Number(args[3]),
         Number(args[4]),
@@ -179,7 +162,7 @@ class DxRecParser {
     case 'KEY':
       // KEY act t c k
       return new DxKeyEvent(
-        this.curr.a!, // eslint-disable-line
+        this.curr.act!, // eslint-disable-line
         Number(args[2]),
         args[3],
         Number(args[1])
@@ -191,7 +174,7 @@ class DxRecParser {
     }
   }
 
-  private parseAvStart(line: string): DxActivity {
+  private parseAvStart(line: string): string {
     // pkg ACTIVITY_BEGIN act
     const [pkg, verb, act] = line.split(/\s+/);
     if (pkg != this.app) {
@@ -200,41 +183,33 @@ class DxRecParser {
     if (verb != 'ACTIVITY_BEGIN') {
       throw new IllegalStateError(`Expected ACTIVITY_BEGIN, got ${verb}`);
     }
-    return new DxActivity(pkg, act);
+    return act;
   }
 
-  private parseAvEnd(line: string): boolean {
+  private parseAvEnd(line: string): DxActivity | null {
     // pkg ACTIVITY_END act
     const [pkg, verb, act] = line.split(/\s+/);
     if (verb != 'ACTIVITY_END') {
-      return false;
+      return null;
     }
 
     // build the view tree
-    const currName = this.curr.a!.name; // eslint-disable-line
+    const currName = this.curr.name;
     if (pkg != this.app || act != currName) {
       throw new IllegalStateError(`Expect ${this.app}/${currName}, got ${pkg}/${act}`);
     }
 
     // decode the encoded entries and parse line by line
-    const decoded = base64.decodeToArrayBuffer(this.curr.b);
+    const decoded = base64.decodeToArrayBuffer(this.curr.entries);
     // ungzip the decoded entries
     const entries = gzip.unzip(new Uint8Array(decoded)).split('\n');
 
-    for (const curr of entries) {
-      const entry = curr.trimEnd();
-      if (entry.length == 0) {
-        continue;
-      }
-      // parse an activity entry
-      const [view, dep] = this.parseAvEntry(entry);
-      // update curr
-      this.curr = {
-        ...this.curr, v: view, d: dep,
-      };
-    }
-
-    return true;
+    return new DxActivityDumpSysBuilder(this.app, this.curr.name)
+      .withWidth(this.dev.width)
+      .withHeight(this.dev.height)
+      .withDecoding(this.decode)
+      .withViewHierarchy(entries)
+      .build();
   }
 
   private parseAvEncoded(line: string): string {
@@ -243,156 +218,6 @@ class DxRecParser {
     } else {
       throw new IllegalStateError('Expect an encoded base64 line');
     }
-  }
-
-  private parseAvEntry(line: string): [DxView, number] {
-    // check and install decor if necessary
-    if (!this.curr.v) {
-      const res = DxRecParser.PAT_AV_DECOR.exec(line);
-      if (!res || !res.groups) {
-        throw new IllegalStateError('Expect DecorView');
-      }
-
-      const {
-        bgclass: bgClass,
-        bgcolor: sBgColor
-      } = res.groups;
-      if (bgClass == '.') {
-        throw new IllegalStateError('Expect DecorView to have at least a background');
-      }
-      
-      /* eslint-disable */
-      this.curr.a!.installDecor(
-        this.dev.width, this.dev.height,
-        bgClass,
-        sBgColor == '.' ? null : Number(sBgColor)
-      );
-
-      return [this.curr.a!.decorView!, 0];
-    }
-
-    // parse view line by line
-    const res = DxRecParser.PAT_AV_VIEW.exec(line);
-    if (!res || !res.groups) {
-      throw new IllegalStateError(`No activity entries match: ${line}`);
-    }
-
-    const {
-      dep: sDep, 
-      cls, flags: sFlags, pflags: sPflags,
-      left: sOffL, top: sOffT, 
-      right: sOffR, bottom: sOffB,
-      rpkg = '', rtype = '', rentry = '',
-      tx: sTx, ty: sTy, tz: sTz,
-      sx: sSx, sy: sSy,
-      desc: sDesc = '', text: sText = '',
-      bgclass: sBgClass, bgcolor: sBgColor,
-      pcurr: sPcurr, tcurr: sTcurr
-    } = res.groups;
-
-    // find parent of current view
-    const dep = sDep.length;
-    let parent: DxView;
-    let diff = dep - this.curr.d;
-    if (diff == 0) { // sibling of curr
-      parent = this.curr.v.parent as DxView;
-    } else if (diff > 0) { // child of curr
-      if (diff != 1) {
-        throw new IllegalStateError(`Expect a direct child, but got an indirect (+${diff}) child`);
-      }
-      parent = this.curr.v;
-    } else { // sibling of an ancestor
-      let ptr = this.curr.v;
-      while (diff != 0) {
-        ptr = ptr.parent!; // eslint-disable-line
-        diff += 1;
-      }
-      parent = ptr.parent!; // eslint-disable-line
-    }
-
-    // parse and construct the view
-    const flags: DxViewFlags = {
-      V: sFlags[0] == 'V' 
-        ? DxViewVisibility.VISIBLE
-        : sFlags[0] == 'I' 
-          ? DxViewVisibility.INVISIBLE
-          : DxViewVisibility.GONE,
-      f: sFlags[1] == 'F',
-      F: sPflags[1] == 'F',
-      E: sFlags[2] == 'E',
-      S: sPflags[2] == 'S',
-      d: sFlags[3] == 'D',
-      hs: sFlags[4] == 'H',
-      vs: sFlags[5] == 'V',
-      c: sFlags[6] == 'C',
-      lc: sFlags[7] == 'L',
-      cc: sFlags[8] == 'X'
-    };
-
-    // tune visibility according its parent's visibility
-    if (parent.flags.V == DxViewVisibility.INVISIBLE) {
-      if (flags.V == DxViewVisibility.VISIBLE) {
-        flags.V = DxViewVisibility.INVISIBLE;
-      }
-    } else if (parent.flags.V == DxViewVisibility.GONE) {
-      flags.V = DxViewVisibility.GONE;
-    }
-
-    // parse background
-    const bgClass = sBgClass == '.' 
-      ? parent.bgClass      // inherits from its parent
-      : sBgClass;
-    const bgColor = sBgClass == '.'
-      ? parent.bgColor      // inherits from its parent
-      : sBgColor == '.'
-        ? null              // not color, maybe ripple, images
-        : Number(sBgColor); // color int value
-
-    // calculate absolute bounds, translation, and scroll
-    const left = parent.left + Number(sOffL);
-    const top = parent.top + Number(sOffT);
-    const right = parent.left + Number(sOffR);
-    const bottom = parent.top + Number(sOffB);
-    const tx = parent.translationX + Number(sTx);
-    const ty = parent.translationY + Number(sTy);
-    const tz = parent.translationZ + Number(sTz);
-    const sx = parent.scrollX + Number(sSx);
-    const sy = parent.scrollY + Number(sSy);
-
-    // decode if necessary
-    const text: string = this.decode ? base64.decode(sText) : sText;
-    const desc: string = this.decode ? base64.decode(sDesc) : sDesc; 
-    
-    // create the view
-    let view: DxView;
-    if (sPcurr) {
-      view = this.packer.newView(DxViewType.VIEW_PAGER);
-    } else if (sTcurr) {
-      view = this.packer.newView(DxViewType.TAB_HOST);
-    } else {
-      view = this.packer.newView(DxViewType.OTHERS);
-    }
-
-    // reset common properties
-    view.reset(
-      parent.pkg, cls, flags,
-      bgClass, bgColor,
-      left, top, right, bottom,
-      tx, ty, tz, sx, sy,
-      rpkg, rtype, rentry,
-      desc, text
-    );
-    // set properties for specific views
-    if (sPcurr && view instanceof DxViewPager) {
-      view.currItem = Number(sPcurr);
-    } else if (sTcurr && view instanceof DxTabHost) {
-      view.currTab = Number(sTcurr);
-    }
-
-    // add to parent
-    parent.addView(view);
-
-    return [view, dep];
   }
 }
 
@@ -431,7 +256,7 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
   // clear all previous log
   await adb.clearLogcat(['main', 'crash']);
   // reset logcat size to 16M
-  await adb.setLogcatSize({ size: 16, unit: 'M' }, ['main'])
+  await adb.setLogcatSize({ size: 16, unit: 'M' }, ['main']);
   const output = adb.raw.pl.logcat(tag, {
     prio: 'I',
     silent: true,
