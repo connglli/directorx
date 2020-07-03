@@ -8,7 +8,6 @@ import DxEvent, {
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxView, { 
-  DxViewVisibility, 
   DxActivity, 
   DxDecorView,
   DxViewPager,
@@ -120,11 +119,7 @@ class DXPK {
           app,                               // pkg
           tokens[1],                         // cls
           {                                  // flags
-            V: tokens[18][0] == 'V' 
-              ? DxViewVisibility.VISIBLE
-              : tokens[18][0] == 'I'
-                ? DxViewVisibility.INVISIBLE
-                : DxViewVisibility.GONE,
+            V:  tokens[18][0] as ('V' | 'I' | 'G'),
             f:  tokens[18][1] == 'F',
             F:  tokens[18][2] == 'F',
             S:  tokens[18][3] == 'S',
@@ -295,11 +290,7 @@ class DXPK {
       await DXPK.writeString(buf, `${base64.encode(v.desc)};${base64.encode(v.text)};`, false);
       await DXPK.writeString(buf, `${v.bgClass};${v.bgColor ?? '.'};`, false);
       let flags = '';
-      flags += v.flags.V == DxViewVisibility.VISIBLE 
-        ? 'V' 
-        : v.flags.V == DxViewVisibility.INVISIBLE 
-          ? 'I' 
-          : 'G';
+      flags += v.flags.V;
       flags += v.flags.f ? 'F' : '.';
       flags += v.flags.F ? 'F' : '.';
       flags += v.flags.S ? 'S' : '.';

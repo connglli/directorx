@@ -1,5 +1,5 @@
 import { signal } from './deps.ts';
-import { DxAdb, DevInfo, ProcessError, DxActivityDumpSysBuilder } from './dxadb.ts';
+import DxAdb, { DevInfo, ProcessError, ActivityDumpSysBuilder } from './dxadb.ts';
 import DxPacker from './dxpack.ts';
 import DxEvent, {
   DxTapEvent,
@@ -204,7 +204,7 @@ class DxRecParser {
     // ungzip the decoded entries
     const entries = gzip.unzip(new Uint8Array(decoded)).split('\n');
 
-    return new DxActivityDumpSysBuilder(this.app, this.curr.name)
+    return new ActivityDumpSysBuilder(this.app, this.curr.name)
       .withWidth(this.dev.width)
       .withHeight(this.dev.height)
       .withDecoding(this.decode)

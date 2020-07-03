@@ -1,9 +1,3 @@
-import { DevInfo, DxAdb } from './dxadb.ts';
-import { 
-  DxYota, 
-  ViewInputOptions as YotaViewInputOptions, 
-  SelectOptions
-} from './dxyota.ts';
 import DxEvent, { 
   DxXYEvent,
   DxKeyEvent, 
@@ -16,8 +10,13 @@ import DxEvent, {
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
-import * as time from './utils/time.ts';
 import DxView, { DxActivity, DxViewMap } from './dxview.ts';
+import DxDroid, {
+  DevInfo,
+  ViewInputOptions, 
+  SelectOptions
+} from './dxdroid.ts';
+import * as time from './utils/time.ts';
 import { 
   IllegalStateError, 
   NotImplementedError, 
@@ -26,18 +25,12 @@ import {
 
 abstract class DxPlayer {
   public readonly timeSensitive = true;
-  public readonly adb: DxAdb;
   protected seq: DxEvSeq | null = null;
   constructor(
     public readonly app: string,   // app to play
-    public readonly rdev: DevInfo, // record device
-    public readonly pdev: DevInfo, // play device,
-    public readonly yota: DxYota   // input command
-  ) {
-    this.adb = yota.adb;
-  }
+  ) {}
 
-  async play(seq: DxEvSeq): Promise<void> {
+  async play(seq: DxEvSeq, rDev: DevInfo): Promise<void> {
     this.seq = seq;
     let lastMs = -1;
     while (!this.seq.empty()) {
@@ -50,30 +43,31 @@ abstract class DxPlayer {
           }
         }
       }
-      await this.playEvent(e);
+      await this.playEvent(e, rDev);
       DxLog.info(e.toString());
       lastMs = e.t;
     }
   }
 
-  protected abstract async playEvent(e: DxEvent): Promise<void>
+  protected abstract async playEvent(e: DxEvent, rDev: DevInfo): Promise<void>
 }
 
-/** DxPxPlayer plays each event pixel by pixel */
-class DxPxPlayer extends DxPlayer {
+/** PxPlayer plays each event pixel by pixel */
+class PxPlayer extends DxPlayer {
   protected async playEvent(e: DxEvent): Promise<void> {
+    const input = DxDroid.get().input;
     switch (e.ty) {
     case 'tap':
-      await this.yota.tap((e as DxTapEvent).x, (e as DxTapEvent).y);
+      await input.tap((e as DxTapEvent).x, (e as DxTapEvent).y);
       break;
     case 'long-tap':
-      await this.yota.longTap((e as DxLongTapEvent).x, (e as DxLongTapEvent).y);
+      await input.longTap((e as DxLongTapEvent).x, (e as DxLongTapEvent).y);
       break;
     case 'double-tap':
-      await this.yota.doubleTap((e as DxDoubleTapEvent).x, (e as DxDoubleTapEvent).y);
+      await input.doubleTap((e as DxDoubleTapEvent).x, (e as DxDoubleTapEvent).y);
       break;
     case 'swipe':
-      await this.yota.swipe(
+      await input.swipe(
         (e as DxSwipeEvent).x, 
         (e as DxSwipeEvent).y, 
         (e as DxSwipeEvent).dx, 
@@ -81,78 +75,87 @@ class DxPxPlayer extends DxPlayer {
       );
       break;
     case 'key':
-      await this.yota.key((e as DxKeyEvent).k);
+      await input.key((e as DxKeyEvent).k);
       break;
     }
   }
 }
 
-/** DxPtPlayer plays each event percentage by percentage */
-class DxPtPlayer extends DxPlayer {
-  protected async playEvent(e: DxEvent): Promise<void> {
+/** PtPlayer plays each event percentage by percentage */
+class PtPlayer extends DxPlayer {
+  protected async playEvent(e: DxEvent, rDev: DevInfo): Promise<void> {
+    const input = DxDroid.get().input;
+    const dev = DxDroid.get().dev;
     if (e.ty == 'tap') {
       const {x, y} = (e as DxTapEvent);      
-      await this.yota.tap(
-        this.rec2play(x, false),
-        this.rec2play(y, true)
+      await input.tap(
+        this.rec2play(x, dev, rDev, false),
+        this.rec2play(y, dev, rDev, true)
       );
     } else if (e.ty == 'long-tap') {
       const {x, y} = (e as DxLongTapEvent);      
-      await this.yota.longTap(
-        this.rec2play(x, false),
-        this.rec2play(y, true)
+      await input.longTap(
+        this.rec2play(x, dev, rDev, false),
+        this.rec2play(y, dev, rDev, true)
       );
     } else if (e.ty == 'double-tap') {
       const {x, y} = (e as DxDoubleTapEvent);      
-      await this.yota.doubleTap(
-        this.rec2play(x, false),
-        this.rec2play(y, true)
+      await input.doubleTap(
+        this.rec2play(x, dev, rDev, false),
+        this.rec2play(y, dev, rDev, true)
       );
     } else if (e.ty == 'swipe') {
       const {
         x, y, dx, dy
       } = (e as DxSwipeEvent);
-      await this.yota.swipe(
-        this.rec2play(x, false),
-        this.rec2play(y, true),
-        this.rec2play(dx, false),
-        this.rec2play(dy, true)
+      await input.swipe(
+        this.rec2play(x, dev, rDev, false),
+        this.rec2play(y, dev, rDev, true),
+        this.rec2play(dx, dev, rDev, false),
+        this.rec2play(dy, dev, rDev, true)
       );
     } else if (e.ty == 'key') {
-      await this.yota.key((e as DxKeyEvent).k);
+      await input.key((e as DxKeyEvent).k);
     }
   }
 
-  private rec2play(x: number, height = false): number {
+  private rec2play(
+    x: number, 
+    pDev: DevInfo, 
+    rDev: DevInfo, 
+    height = false
+  ): number {
     if (height) {
-      return x / this.rdev.height * this.pdev.height;
+      return x / rDev.height * pDev.height;
     } else {
-      return x / this.rdev.width * this.pdev.width;
+      return x / rDev.width * pDev.width;
     }
   }
 }
 
-/** DxWdgPlayer plays each event according to its view widget.
+/** WdgPlayer plays each event according to its view widget.
  * It matches each view according to its:
  * 1. resId (contains-ignore-case)
  * 2. desc (contains-ignore-case)
  * 3. text (contains-ignore-case)
  * If no views are found, a YotaNoSuchViewException is thrown.
  */
-class DxWdgPlayer extends DxPlayer {
+class WdgPlayer extends DxPlayer {
   protected async playEvent(e: DxEvent): Promise<void> {
+    const input = DxDroid.get().input;
+    const dev = DxDroid.get().dev;
     if (e.ty == 'tap') {
       const {x, y} = (e as DxTapEvent);
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
-      await this.yota.view('tap', opt);
+      await input.view('tap', opt);
     } else if (e.ty == 'long-tap') {
       const {x, y} = (e as DxLongTapEvent);
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
-      await this.yota.view('longtap', opt);
+      await input.view('longtap', opt);
     } else if (e.ty == 'double-tap') {
       const {x, y} = (e as DxDoubleTapEvent);
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
-      await this.yota.view('doubletap', opt);
+      await input.view('doubletap', opt);
     } else if (e.ty == 'swipe') {
       const { x, y } = (e as DxSwipeEvent);
       let  { dx, dy } = (e as DxSwipeEvent);
@@ -162,18 +165,18 @@ class DxWdgPlayer extends DxPlayer {
       const vCenter = (v.top + v.bottom) / 2;
       if (dx < 0 && hCenter + dx < 0) {
         dx = -hCenter;
-      } else if (dx > 0 && hCenter + dx > this.pdev.width) {
-        dx = this.pdev.width - hCenter;
+      } else if (dx > 0 && hCenter + dx > dev.width) {
+        dx = dev.width - hCenter;
       }
       if (dy < 0 && vCenter + dy < 0) {
         dy = -vCenter;
-      } else if (dy > 0 && vCenter + dy > this.pdev.height) {
-        dy = this.pdev.height - vCenter;
+      } else if (dy > 0 && vCenter + dy > dev.height) {
+        dy = dev.height - vCenter;
       }
       opt.dx = dx; opt.dy = dy;
-      await this.yota.view('swipe', opt);
+      await input.view('swipe', opt);
     } else if (e.ty == 'key') {
-      await this.yota.key((e as DxKeyEvent).k);
+      await input.key((e as DxKeyEvent).k);
     }
   }
 
@@ -181,12 +184,12 @@ class DxWdgPlayer extends DxPlayer {
     a: DxActivity, 
     x: number, 
     y: number
-  ): [YotaViewInputOptions, DxView] {
+  ): [ViewInputOptions, DxView] {
     const v = a.findViewByXY(x, y);
     if (v == null) {
       throw new IllegalStateError(`No visible view found at (${x}, ${y}) on rec tree`);
     }
-    const opt: YotaViewInputOptions = {};
+    const opt: ViewInputOptions = {};
     if (v.resId.length != 0) {
       opt.resIdContains = v.resEntry;
     }
@@ -200,23 +203,20 @@ class DxWdgPlayer extends DxPlayer {
   }
 }
 
-/** DxResPlayer plays each event responsively */
-class DxResPlayer extends DxPlayer {
+/** ResPlayer plays each event responsively */
+class ResPlayer extends DxPlayer {
   constructor(
     app: string,
-    rdev: DevInfo,
-    pdev: DevInfo,
-    yota: DxYota,
     public readonly decode: boolean,
     public readonly K: number
   ) {
-    super(app, rdev, pdev, yota);
+    super(app);
   }
 
   protected async playEvent(e: DxEvent): Promise<void> {
     if (!isXYEvent(e)) {
       if (e.ty == 'key') {
-        await this.yota.key((e as DxKeyEvent).k);
+        await DxDroid.get().input.key((e as DxKeyEvent).k);
       } else {
         throw new NotImplementedError();
       }
@@ -267,7 +267,7 @@ class DxResPlayer extends DxPlayer {
     if (!opt.resIdContains && !opt.textContains && !opt.descContains) {
       throw new NotImplementedError('resId, text and desc are all empty');
     }
-    const vms = await this.yota.select(opt);
+    const vms = await DxDroid.get().input.select(opt);
     if (vms.length == 0) {
       return null;
     } else {
@@ -281,11 +281,11 @@ class DxResPlayer extends DxPlayer {
     const y = (top + bottom) / 2;
     switch (e.ty) {
     case 'tap':
-      return await this.yota.tap(x, y);
+      return await DxDroid.get().input.tap(x, y);
     case 'double-tap':
-      return await this.yota.doubleTap(x, y);
+      return await DxDroid.get().input.doubleTap(x, y);
     case 'long-tap':
-      return await this.yota.longTap(x, y);
+      return await DxDroid.get().input.longTap(x, y);
     case 'swipe':
       throw new NotImplementedError();
     default:
@@ -312,41 +312,42 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
   const {
     serial, pty, dxpk
   } = opt;
-  const adb = new DxAdb({ serial });
-  const yota = new DxYota(adb);
+
+  // connect to droid
+  await DxDroid.connect(serial);
   
-  const packer = await DxPacker.load(dxpk);
-  const dev = await adb.fetchInfo();
-  const seq = new DxEvSeq(packer.eventSeq.map(e => packer.unpack(e)));
+  const pkr = await DxPacker.load(dxpk);
+  const dev = DxDroid.get().dev;
+  const seq = new DxEvSeq(pkr.eventSeq.map(e => pkr.unpack(e)));
 
   let player: DxPlayer;
   switch (pty) {
   case 'px':
     if (
-      dev.width != packer.dev.width || 
-      dev.height != packer.dev.height || 
-      dev.dpi != packer.dev.dpi
+      dev.width != pkr.dev.width || 
+      dev.height != pkr.dev.height || 
+      dev.dpi != pkr.dev.dpi
     ) {
       DxLog.warning('Screen setting is different, you\'d better use a more advanced player');
     }
-    player = new DxPxPlayer(packer.app, packer.dev, dev, yota);
+    player = new PxPlayer(pkr.app);
     break;
   case 'pt':
-    player = new DxPtPlayer(packer.app, packer.dev, dev, yota);
+    player = new PtPlayer(pkr.app);
     break;
   case 'wdg':
-    player = new DxWdgPlayer(packer.app, packer.dev, dev, yota);
+    player = new WdgPlayer(pkr.app);
     break;
   case 'res':
     if (!opt.K) {
       DxLog.critical('Lookahead K is not specified, use -K or --lookahead to specify it');
       Deno.exit(1);
     }
-    player = new DxResPlayer(packer.app, packer.dev, dev, yota, opt.decode, opt.K);
+    player = new ResPlayer(pkr.app, opt.decode, opt.K);
     break;
   default:
     throw new CannotReachHereError();
   }
 
-  await player.play(seq);
+  await player.play(seq, pkr.dev);
 }

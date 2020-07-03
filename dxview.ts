@@ -1,28 +1,22 @@
 import LinkedList from './utils/linked_list.ts';
 import { CannotReachHereError } from './utils/error.ts';
 
-export enum DxViewVisibility {
-  VISIBLE,
-  INVISIBLE,
-  GONE
-}
-
 export type DxViewFlags = {
-  V: DxViewVisibility; // visibility
-  f: boolean;          // focusable
-  F: boolean;          // focused
-  S: boolean;          // selected
-  E: boolean;          // enabled
-  d: boolean;          // will draw?
-  hs: boolean;         // horizontal scrollable
-  vs: boolean;         // vertical scrollable
-  c: boolean;          // clickable
-  lc: boolean;         // long clickable
-  cc: boolean;         // context clickable  
+  V: 'V' | 'G' | 'I'; // visibility
+  f: boolean;         // focusable
+  F: boolean;         // focused
+  S: boolean;         // selected
+  E: boolean;         // enabled
+  d: boolean;         // will draw?
+  hs: boolean;        // horizontal scrollable
+  vs: boolean;        // vertical scrollable
+  c: boolean;         // clickable
+  lc: boolean;        // long clickable
+  cc: boolean;        // context clickable  
 }
 
 export const DefaultFlags: DxViewFlags = {
-  V: DxViewVisibility.VISIBLE,
+  V: 'V',
   f: false,
   F: false,
   S: false,
@@ -377,7 +371,7 @@ export default class DxView {
       this.drawingY <= y && y <= (this.drawingY + this.height)
     );
     if (visible) {
-      hit = hit && this.flags.V == DxViewVisibility.VISIBLE;
+      hit = hit && this.flags.V == 'V';
     }
     if (enabled) {
       hit = hit && this.flags.E;
@@ -460,36 +454,6 @@ export default class DxView {
       parent,
       children
     );
-  }
-
-  /** Convert to a map */
-  toMap(): DxViewMap {
-    return {
-      'index': 0,
-      'class': this.cls,
-      'package': this.pkg,
-      'resource-id': this.resId,
-      'text': this.text,
-      'content-desc': this.desc,
-      'enabled': this.flags.E,
-      'visible': this.flags.V == DxViewVisibility.VISIBLE,
-      'clickable': this.flags.c,
-      'context-clickable': this.flags.cc,
-      'long-clickable': this.flags.lc,
-      'scrollable': this.flags.hs || this.flags.vs,
-      'focusable': this.flags.f,
-      'focused': this.flags.F,
-      'selected': this.flags.S,
-      'bounds': {
-        'left': this.drawingX,
-        'right': this.drawingX + this.width,
-        'top': this.drawingY,
-        'bottom': this.drawingY + this.height
-      },
-      'checkable': true,
-      'checked': true,
-      'password': false,
-    };
   }
 }
 
