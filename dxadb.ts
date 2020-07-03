@@ -61,7 +61,7 @@ export class DevInfo {
 
 const PAT_AV_HEADER = /ACTIVITY\s(?<pkg>[\w.]+)\/(?<name>[\w.]+).*/;
 
-export class ActivityInfo {
+class DumpSysActivityInfo {
   private viewHierarchy_: [number, number] = [-1, -1];
   private name_ = '';
 
@@ -91,28 +91,8 @@ export class ActivityInfo {
   private init() {
     // parse head to pkg and name
     this.initHeader();
-    // find the view hierarchy start line
-    let viewHierarchyStartLine = -1;
-    const viewHierarchyStartLinePrefix = '  View Hierarchy:';
-    for (let i = 0; i < this.info.length; i ++) {
-      if (this.info[i].startsWith(viewHierarchyStartLinePrefix)) {
-        viewHierarchyStartLine = i + 1;
-        break;
-      }
-    }
-    if (viewHierarchyStartLine == -1) {
-      throw new AdbError('dumpsys activity top', 0, 'No view hierarchies exist');
-    }
-    // find the  view hierarchy end line
-    let viewHierarchyEndLine = this.info.length;
-    const viewHierarchyLinePrefix = '    ';
-    for (let i = viewHierarchyStartLine; i < this.info.length; i ++) {
-      if (!this.info[i].startsWith(viewHierarchyLinePrefix)) {
-        viewHierarchyEndLine = i;
-        break;
-      }
-    }
-    this.viewHierarchy_ = [viewHierarchyStartLine, viewHierarchyEndLine];
+    // parse to find view hierarchy
+    this.initViewHierarchy(true);
   }
 
   private initHeader() {
@@ -132,6 +112,76 @@ export class ActivityInfo {
       name = pkg + name; 
     }
     this.name_ = name;
+  }
+
+  private initViewHierarchy(rmNavSta = false) {
+    // find the view hierarchy start line
+    let viewHierarchyStartLine = -1;
+    const viewHierarchyStartLinePrefix = '  View Hierarchy:';
+    for (let i = 0; i < this.info.length; i ++) {
+      if (this.info[i].startsWith(viewHierarchyStartLinePrefix)) {
+        viewHierarchyStartLine = i + 1;
+        break;
+      }
+    }
+    if (viewHierarchyStartLine == -1) {
+      throw new AdbError('dumpsys activity top', 0, 'No view hierarchies exist');
+    }
+    // find the view hierarchy end line
+    let viewHierarchyEndLine = this.info.length;
+    const viewHierarchyLinePrefix = '    ';
+    for (let i = viewHierarchyStartLine; i < this.info.length; i ++) {
+      if (!this.info[i].startsWith(viewHierarchyLinePrefix)) {
+        viewHierarchyEndLine = i;
+        break;
+      }
+    }
+    if (rmNavSta) {
+      // find and drop navigation and status bar
+      let statusBarStartLine = -1;
+      let navBarStartLine = -1;
+      for (let i = viewHierarchyStartLine; i < viewHierarchyEndLine; i ++) {
+        if (this.info[i].indexOf('android:id/navigationBarBackground') != -1) {
+          navBarStartLine = i;
+        } else if (this.info[i].indexOf('android:id/statusBarBackground') != -1) {
+          statusBarStartLine = i;
+        }
+        if (navBarStartLine != -1 && statusBarStartLine != -1) {
+          break;
+        }
+      }
+      // in case there are children
+      if (statusBarStartLine != -1) {
+        let statusBarEndLine = statusBarStartLine + 1;
+        const statusBarPrefix = this.info[statusBarStartLine].substring(0, this.info[statusBarStartLine].indexOf('android.view.View')) + '  ';
+        for (let i = statusBarEndLine; i < viewHierarchyEndLine; i ++) {
+          if (!this.info[i].startsWith(statusBarPrefix)) {
+            statusBarEndLine = i;
+            break;
+          }
+        }
+        const deleted = (statusBarEndLine - statusBarStartLine);
+        this.info.splice(statusBarStartLine, deleted);
+        viewHierarchyEndLine -= deleted;
+        if (navBarStartLine > statusBarStartLine) {
+          navBarStartLine -= deleted;
+        }
+      }
+      if (navBarStartLine != -1) {
+        let navBarEndLine = navBarStartLine + 1;
+        const navBarPrefix = this.info[navBarStartLine].substring(0, this.info[navBarStartLine].indexOf('android.view.View')) + '  ';
+        for (let i = navBarEndLine; i < viewHierarchyEndLine; i ++) {
+          if (!this.info[i].startsWith(navBarPrefix)) {
+            navBarEndLine = i;
+            break;
+          }
+        }
+        const deleted = (navBarEndLine - navBarStartLine);
+        this.info.splice(navBarStartLine, deleted);
+        viewHierarchyEndLine -= deleted;
+      }
+      this.viewHierarchy_ = [viewHierarchyStartLine, viewHierarchyEndLine];
+    }
   }
 }
 
@@ -439,7 +489,46 @@ export class DxAdb {
       .build();
   }
 
-  async dumpTopActivity(pkg: string): Promise<ActivityInfo> {
+  async fetchInfo(): Promise<DevInfo> {
+    let width: number;
+    let height: number;
+    let dpi: number;
+    let out = (await this.unsafeExecOut('wm size')).trim();
+    let res = PAT_DEVICE_SIZE.exec(out);
+    if (!res || !res.groups) {
+      throw new AdbError('window size', -1, 'Match device size failed');
+    } else if (res.groups.ow && res.groups.oh) {
+      width = Number.parseInt(res.groups.ow);
+      height = Number.parseInt(res.groups.oh);
+    } else if (res.groups.pw && res.groups.pw) {
+      width = Number.parseInt(res.groups.pw);
+      height = Number.parseInt(res.groups.ph);
+    } else {
+      throw new AdbError('window size', -1, 'Match device size failed');
+    }
+    out = (await this.unsafeExecOut('wm density')).trim();
+    res = PAT_DEVICE_DENS.exec(out);
+    if (!res || !res.groups) {
+      throw new AdbError('window density', -1, 'Match device density failed');
+    } else if (res.groups.od) {
+      dpi = Number.parseInt(res.groups.od);
+    } else if (res.groups.pd) {
+      dpi = Number.parseInt(res.groups.pd);
+    } else {
+      throw new AdbError('window density', -1, 'Match device density failed');
+    }
+    return new DevInfo(
+      await this.getprop('ro.product.board'),
+      await this.getprop('ro.product.brand'),
+      await this.getprop('ro.product.device'),
+      await this.getprop('ro.product.cpu.abi'),
+      width, height, dpi,
+      Number.parseInt(await this.getprop('ro.system.build.version.sdk')),
+      Number.parseFloat(await this.getprop('ro.system.build.version.release'))
+    );
+  }
+
+  private async dumpTopActivity(pkg: string): Promise<DumpSysActivityInfo> {
     const out = (await this.unsafeExecOut('dumpsys activity top')).split('\n');
     // find the task start line
     let taskStartLine = -1;
@@ -483,10 +572,10 @@ export class DxAdb {
     for (let i = activityStartLine; i < activityEndLine; i ++) {
       info.push(out[i].substring(2));
     }
-    return new ActivityInfo(pkg, info);
+    return new DumpSysActivityInfo(pkg, info);
   }
 
-  async dumpViewHierarchy(pkg: string): Promise<string[]> {
+  private async dumpViewHierarchy(pkg: string): Promise<string[]> {
     const out = (await this.unsafeExecOut('dumpsys activity top')).split('\n');
     // find the task start line
     let taskStartLine = -1;
@@ -523,45 +612,6 @@ export class DxAdb {
     }
     // return the view hierarchy
     return out.slice(viewHierarchyStartLine, viewHierarchyEndLine);
-  }
-
-  async fetchInfo(): Promise<DevInfo> {
-    let width: number;
-    let height: number;
-    let dpi: number;
-    let out = (await this.unsafeExecOut('wm size')).trim();
-    let res = PAT_DEVICE_SIZE.exec(out);
-    if (!res || !res.groups) {
-      throw new AdbError('window size', -1, 'Match device size failed');
-    } else if (res.groups.ow && res.groups.oh) {
-      width = Number.parseInt(res.groups.ow);
-      height = Number.parseInt(res.groups.oh);
-    } else if (res.groups.pw && res.groups.pw) {
-      width = Number.parseInt(res.groups.pw);
-      height = Number.parseInt(res.groups.ph);
-    } else {
-      throw new AdbError('window size', -1, 'Match device size failed');
-    }
-    out = (await this.unsafeExecOut('wm density')).trim();
-    res = PAT_DEVICE_DENS.exec(out);
-    if (!res || !res.groups) {
-      throw new AdbError('window density', -1, 'Match device density failed');
-    } else if (res.groups.od) {
-      dpi = Number.parseInt(res.groups.od);
-    } else if (res.groups.pd) {
-      dpi = Number.parseInt(res.groups.pd);
-    } else {
-      throw new AdbError('window density', -1, 'Match device density failed');
-    }
-    return new DevInfo(
-      await this.getprop('ro.product.board'),
-      await this.getprop('ro.product.brand'),
-      await this.getprop('ro.product.device'),
-      await this.getprop('ro.product.cpu.abi'),
-      width, height, dpi,
-      Number.parseInt(await this.getprop('ro.system.build.version.sdk')),
-      Number.parseFloat(await this.getprop('ro.system.build.version.release'))
-    );
   }
 }
 
