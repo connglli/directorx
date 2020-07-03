@@ -1,16 +1,20 @@
 FEATURES:
-1. intercept more events, e.g.,
+***1. intercept more events, e.g.,
    1. ui events: dialog, popupwindow, editor
    2. system events: orientation, gps, ...
    3. webview
 2. collect crash information by adding states
-3. save dxpk in a binary compressed format
-4. in DXPK.load() and DXPK.dump() throw meaningful exception and add semantic checking
+3. save dxpk in a binary compressed format (consider using the binary 
+   and bb64 deno 3rd party lib)
+4. in DXPK.load() and DXPK.dump() throw meaningful exception and add 
+   semantic checking
 5. bundle and minify (uglify)
-6. detect text using OCR, and add as a ocr-text attribute to each leaf view
+6. detect text using OCR, and add as a ocr-text attribute to each 
+   leaf view
 7. consider rotation, scale, elevation in coordinate of view
-8. segment similarity: (1) word bag (2) background
-9. findViewByXY should not return the first, but (1) the first with text (2) if not 1, then first with desc, (3) the first
+***8. segment similarity: (1) word bag (2) background
+***9. findViewByXY should not return the first, but (1) the first 
+      with text (2) if not 1, then first with desc, (3) the first
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 
@@ -34,8 +38,14 @@ BUGS:
       pad_avanced (page2), and if the the tap event occurs on the different 
       page (mCurItem != tapped_item), it returns true to intercept the event 
       and hanldes the event itself
-****4. logs of logcat are often lost when the log is too large (even though 
+***4. overlapped views also makes ui segmentation fails
+**5. logs of logcat are often lost when the log is too large (even though 
        we've already pre-truncated the log before logging), this makes the dump
        incomplete and incorrect
        + current partially fixed by gzip the view hierarchy then encode as base64,
          but it can still fails when the output is large enough
+***6. some apps starts as a task with name different from package,
+       e.g., the Contact app
+***7. some apps (e.g., MS Word) start other apps, and this makes the 
+       package name of the activity different from that of the app, and
+       task name different
