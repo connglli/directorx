@@ -1,5 +1,5 @@
 import Ranges, { Range } from '../utils/ranges.ts';
-import DxView, { DxActivity, DxViewVisibility } from '../dxview.ts';
+import DxView, { DxActivity } from '../dxview.ts';
 import { CannotReachHereError } from '../utils/error.ts';
 
 const DEFAULTS = {
@@ -85,7 +85,7 @@ class Views {
   }
 
   static isVisible(v: DxView): boolean {
-    return v.flags.V == DxViewVisibility.VISIBLE;
+    return v.flags.V == 'V';
   }
 
   static hasValidChild(v: DxView): boolean {

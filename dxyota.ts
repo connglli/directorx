@@ -1,7 +1,6 @@
-import { 
+import DxAdb, { 
   AdbResult, 
-  AdbError, 
-  DxAdb
+  AdbError
 } from './dxadb.ts';
 import { DxViewMap } from './dxview.ts';
 import { NotImplementedError } from './utils/error.ts';
@@ -130,7 +129,7 @@ export class YotaNoSuchViewError extends AdbError {
   }
 }
 
-export class DxYota {
+export default class DxYota {
   public static readonly BIN = '/data/local/tmp/yota'
   constructor(
     public readonly adb: DxAdb

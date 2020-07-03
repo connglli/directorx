@@ -8,7 +8,6 @@ import {
 import DxView, { 
   DxActivity, 
   DxViewFlags, 
-  DxViewVisibility,
   DxViewPager,
   DxTabHost,
   DxViewType,
@@ -190,7 +189,7 @@ class DumpSysActivityInfo {
 const PAT_AV_DECOR = /DecorView@[a-fA-F0-9]+\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
 const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
 
-export class DxActivityDumpSysBuilder {
+export class ActivityDumpSysBuilder {
 
   private pfxLen = 0;
   private step = 1;
@@ -205,37 +204,37 @@ export class DxActivityDumpSysBuilder {
     private readonly name: string
   ) {}
 
-  withWidth(width: number): DxActivityDumpSysBuilder {
+  withWidth(width: number): ActivityDumpSysBuilder {
     this.width = width;
     return this;
   }
 
-  withHeight(height: number): DxActivityDumpSysBuilder {
+  withHeight(height: number): ActivityDumpSysBuilder {
     this.height = height;
     return this;
   }
 
-  withDecoding(decode: boolean): DxActivityDumpSysBuilder {
+  withDecoding(decode: boolean): ActivityDumpSysBuilder {
     this.decode = decode;
     return this;
   }
 
-  withPrefixLength(len: number): DxActivityDumpSysBuilder {
+  withPrefixLength(len: number): ActivityDumpSysBuilder {
     this.pfxLen = len;
     return this;
   }
 
-  withStep(step: number): DxActivityDumpSysBuilder {
+  withStep(step: number): ActivityDumpSysBuilder {
     this.step = step;
     return this;
   }
 
-  withCache(cache: DxViewCache): DxActivityDumpSysBuilder {
+  withCache(cache: DxViewCache): ActivityDumpSysBuilder {
     this.cache = cache;
     return this;
   }
 
-  withViewHierarchy(viewHierarchy: string[]): DxActivityDumpSysBuilder {
+  withViewHierarchy(viewHierarchy: string[]): ActivityDumpSysBuilder {
     this.viewHierarchy = viewHierarchy;
     return this;
   }
@@ -332,10 +331,10 @@ export class DxActivityDumpSysBuilder {
     // parse and construct the view
     const flags: DxViewFlags = {
       V: sFlags[0] == 'V' 
-        ? DxViewVisibility.VISIBLE
+        ? 'V'
         : sFlags[0] == 'I' 
-          ? DxViewVisibility.INVISIBLE
-          : DxViewVisibility.GONE,
+          ? 'I'
+          : 'G',
       f: sFlags[1] == 'F',
       F: sPflags[1] == 'F',
       E: sFlags[2] == 'E',
@@ -349,12 +348,12 @@ export class DxActivityDumpSysBuilder {
     };
 
     // tune visibility according its parent's visibility
-    if (parent.flags.V == DxViewVisibility.INVISIBLE) {
-      if (flags.V == DxViewVisibility.VISIBLE) {
-        flags.V = DxViewVisibility.INVISIBLE;
+    if (parent.flags.V == 'I') {
+      if (flags.V == 'V') {
+        flags.V = 'I';
       }
-    } else if (parent.flags.V == DxViewVisibility.GONE) {
-      flags.V = DxViewVisibility.GONE;
+    } else if (parent.flags.V == 'G') {
+      flags.V = 'G';
     }
 
     // parse background
@@ -435,7 +434,7 @@ export class DxActivityDumpSysBuilder {
   }
 }
 
-export class DxAdb {
+export default class DxAdb {
   public readonly raw: AdbBindShape;
   constructor(gOpt: AdbGlobalOptions = {}) {
     this.raw = bindAdb(gOpt);
@@ -479,7 +478,7 @@ export class DxAdb {
     const info = await this.dumpTopActivity(pkg);
     const vhIndex = info.viewHierarchy;
     const viewHierarchy = info.get().slice(vhIndex[0], vhIndex[1]);
-    return new DxActivityDumpSysBuilder(pkg, info.name)
+    return new ActivityDumpSysBuilder(pkg, info.name)
       .withHeight(dev.height)
       .withWidth(dev.width)
       .withDecoding(decoding)
