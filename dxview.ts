@@ -29,33 +29,6 @@ export const DefaultFlags: DxViewFlags = {
   cc: false,
 };
 
-export type DxViewMap = {
-  'index': number;
-  'package': string;
-  'class': string;
-  'resource-id': string;
-  'visible': boolean;
-  'text': string;
-  'content-desc': string;
-  'clickable': boolean;
-  'context-clickable': boolean;
-  'long-clickable': boolean;
-  'scrollable': boolean;
-  'checkable': boolean;
-  'checked': boolean;
-  'focusable': boolean;
-  'focused': boolean;
-  'selected': boolean;
-  'password': boolean;
-  'enabled': boolean;
-  'bounds': { // the visible and drawing bounds
-    'left': number;
-    'right': number;
-    'top': number;
-    'bottom': number;
-  }
-}
-
 export enum DxViewType {
   DECOR = 1,
   VIEW_PAGER,
@@ -277,7 +250,7 @@ export default class DxView {
   get text(): string {
     return this.text_;
   }
-  
+
   /** Add view v as a child */
   addView(v: DxView): void {
     v.parent_ = this;

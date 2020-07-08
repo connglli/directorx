@@ -208,6 +208,8 @@ class DxRecParser {
       .withWidth(this.dev.width)
       .withHeight(this.dev.height)
       .withDecoding(this.decode)
+      .withPrefixLength(0)
+      .withStep(1)
       .withViewHierarchy(entries)
       .build();
   }
@@ -224,17 +226,23 @@ class DxRecParser {
 // HERE WE GOES
 
 export type DxRecordOptions = {
-  serial?: string;  // phone serial no
-  tag:     string;  // logcat tag
-  app:     string;  // app package
-  dxpk:    string;  // output dxpk path
-  decode:  boolean; // flag: decode string or not
+  serial?:  string;  // phone serial no
+  tag:      string;  // logcat tag
+  app:      string;  // app package
+  dxpk:     string;  // output dxpk path
+  decode:   boolean; // flag: decode string or not
+  verbose?: boolean; // verbose mode
 }
 
 export default async function dxRec(opt: DxRecordOptions): Promise<void> {
   const {
-    serial, tag, app, dxpk, decode
+    serial, tag, app, dxpk, decode, verbose = false
   } = opt;
+
+  if (verbose) {
+    DxLog.setLevel('DEBUG');
+  }
+
   const adb = new DxAdb({ serial });
 
   // fetch basic information
