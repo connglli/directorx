@@ -4,6 +4,42 @@ export class RangeError extends Error {}
  * `start`, and ended by `end`, i.e. [start, end].
  */
 export class Range {
+  /** check whether a and b are crossed each other, return
+   * + -1: not cross
+   * +  0: a's st in b
+   * +  1: a's ed in b
+   */
+  static cross(a: Range, b: Range): number {
+    if (a.st > b.st && a.st < b.ed && b.ed < a.ed) {
+      return 0;
+    } else if (b.st > a.st && b.st < a.ed && a.ed < b.ed) {
+      return 1;
+    } else {
+      return -1;
+    }
+  }
+
+  /** check whether a covers b, return
+   * + -1: not cover
+   * +  0: cover, and st is same
+   * +  1: cover, and ed is same
+   * +  2: cover, and exactly same
+   * +  3: cover, and strict cover
+   */
+  static cover(a: Range, b: Range): -1 | 0 | 1 | 2 | 3 {
+    if (a.st == b.st && a.ed == b.ed) {
+      return 2;
+    } else if (a.st < b.st && b.ed < a.ed) {
+      return 3;
+    } else if (a.st == b.st && b.ed < a.ed) {
+      return 0;
+    } else if (a.st < b.st && b.ed == a.ed) {
+      return 1;
+    } else {
+      return -1;
+    }
+  }
+
   constructor(
     private st_: number, 
     private ed_: number
@@ -68,11 +104,11 @@ export default class Ranges {
     this.ranges.splice(0, this.ranges.length);
     for (const i in ranges) {
       const rg = ranges[i];
-      if (this.cover(rg, removed) >= 0) {
+      if (Range.cover(rg, removed) >= 0) {
         // cover, split rg by removed
         this.ranges.push(...this.split(rg, removed));
-      } else if (this.cover(removed, rg) >= 0) {
-        switch (this.cover(removed, rg)) {
+      } else if (Range.cover(removed, rg) >= 0) {
+        switch (Range.cover(removed, rg)) {
         case 2:
           throw new RangeError('Cannot reach here');
         case 1:
@@ -91,7 +127,7 @@ export default class Ranges {
         }
       } else {
         // cross or no overlapping
-        const which = this.cross(rg, removed);
+        const which = Range.cross(rg, removed);
         if (which >= 0) {
           // cross, update rg boundary
           rg.set(which, removed.get(1 - which));
@@ -117,38 +153,6 @@ export default class Ranges {
       return [x]; // don't split
     } else {
       return [new Range(x.st, at.st), new Range(at.ed, x.ed)];
-    }
-  }
-
-  /** check whether a and b are crossed each other */
-  private cross(a: Range, b: Range): number {
-    if (a.st > b.st && a.st < b.ed && b.ed < a.ed) {
-      return 0;
-    } else if (b.st > a.st && b.st < a.ed && a.ed < b.ed) {
-      return 1;
-    } else {
-      return -1;
-    }
-  }
-
-  /** check whether a covers b, return
-   * + -1: not cover
-   * +  0: cover, and st is same
-   * +  1: cover, and ed is same
-   * +  2: cover, and exactly same
-   * +  3: cover, and strict cover
-   */
-  private cover(a: Range, b: Range): -1 | 0 | 1 | 2 | 3 {
-    if (a.st == b.st && a.ed == b.ed) {
-      return 2;
-    } else if (a.st < b.st && b.ed < a.ed) {
-      return 3;
-    } else if (a.st == b.st && b.ed < a.ed) {
-      return 0;
-    } else if (a.st < b.st && b.ed == a.ed) {
-      return 1;
-    } else {
-      return -1;
     }
   }
 }

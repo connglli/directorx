@@ -542,9 +542,9 @@ export default class DxPacker {
   private infoLogInner(e: DxEvent, views: DxView[]) {
     if (views.length != 0) {
       const v = views[0];
-      DxLog.debug(`${e.toString()} cls=${v.cls} id="${v.resId}" text="${v.text}" desc="${v.desc}" x=${v.x}-${v.x + v.width} y=${v.y}-${v.y + v.height} z=${v.z}`);
+      DxLog.info(`${e.toString()} cls=${v.cls} id="${v.resId}" text="${v.text}" desc="${v.desc}" x=${v.x}-${v.x + v.width} y=${v.y}-${v.y + v.height} z=${v.z}`);
     } else if (e.ty == 'key') {
-      DxLog.debug(e.toString());
+      DxLog.info(e.toString());
     }
   }
 }

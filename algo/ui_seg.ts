@@ -1,5 +1,7 @@
 import Ranges, { Range } from '../utils/ranges.ts';
 import DxView, { DxActivity } from '../dxview.ts';
+import DxDroid from '../dxdroid.ts';
+import DxLog from '../dxlog.ts';
 import { CannotReachHereError } from '../utils/error.ts';
 
 const DEFAULTS = {
@@ -15,7 +17,8 @@ const DEFAULTS = {
     DIFF_NUM: 50, // different number of views
     DIFF_CLS: 10,  // different view classes
     SAME_CLS: -50, // same view class
-    SAME_SCROLL_PARENT: -80, // same scrollable parent
+    SAME_VS_PARENT: -80, // same vertical scrollable parent
+    SAME_HS_PARENT: -80, // same horizontal scrollable parent
     DIFF_BG: 200, // different bg classes and colors
     DIFF_BG_CLS: 50, // different bg classes
     DIFF_BG_COLOR: 100, // different bg colors
@@ -23,7 +26,7 @@ const DEFAULTS = {
     BOTH_TXT: -80, // both are text views
     DIFF_TEXT: 200, // one side is text, the other is not
   },
-  get SP_SCORE_THRESHOLD() {
+  get SP_SCORE_THRESHOLD(): number {
     let minAward = Number.MAX_VALUE;
     for (const k in this.SP_SCORE_AWARD) {
       const v = (this.SP_SCORE_AWARD as {[key: string]: number})[k];
@@ -84,8 +87,20 @@ class Views {
     return v.width != 0 && v.height != 0;
   }
 
-  static isVisible(v: DxView): boolean {
-    return v.flags.V == 'V';
+  static isVisibleToUser(v: DxView): boolean {
+    if (v.flags.V != 'V') {
+      return false;
+    }
+    const { width, height } = DxDroid.get().dev;
+    const wx = new Range(0, width);
+    const wy = new Range(0, height);
+    const vx = new Range(Views.x0(v), Views.x1(v));
+    const vy = new Range(Views.y0(v), Views.y1(v));
+    const x = Range.cover(wx, vx) >= 0 
+      || Range.cross(wx, vx) >= 0;
+    const y = Range.cover(wy, vy) >= 0 
+      || Range.cross(wy, vy) >= 0;
+    return x && y;
   }
 
   static hasValidChild(v: DxView): boolean {
@@ -150,7 +165,7 @@ const rules: Rule[] = [ // /* eslint-disable */
   /** If the view is navigation/status bar, then skip it */
   ({ v }) => Views.isNavBar(v) || Views.isStatusBar(v) ? 's' : '-',
   /** If the view is invisible skip it */
-  ({ v }) => !Views.isVisible(v) ? 's' : '-',
+  ({ v }) => !Views.isVisibleToUser(v) ? 's' : '-',
   /** If the view is invalid, skip it */
   ({ v }) => !Views.isValid(v) ? 's' : '-',
   /** If the view has no children, don't divide this view */
@@ -276,8 +291,26 @@ function findSepForSeg(
   const xRgs = new Ranges(seg.x, seg.x + seg.w);
   const yRgs = new Ranges(seg.y, seg.y + seg.h);
   for (const v of pool) {
+    DxLog.debug('== Find separators');
+    DxLog.debug(`${v.cls} resId=${v.resId} text="${v.text}" desc="${v.desc}"`);
+    DxLog.debug('XXXX (vsep)');
+    for (const r of xRgs) {
+      DxLog.debug(r.toString());
+    }
+    DxLog.debug(`REMOVE ${Views.x0(v)}-${Views.x1(v)}`);
     xRgs.remove(Views.x0(v), Views.x1(v));
+    for (const r of xRgs) {
+      DxLog.debug(r.toString());
+    }
+    DxLog.debug('YYYY (hsep)');
+    for (const r of yRgs) {
+      DxLog.debug(r.toString());
+    }
+    DxLog.debug(`REMOVE ${Views.y0(v)}-${Views.y1(v)}`);
     yRgs.remove(Views.y0(v), Views.y1(v));
+    for (const r of yRgs) {
+      DxLog.debug(r.toString());
+    }
   }
   const hSep: SepRange[] = [];
   const vSep: SepRange[] = [];
@@ -404,11 +437,11 @@ function scoreSep(
       {
         let scrollParent = a.findVScrollableParent();
         if (scrollParent != null && scrollParent == b.findVScrollableParent()) {
-          score += AWARD.SAME_SCROLL_PARENT;
+          score += AWARD.SAME_VS_PARENT;
         }
         scrollParent = a.findHScrollableParent();
         if (scrollParent != null && scrollParent == b.findHScrollableParent()) {
-          score += AWARD.SAME_SCROLL_PARENT;
+          score += AWARD.SAME_HS_PARENT;
         }
       }
       // thee diverse the background, the better
@@ -514,14 +547,31 @@ export default function segUi(a: DxActivity): [DxSegment[], DxSegSep[]] {
   const separators: DxSegSep[] = [];
   const queue: DxSegment[] = [initialSeg];
   while (queue.length != 0) {
+    DxLog.debug('>>>> New Iteration');
     const seg = queue.shift()!;
     const sep = segSeg(seg);
     if (sep != null && sep.score >= DEFAULTS.SP_SCORE_THRESHOLD) {
       queue.push(sep.sides[0], sep.sides[1]);
       separators.push(sep);
+      DxLog.debug(`++ add ${sep.dir} ${sep.score} ${sep.xrg.st};${sep.yrg.st};${sep.xrg.ed};${sep.yrg.ed}`);
     } else {
+      if (sep != null) {
+        DxLog.debug(`-- abandon ${sep.dir} ${sep.score} ${sep.xrg.st};${sep.yrg.st};${sep.xrg.ed};${sep.yrg.ed}`);
+      }
       segments.push(seg);
     }
   }
   return [segments, separators];
+}
+
+import { ActivityYotaBuilder } from '../dxyota.ts';
+if (import.meta.main) {
+  // await DxLog.setLevel('DEBUG');
+  await DxDroid.connect();
+  const d = DxDroid.get();
+  const act = await d.topActivity('com.android.calculator2', true, 'dumpsys');
+  const [segs, seps] = segUi(act);
+  for (const sep of seps) {
+    console.log(`${sep.xrg.st};${sep.yrg.st};${sep.xrg.ed};${sep.yrg.ed};`);
+  }
 }

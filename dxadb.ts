@@ -573,45 +573,6 @@ export default class DxAdb {
     }
     return new DumpSysActivityInfo(pkg, info);
   }
-
-  private async dumpViewHierarchy(pkg: string): Promise<string[]> {
-    const out = (await this.unsafeExecOut('dumpsys activity top')).split('\n');
-    // find the task start line
-    let taskStartLine = -1;
-    const taskStartLinePrefix = `TASK ${pkg} `;
-    for (let i = 0; i < out.length; i++) {
-      if (out[i].startsWith(taskStartLinePrefix)) {
-        taskStartLine = i;
-        break;
-      }
-    }
-    if (taskStartLine == -1) {
-      throw new AdbError('dumpsys activity top', 0, `Cannot find any task for ${pkg}`);
-    }
-    // find the view hierarchy start line
-    let viewHierarchyStartLine = -1;
-    const viewHierarchyStartLinePrefix = '    View Hierarchy:';
-    for (let i = taskStartLine; i < out.length; i ++) {
-      if (out[i].startsWith(viewHierarchyStartLinePrefix)) {
-        viewHierarchyStartLine = i + 1;
-        break;
-      }
-    }
-    if (viewHierarchyStartLine == -1) {
-      throw new AdbError('dumpsys activity top', 0, `Task ${pkg} found, but no view hierarchies exist`);
-    }
-    // find the  view hierarchy end line
-    let viewHierarchyEndLine = out.length;
-    const viewHierarchyLinePrefix = '      ';
-    for (let i = viewHierarchyStartLine; i < out.length; i ++) {
-      if (!out[i].startsWith(viewHierarchyLinePrefix)) {
-        viewHierarchyEndLine = i;
-        break;
-      }
-    }
-    // return the view hierarchy
-    return out.slice(viewHierarchyStartLine, viewHierarchyEndLine);
-  }
 }
 
 if (import.meta.main) {

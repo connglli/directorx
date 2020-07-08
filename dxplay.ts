@@ -10,11 +10,12 @@ import DxEvent, {
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
-import DxView, { DxActivity, DxViewMap } from './dxview.ts';
+import DxView, { DxActivity } from './dxview.ts';
 import DxDroid, {
   DevInfo,
   ViewInputOptions, 
-  SelectOptions
+  SelectOptions,
+  ViewMap
 } from './dxdroid.ts';
 import * as time from './utils/time.ts';
 import { 
@@ -246,7 +247,7 @@ class ResPlayer extends DxPlayer {
     throw new NotImplementedError('Ui Segmentation -> Segment Matching -> Synthesis');
   }
 
-  private async find(e: DxXYEvent): Promise<DxViewMap | null> {
+  private async find(e: DxXYEvent): Promise<ViewMap | null> {
     const { a, x, y } = e;
     const v = a.findViewByXY(x, y);
     if (v == null) {
@@ -275,7 +276,7 @@ class ResPlayer extends DxPlayer {
     }
   }
 
-  private async fireOnViewMap(e: DxEvent, v: DxViewMap) {
+  private async fireOnViewMap(e: DxEvent, v: ViewMap) {
     const { bounds: { left, right, top, bottom } } = v;
     const x = (left + right) / 2;
     const y = (top + bottom) / 2;
@@ -306,12 +307,17 @@ export type DxPlayOptions = {
   dxpk:    string;       // path to dxpk
   K?:      number;       // look ahead, if use res
   decode:  boolean;      // decode or not
+  verbose?: boolean;     // verbose mode
 };
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
   const {
-    serial, pty, dxpk
+    serial, pty, dxpk, verbose = false
   } = opt;
+
+  if (verbose) {
+    DxLog.setLevel('DEBUG');
+  }
 
   // connect to droid
   await DxDroid.connect(serial);

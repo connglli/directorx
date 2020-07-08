@@ -1,8 +1,8 @@
 FEATURES:
 ***1. intercept more events, e.g.,
-   1. ui events: dialog, popupwindow, editor
-   2. system events: orientation, gps, ...
-   3. webview
+      1. ui events: dialog, popupwindow, editor
+      2. system events: orientation, gps, ...
+      3. webview
 2. collect crash information by adding states
 3. save dxpk in a binary compressed format (consider using the binary 
    and bb64 deno 3rd party lib)
@@ -15,6 +15,11 @@ FEATURES:
 ***8. segment similarity: (1) word bag (2) background
 ***9. findViewByXY should not return the first, but (1) the first 
       with text (2) if not 1, then first with desc, (3) the first
+10. support multi-window (activity decor thereby cannot be installed 
+    only by a width and height, Views.isVisibleToUser() cannot determine
+    only by the dev width and height), maybe a DxWindow or ViewPort
+    should be introduced
+11. set logging level
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 
@@ -49,3 +54,4 @@ BUGS:
 ***7. some apps (e.g., MS Word) start other apps, and this makes the 
        package name of the activity different from that of the app, and
        task name different
+8. yota info commands may fail on real devices

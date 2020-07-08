@@ -27,13 +27,15 @@ prog
   .option('-o, --output <type:string>', 'output dxpk', {
     default: 'out.dxpk'
   })
-  .action(async ({ serial, output }: IFlags, app: string): Promise<void> => {
+  .option('-v, --verbose [type:boolean]', 'output verbose information')
+  .action(async ({ serial, output, verbose }: IFlags, app: string): Promise<void> => {
     await dxRec({
       serial: serial as (string | undefined),
       app,
       dxpk: output as string,
       decode: DECODE,
-      tag: TAG
+      tag: TAG,
+      verbose: verbose as (boolean | undefined)
     });
   });
 
@@ -45,13 +47,15 @@ prog
     default: 'px'
   })
   .option('-K, --lookahead [type:number]', 'Look ahead constant, required when player is res')
-  .action(async ({ serial, player, lookahead }: IFlags, dxpk: string): Promise<void> => {
+  .option('-v, --verbose [type:boolean]', 'output verbose information')
+  .action(async ({ serial, player, lookahead, verbose }: IFlags, dxpk: string): Promise<void> => {
     await dxPlay({ 
       serial: serial as (string | undefined),
       pty: player as DxPlayerType, 
       dxpk,
       K: lookahead as (number | undefined),
-      decode: DECODE
+      decode: DECODE,
+      verbose: verbose as (boolean | undefined)
     });
   });
 

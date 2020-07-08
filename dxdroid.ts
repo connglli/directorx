@@ -1,10 +1,13 @@
 import DxAdb, { DevInfo } from './dxadb.ts';
-import DxYota, { ViewInputOptions, SelectOptions } from './dxyota.ts';
+import DxYota, { ViewInputOptions, SelectOptions, ViewMap, ViewHierarchyMap } from './dxyota.ts';
+import { DxActivity } from './dxview.ts';
 
 export {
   DevInfo,
   ViewInputOptions, 
-  SelectOptions
+  SelectOptions,
+  ViewMap,
+  ViewHierarchyMap,
 };
 
 export class DxDroidError extends Error {}
@@ -12,7 +15,7 @@ export class DxDroidError extends Error {}
 export default class DxDroid {
   private static instance: DxDroid | null = null;
 
-  static async connect(serial: string | undefined): Promise<void> {
+  static async connect(serial?: string): Promise<void> {
     const adb = new DxAdb({ serial });
     const yota = new DxYota(adb);
     this.instance = new DxDroid(adb, yota);
@@ -34,6 +37,14 @@ export default class DxDroid {
   get input(): DxYota {
     this.check();
     return this.yota_;
+  }
+
+  async topActivity(pkg: string, decoding = true, tool: 'uiautomator' | 'dumpsys' = 'dumpsys'): Promise<DxActivity> {
+    if (tool == 'dumpsys') {
+      return await this.adb_.topActivity(pkg, decoding, this.dev);
+    } else {
+      return await this.yota_.topActivity(pkg, this.dev);
+    }
   }
 
   private inited = false;
