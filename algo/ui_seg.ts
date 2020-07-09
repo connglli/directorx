@@ -1,4 +1,4 @@
-import Ranges, { Range } from '../utils/ranges.ts';
+import { Range, XYRange, MemorizedXYRanges } from '../utils/ranges.ts';
 import DxView, { DxActivity } from '../dxview.ts';
 import DxDroid from '../dxdroid.ts';
 import DxLog from '../dxlog.ts';
@@ -11,20 +11,21 @@ const DEFAULTS = {
   // default by Bootstrap, see also Bootstrap "Grid options"
   // https://getbootstrap.com/docs/4.0/layout/grid/#grid-options
   SP_SZ_RECOMMENDED: 30,
+  SP_E_RECOMMENDED: 15,
   SP_SCORE_BASE: 100,
   SP_SCORE_AWARD: {
-    SZ_BEST: 120, // best score for separator size
-    DIFF_NUM: 50, // different number of views
-    DIFF_CLS: 10,  // different view classes
-    SAME_CLS: -50, // same view class
+    SZ_BEST: 120,        // best score for separator size
+    DIFF_NUM: 50,        // different number of views
+    DIFF_CLS: 10,        // different view classes
+    SAME_CLS: -50,       // same view class
     SAME_VS_PARENT: -80, // same vertical scrollable parent
     SAME_HS_PARENT: -80, // same horizontal scrollable parent
-    DIFF_BG: 200, // different bg classes and colors
-    DIFF_BG_CLS: 50, // different bg classes
-    DIFF_BG_COLOR: 100, // different bg colors
-    SAME_BG: -80, // same background
-    BOTH_TXT: -80, // both are text views
-    DIFF_TEXT: 200, // one side is text, the other is not
+    DIFF_BG: 200,        // different bg classes and colors
+    DIFF_BG_CLS: 50,     // different bg classes
+    DIFF_BG_COLOR: 100,  // different bg colors
+    SAME_BG: -80,        // same background
+    BOTH_TXT: -80,       // both are text views
+    DIFF_TEXT: 200,      // one side is text, the other is not
   },
   get SP_SCORE_THRESHOLD(): number {
     let minAward = Number.MAX_VALUE;
@@ -59,8 +60,8 @@ export type DxSegSep = {
   /** Score of this sep */
   score: number;
   /** Separator direction */
-  dir: 'H' | 'V';
-  /** Separator ranges */
+  dir: 'H' | 'V' | 'E';
+  /** Separator ranges, DON'T use them when dir is 'E' */
   xrg: Range; // [x0, x1]
   yrg: Range; // [y0, y1]
   /** Segments both sides, 
@@ -119,6 +120,10 @@ class Views {
     }
   }
 
+  static xxyy(v: DxView): [number, number, number, number] {
+    return [Views.x0(v), Views.x1(v), Views.y0(v), Views.y1(v)];
+  }
+
   static x0(v: DxView): number {
     return v.drawingX;
   }
@@ -137,8 +142,58 @@ class Views {
 }
 
 class Segments {
+  static adjust(
+    roots: DxView[]
+  ): DxSegment {
+    if (roots.length == 0) {
+      throw new UiSegError('roots is empty');
+    }
+    let xy = new XYRange(...Views.xxyy(roots[0]));
+    for (let i = 1; i < roots.length; i ++) {
+      xy = XYRange.merge(xy, new XYRange(...Views.xxyy(roots[i])));
+    }
+    return {
+      roots: roots,
+      x: xy.x.st,
+      y: xy.y.st,
+      w: xy.x.ed - xy.x.st,
+      h: xy.y.ed - xy.y.st
+    };
+  }
+
   static areaOf(s: DxSegment) {
     return s.w * s.h;
+  }
+
+  static coverAll(s: DxSegment, vs: DxView[]) {
+    const xy = new XYRange(...Segments.xxyy(s));
+    for (const v of vs) {
+      const c = new XYRange(...Views.xxyy(v));
+      if (Range.cover(xy.x, c.x) < 0 || Range.cover(xy.y, c.y) < 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static xxyy(s: DxSegment): [number, number, number, number] {
+    return [Segments.x0(s), Segments.x1(s), Segments.y0(s), Segments.y1(s)];
+  }
+
+  static x0(s: DxSegment): number {
+    return s.x;
+  }
+
+  static x1(s: DxSegment): number {
+    return s.x + s.w;
+  }
+
+  static y0(s: DxSegment): number {
+    return s.y;
+  }
+
+  static y1(s: DxSegment): number {
+    return s.y + s.h;
   }
 }
 
@@ -280,59 +335,81 @@ function segView(v: DxView, seg: DxSegment, pool: DxView[]) {
 }
 
 // [(x0, x1), (y0, y1)]
-type SepRange = [Range, Range]; 
+type HVSepRange = [Range, Range]; 
+// [a view pool, a view pool]
+type ESepRange = [DxView[], DxView[]];
 
-// Find and calculate the separator ranges
+// ViewRange is range with extra DxView
+class ViewRange extends XYRange {
+  constructor(
+    public readonly v: DxView
+  ) {
+    super(...Views.xxyy(v));
+  }
+}
+
+// Find and calculate the separator (elevated, horizontal, vertical) ranges
 // for a segment along with its pool
 function findSepForSeg(
   seg: DxSegment, 
   pool: DxView[]
-): [SepRange[], SepRange[]] {
-  const xRgs = new Ranges(seg.x, seg.x + seg.w);
-  const yRgs = new Ranges(seg.y, seg.y + seg.h);
+): [ESepRange[], HVSepRange[], HVSepRange[]] {
+  const rgs = new MemorizedXYRanges(
+    new XYRange(seg.x, seg.x + seg.w, seg.y, seg.y + seg.h)
+  );
   for (const v of pool) {
     DxLog.debug('== Find separators');
     DxLog.debug(`${v.cls} resId=${v.resId} text="${v.text}" desc="${v.desc}"`);
     DxLog.debug('XXXX (vsep)');
-    for (const r of xRgs) {
-      DxLog.debug(r.toString());
-    }
-    DxLog.debug(`REMOVE ${Views.x0(v)}-${Views.x1(v)}`);
-    xRgs.remove(Views.x0(v), Views.x1(v));
-    for (const r of xRgs) {
+    for (const r of rgs.x()) {
       DxLog.debug(r.toString());
     }
     DxLog.debug('YYYY (hsep)');
-    for (const r of yRgs) {
+    for (const r of rgs.y()) {
       DxLog.debug(r.toString());
     }
-    DxLog.debug(`REMOVE ${Views.y0(v)}-${Views.y1(v)}`);
-    yRgs.remove(Views.y0(v), Views.y1(v));
-    for (const r of yRgs) {
+    DxLog.debug(`RMX ${Views.x0(v)}-${Views.x1(v)}`);
+    DxLog.debug(`RMY ${Views.y0(v)}-${Views.y1(v)}`);
+    rgs.remove(new ViewRange(v));
+    for (const r of rgs.x()) {
+      DxLog.debug(r.toString());
+    }
+    for (const r of rgs.y()) {
       DxLog.debug(r.toString());
     }
   }
-  const hSep: SepRange[] = [];
-  const vSep: SepRange[] = [];
-  for (const rg of xRgs) {
+  const hSep: HVSepRange[] = [];
+  const vSep: HVSepRange[] = [];
+  const eSep: ESepRange[] = [];
+  for (const rg of rgs.x()) {
     // segment boundary is not a valid separator
     if (rg.st == seg.x || rg.ed == (seg.x + seg.w)) {
       continue;
     }
     vSep.push([rg, new Range(seg.y, seg.y + seg.h)]);
   }
-  for (const rg of yRgs) {
+  for (const rg of rgs.y()) {
     // segment boundary is not a valid separator
     if (rg.st == seg.y || rg.ed == (seg.y + seg.h)) {
       continue;
     }
     hSep.push([new Range(seg.x, seg.x + seg.w), rg]);
   }
-  return [hSep, vSep];
+  // eSep are recognized by overlapped regions
+  for (const rg of rgs.memory()) {
+    const ove = rgs.getOverlappingMemory(rg);
+    if (ove.length != 0) {
+      eSep.push([
+        [(rg as ViewRange).v],
+        ove.map(org => (org as ViewRange).v)
+      ]);
+    }
+  }
+  return [eSep, hSep, vSep];
 }
 
 // Find both-side neighbor views of a separator
-function findSepNeighbors(
+function findHVSepNeighbors(
   rg: [Range, Range], 
   dir: 'V' | 'H', 
   pool: DxView[]
@@ -366,8 +443,10 @@ function findSepNeighbors(
   return [s1, s2];
 }
 
-// Find both-side views of a separator
-function findBothSides(
+// Find both-side views of a hv separator, return
+// [left, right] for v separator
+// [top, bottom] for h separator
+function findHVBothSides(
   rg: [Range, Range], 
   dir: 'V' | 'H', 
   pool: DxView[]
@@ -401,8 +480,55 @@ function findBothSides(
   return [s1, s2];
 }
 
-function scoreSep(
-  sep: SepRange, 
+// Find both-side views of a e separator, return
+// [lessSide, mostSide] for e separator
+function findEBothSides(
+  sep: ESepRange,
+  seg: DxSegment,
+  pool: DxView[]
+): [DxView[], DxView[]] {
+  // Always put other views in pool to mostSide
+  let less: number;
+  if (sep[0].length < sep[1].length) {
+    less = 0;
+  } else if (sep[0].length > sep[1].length) {
+    less = 1;
+  } else {
+    // However, if there are same number of sides
+    // in sep, then treat the sep which is outside
+    // of the seg as less side
+    const r0 = Segments.coverAll(seg, sep[0]);
+    const r1 = Segments.coverAll(seg, sep[1]);
+    if (r0 && !r1) {
+      less = 1;
+    } else if (r1 && !r0) {
+      less = 0;
+    } else {
+      // However, if they are all covered by seg,
+      // then always choose the smaller one as the
+      // less one, because the smaller one is always
+      // more scattered than the larger one
+      const sz0 = sep[0].reduce((s, v) => s + Views.areaOf(v), 0);
+      const sz1 = sep[1].reduce((s, v) => s + Views.areaOf(v), 0);
+      less = sz0 >= sz1 ? 1 : 0;
+    }
+  }
+  const more = 1 - less;
+
+  const lessSide = [...sep[less]];
+  const moreSide = [...sep[more]];
+  for (const v of pool) {
+    if (lessSide.indexOf(v) == -1 && moreSide.indexOf(v) == -1) {
+      moreSide.push(v);
+    }
+  }
+
+  return [lessSide, moreSide];
+}
+
+// Score a hv separator
+function scoreHVSep(
+  sep: HVSepRange, 
   dir: 'V' | 'H',
   seg: DxSegment,
   s1: DxView[], 
@@ -469,6 +595,16 @@ function scoreSep(
   return score;
 }
 
+// Score a e separator
+function scoreESep(
+  sep: ESepRange, 
+  seg: DxSegment // eslint-disable-line
+): number { 
+  let score = DEFAULTS.SP_SCORE_BASE;
+  score += Math.min((sep[0].length + sep[1].length) / DEFAULTS.SP_E_RECOMMENDED, 1) * 100;
+  return score;
+}
+
 /** Segment a segment to two sub-segments */
 function segSeg(seg: DxSegment): DxSegSep | null {
   // divide views, put non-division to a pool
@@ -478,20 +614,44 @@ function segSeg(seg: DxSegment): DxSegSep | null {
   }
 
   // find the separators for these views
-  const [hSep, vSep] = findSepForSeg(seg, pool);
+  const [eSep, hSep, vSep] = findSepForSeg(seg, pool);
 
   // no separators, means this segment is minimum
-  if (hSep.length == 0 && vSep.length == 0) {
+  if (eSep.length == 0 && hSep.length == 0 && vSep.length == 0) {
     return null;
   }
 
-  // calculate scores for each sep
+  // if there are eseps, only take care of eseps
+  if (eSep.length != 0) {
+    let best = Number.MIN_SAFE_INTEGER;
+    let bestSep: ESepRange | null = null;
+    for (const sep of eSep) {
+      const score = scoreESep(sep, seg);
+      if (score > best) {
+        best = score;
+        bestSep = sep;
+      }
+    }
+    const [s1, s2] = findEBothSides(bestSep!, seg, pool); // eslint-disable-line
+    return {
+      score: best,
+      dir: 'E',
+      xrg: new Range(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY),
+      yrg: new Range(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY),
+      sides: [
+        Segments.adjust(s1),
+        Segments.adjust(s2)
+      ],
+    };
+  }
+
+  // calculate scores for each hsep and rsep
   let best = Number.MIN_SAFE_INTEGER;
-  let bestSep: SepRange | null = null;
+  let bestSep: HVSepRange | null = null;
   let bestSepDir: 'H' | 'V' = 'H';
 
   for (const sep of vSep) {
-    const score = scoreSep(sep, 'V', seg, ...findSepNeighbors(sep, 'V', pool));
+    const score = scoreHVSep(sep, 'V', seg, ...findHVSepNeighbors(sep, 'V', pool));
     // for same score, we always select the first one
     if (score > best) {
       best = score;
@@ -500,7 +660,7 @@ function segSeg(seg: DxSegment): DxSegSep | null {
     }
   }
   for (const sep of hSep) {
-    const score = scoreSep(sep, 'H', seg,...findSepNeighbors(sep, 'H', pool));
+    const score = scoreHVSep(sep, 'H', seg,...findHVSepNeighbors(sep, 'H', pool));
     // for same score, we always select the first one
     if (score > best) {
       best = score;
@@ -510,28 +670,16 @@ function segSeg(seg: DxSegment): DxSegSep | null {
   }
 
   // construct seg for separator
-  const [s1, s2] = findBothSides(bestSep!, bestSepDir, pool); // eslint-disable-line
-  let sides: [DxSegment, DxSegment];
-  if (bestSepDir == 'V') {
-    /* eslint-disable */
-    sides = [
-      { roots: s1, x: seg.x, y: seg.y, w: bestSep![0].st - seg.x, h: seg.h },
-      { roots: s2, x: bestSep![0].ed, y: seg.y, w: seg.x + seg.w - bestSep![0].ed, h: seg.h }
-    ]
-  } else {
-    /* eslint-disable */   
-    sides = [
-      { roots: s1, x: seg.x, y: seg.y, w: seg.w, h: bestSep![1].st - seg.y },
-      { roots: s2, x: seg.x, y: bestSep![1].st, w: seg.w, h: seg.y + seg.h - bestSep![1].st }
-    ]
-  }
+  const [s1, s2] = findHVBothSides(bestSep!, bestSepDir, pool); // eslint-disable-line
+  const sides: [DxSegment, DxSegment] = [Segments.adjust(s1), Segments.adjust(s2)];
   return {
+    /* eslint-disable */
     score: best,
     dir: bestSepDir,
     xrg: bestSep![0],
     yrg: bestSep![1], 
     sides
-  }
+  };
 }
 
 export default function segUi(a: DxActivity): [DxSegment[], DxSegSep[]] {
@@ -550,28 +698,20 @@ export default function segUi(a: DxActivity): [DxSegment[], DxSegSep[]] {
     DxLog.debug('>>>> New Iteration');
     const seg = queue.shift()!;
     const sep = segSeg(seg);
-    if (sep != null && sep.score >= DEFAULTS.SP_SCORE_THRESHOLD) {
-      queue.push(sep.sides[0], sep.sides[1]);
-      separators.push(sep);
-      DxLog.debug(`++ add ${sep.dir} ${sep.score} ${sep.xrg.st};${sep.yrg.st};${sep.xrg.ed};${sep.yrg.ed}`);
-    } else {
+    // for elevated separator, directly recognize it as a valid separator,
+    // for horizontal/vertical separators, recognize them if and only if 
+    // their scores are larger than the predefined threshold, or stop
+    // segment this segment further
+    if ((sep == null) || (sep.dir != 'E' && sep.score < DEFAULTS.SP_SCORE_THRESHOLD)) { 
       if (sep != null) {
         DxLog.debug(`-- abandon ${sep.dir} ${sep.score} ${sep.xrg.st};${sep.yrg.st};${sep.xrg.ed};${sep.yrg.ed}`);
       }
       segments.push(seg);
+    } else {
+      queue.push(sep.sides[0], sep.sides[1]);
+      separators.push(sep);
+      DxLog.debug(`++ add ${sep.dir} ${sep.score} ${sep.xrg.st};${sep.yrg.st};${sep.xrg.ed};${sep.yrg.ed}`);
     }
   }
   return [segments, separators];
-}
-
-import { ActivityYotaBuilder } from '../dxyota.ts';
-if (import.meta.main) {
-  // await DxLog.setLevel('DEBUG');
-  await DxDroid.connect();
-  const d = DxDroid.get();
-  const act = await d.topActivity('com.android.calculator2', true, 'dumpsys');
-  const [segs, seps] = segUi(act);
-  for (const sep of seps) {
-    console.log(`${sep.xrg.st};${sep.yrg.st};${sep.xrg.ed};${sep.yrg.ed};`);
-  }
 }
