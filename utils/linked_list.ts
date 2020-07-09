@@ -39,9 +39,9 @@ export default class LinkedList<T> {
 
   insert(i: number, x: T) {
     if (i == 0) {
-      this.push_front(x);
+      this.pushFront(x);
     } else if (i == this._size - 1) {
-      this.push_back(x);
+      this.pushBack(x);
     } else {
       const curr: LinkedListNode<T> = { value: x, next: null };
       const prev = this.getNode(i - 1);
@@ -51,7 +51,7 @@ export default class LinkedList<T> {
     }
   }
 
-  push_back(x: T): void {
+  pushBack(x: T): void {
     if (this._size == 0) {
       this._head = { value: x, next: null };
       this._tail = this._head;
@@ -63,7 +63,7 @@ export default class LinkedList<T> {
     this._size += 1;
   }
 
-  push_front(x: T): void {
+  pushFront(x: T): void {
     if (this._size == 0) {
       this._head = { value: x, next: null };
       this._tail = this._head;
@@ -95,7 +95,7 @@ if (import.meta.main) {
   const list1 = new LinkedList<number>();
   const array = [1, 5, 4];
   for (const a of array) {
-    list1.push_back(a);
+    list1.pushBack(a);
   }
   assertEquals(list1.size, array.length);
   let i = 0;

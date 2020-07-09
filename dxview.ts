@@ -647,13 +647,13 @@ export class DxViewCache {
   put(v: DxView): void {
     switch (DxViewFactory.typeOf(v)) {
     case DxViewType.DECOR:
-      return this.decorCache.push_front(v as DxDecorView);
+      return this.decorCache.pushFront(v as DxDecorView);
     case DxViewType.VIEW_PAGER:
-      return this.pagerCache.push_front(v as DxViewPager);
+      return this.pagerCache.pushFront(v as DxViewPager);
     case DxViewType.TAB_HOST:
-      return this.tabCache.push_front(v as DxTabHost);
+      return this.tabCache.pushFront(v as DxTabHost);
     case DxViewType.OTHERS:
-      return this.otherCache.push_front(v);
+      return this.otherCache.pushFront(v);
     default:
       throw new CannotReachHereError();
     }
