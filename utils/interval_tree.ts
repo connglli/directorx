@@ -120,7 +120,7 @@ export default class IntervalTree<T> {
     // the element intervals right from the left most node's left interval
     const result: ElementIntervalData<T>[] = [];
     for (let inv: N<IntervalWrapper<T>> = this.head.next; inv && inv.next; inv = inv.next) {
-      result.push([inv, inv.data]);
+      result.push([inv.inv, inv.data]);
     }
     return result;
   }
@@ -141,7 +141,7 @@ export default class IntervalTree<T> {
   }
 
   private insertInterval(inv: Interval): [IntervalTreeNode<T>, IntervalTreeNode<T>] {
-    if (!Interval.cover(this.inv, inv)) {
+    if (Interval.cover(this.inv, inv) < 0) {
       throw new IntervalTreeError('Interval to insert out of the tree interval');
     }
     // insert l as a center
