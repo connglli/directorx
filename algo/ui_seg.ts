@@ -1,7 +1,9 @@
-import { Range, XYRange, MemorizedXYRanges } from '../utils/ranges.ts';
 import DxView, { DxActivity } from '../dxview.ts';
 import DxDroid from '../dxdroid.ts';
 import DxLog from '../dxlog.ts';
+import { Range, XYRange, XYRanges } from '../utils/ranges.ts';
+import IntervalTree from '../utils/interval_tree.ts';
+import Interval from '../utils/interval.ts';
 import { CannotReachHereError } from '../utils/error.ts';
 
 const DEFAULTS = {
@@ -354,7 +356,37 @@ function findSepForSeg(
   seg: DxSegment, 
   pool: DxView[]
 ): [ESepRange[], HVSepRange[], HVSepRange[]] {
-  const rgs = new MemorizedXYRanges(
+  // eSep are recognized by overlapped regions
+  const eSep: ESepRange[] = [];
+  const xTree = new IntervalTree<DxView|null>();
+  const yTree = new IntervalTree<DxView|null>();
+  yTree.insert(Interval.of(Segments.y0(seg), Segments.y1(seg)), null);
+  xTree.insert(Interval.of(Segments.x0(seg), Segments.x1(seg)), null);
+  for (const v of pool) {
+    xTree.insert(Interval.of(Views.x0(v), Views.x1(v)), v);
+    yTree.insert(Interval.of(Views.y0(v), Views.y1(v)), v);
+  }
+  for (const v of pool) {
+    /* eslint-disable */
+    // overlap iff both x- and y-overlap
+    const ove: DxView[] = [];
+    const xOve = xTree.query(Interval.of(Views.x0(v), Views.x1(v)))
+      .map(([i, w]) => w);
+    const yOve = yTree.query(Interval.of(Views.y0(v), Views.y1(v)))
+      .map(([i, w]) => w);
+    for (const w of xOve) {
+      if (w == null || w == v) {
+        continue;
+      }
+      if (yOve.indexOf(w) != -1) {
+        ove.push(w);
+      }
+    }
+    if (ove.length != 0) {
+      eSep.push([[v], ove]);
+    }
+  }
+  const rgs = new XYRanges(
     new XYRange(seg.x, seg.x + seg.w, seg.y, seg.y + seg.h)
   );
   for (const v of pool) {
@@ -380,7 +412,6 @@ function findSepForSeg(
   }
   const hSep: HVSepRange[] = [];
   const vSep: HVSepRange[] = [];
-  const eSep: ESepRange[] = [];
   for (const rg of rgs.x()) {
     // segment boundary is not a valid separator
     if (rg.st == seg.x || rg.ed == (seg.x + seg.w)) {
@@ -394,16 +425,6 @@ function findSepForSeg(
       continue;
     }
     hSep.push([new Range(seg.x, seg.x + seg.w), rg]);
-  }
-  // eSep are recognized by overlapped regions
-  for (const rg of rgs.memory()) {
-    const ove = rgs.getOverlappingMemory(rg);
-    if (ove.length != 0) {
-      eSep.push([
-        [(rg as ViewRange).v],
-        ove.map(org => (org as ViewRange).v)
-      ]);
-    }
   }
   return [eSep, hSep, vSep];
 }
