@@ -1,4 +1,4 @@
-import { assertEquals } from './deps.ts';
+import { assertEquals } from 'https://deno.land/std/testing/asserts.ts';
 
 type LinkedListNode<T> = { 
   value: T;

@@ -1,5 +1,5 @@
-import { hash } from './deps.ts';
-import { assertEquals } from './deps.ts';
+import * as hash from 'https://jspm.dev/object-hash@2.0.3';
+import { assertEquals } from 'https://deno.land/std/testing/asserts.ts';
 
 const { MD5: md5, sha1 } = hash.default;
 type HashFunc = typeof md5 | typeof sha1;
