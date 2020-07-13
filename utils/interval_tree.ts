@@ -1,13 +1,16 @@
-import Interval from './interval.ts';
+import Interval, { XYInterval } from './interval.ts';
 
 /** Nullable type, for ease of use */
 type N<T> = T | null;
+/** Shortcut for infinity interval */
+const INF_INV = Interval.INF;
+const XY_INF_INV = XYInterval.INF;
 
 export class IntervalTreeError extends Error {}
 
 /** An IntervalData is a pair of an Interval and T */
 export type IntervalData<T> = [Interval, T];
-/** An IntervalData is a pair of an Interval and T */
+/** An ElementIntervalData is a pair of an Interval and T[] */
 export type ElementIntervalData<T> = [Interval, T[]];
 
 /** An IntervalWrapper wraps an Interval with
@@ -69,16 +72,18 @@ class IntervalTreeNode<T> {
   }
 }
 
-const INF_INV = Interval.INF;
-
 /** An IntervalTree is a binary search tree with extra
  * data, i.e., the left and right intervals. See also
  * http://www.dgp.toronto.edu/~jstewart/378notes/22intervals/
  */
 export default class IntervalTree<T> {
+  // Interval of the tree
   public readonly inv: Interval;
+  // Root node of the BST
   private root: IntervalTreeNode<T>;
+  // Head of the element interval
   private head: IntervalWrapper<T>;
+  // Dict of the inserted data->interval pair
   private readonly dict: Map<T, Interval>;
 
   constructor(inv: Interval = INF_INV) {
@@ -263,6 +268,39 @@ export default class IntervalTree<T> {
     if (neighbor) {
       neighbor.inv.left = right.inv.right;
     }
+  }
+}
+
+export type XYIntervalData<T> = [XYInterval, T];
+
+export class XYIntervalTree<T> {
+  private xTree: IntervalTree<T>;
+  private yTree: IntervalTree<T>;
+  constructor(public readonly inv: XYInterval = XY_INF_INV) {
+    this.xTree = new IntervalTree(inv.x);
+    this.yTree = new IntervalTree(inv.y);
+  }
+
+  insert(inv: XYInterval, data: T): void {
+    this.xTree.insert(inv.x, data);
+    this.yTree.insert(inv.y, data);
+  }
+
+  query(inv: XYInterval): XYIntervalData<T>[] {
+    const x = this.xTree.query(inv.x);
+    const y = this.yTree.query(inv.y);
+    const yd = y.map(([, d]) => d);
+    const res: XYIntervalData<T>[] = [];
+    // overlap iff x- and y-overlap
+    for (let xi = 0; xi < x.length; xi++) {
+      const [xinv, d] = x[xi];
+      const yi = yd.indexOf(d);
+      if (yi != -1) {
+        const [yinv,] = y[yi];
+        res.push([XYInterval.of(xinv.low, xinv.high, yinv.low, yinv.high), d]);
+      }
+    }
+    return res;
   }
 }
 
