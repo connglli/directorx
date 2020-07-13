@@ -1,8 +1,9 @@
 import DxView, { DxActivity } from '../dxview.ts';
 import DxDroid from '../dxdroid.ts';
 import DxLog from '../dxlog.ts';
-import IntervalTree from '../utils/interval_tree.ts';
+import { XYIntervalTree } from '../utils/interval_tree.ts';
 import Interval, { XYInterval, XYIntervals } from '../utils/interval.ts';
+import { timeOf } from '../utils/time.ts';
 import { CannotReachHereError } from '../utils/error.ts';
 
 const DEFAULTS = {
@@ -81,6 +82,13 @@ class Views {
     return v.resId == 'android:id/navigationBarBackground';
   }
 
+  static isInformative(v: DxView): boolean {
+    return v.children.length != 0 || 
+      v.desc.length != 0 || 
+      v.text.length != 0 || 
+      v.resId.length != 0;
+  }
+
   static isText(v: DxView): boolean {
     return v.text.length != 0;
   }
@@ -94,15 +102,10 @@ class Views {
       return false;
     }
     const { width, height } = DxDroid.get().dev;
-    const wx = Interval.of(0, width);
-    const wy = Interval.of(0, height);
-    const vx = Interval.of(Views.x0(v), Views.x1(v));
-    const vy = Interval.of(Views.y0(v), Views.y1(v));
-    const x = Interval.cover(wx, vx) >= 0 
-      || Interval.cross(wx, vx) >= 0;
-    const y = Interval.cover(wy, vy) >= 0 
-      || Interval.cross(wy, vy) >= 0;
-    return x && y;
+    return XYInterval.overlap(
+      XYInterval.of(0, width, 0, height), 
+      XYInterval.of(...Views.xxyy(v))
+    ) != null;
   }
 
   static hasValidChild(v: DxView): boolean {
@@ -149,9 +152,9 @@ class Segments {
     if (roots.length == 0) {
       throw new UiSegError('roots is empty');
     }
-    let xy = new XYInterval(...Views.xxyy(roots[0]));
+    let xy = XYInterval.of(...Views.xxyy(roots[0]));
     for (let i = 1; i < roots.length; i ++) {
-      xy = XYInterval.merge(xy, new XYInterval(...Views.xxyy(roots[i])));
+      xy = XYInterval.merge(xy, XYInterval.of(...Views.xxyy(roots[i])));
     }
     return {
       roots: roots,
@@ -167,9 +170,9 @@ class Segments {
   }
 
   static coverAll(s: DxSegment, vs: DxView[]) {
-    const xy = new XYInterval(...Segments.xxyy(s));
+    const xy = XYInterval.of(...Segments.xxyy(s));
     for (const v of vs) {
-      const c = new XYInterval(...Views.xxyy(v));
+      const c = XYInterval.of(...Views.xxyy(v));
       if (Interval.cover(xy.x, c.x) < 0 || Interval.cover(xy.y, c.y) < 0) {
         return false;
       }
@@ -224,6 +227,10 @@ const rules: Rule[] = [ // /* eslint-disable */
   ({ v }) => !Views.isVisibleToUser(v) ? 's' : '-',
   /** If the view is invalid, skip it */
   ({ v }) => !Views.isValid(v) ? 's' : '-',
+  /** If the view is not informative (has no children, and 
+   * provides no useful information), skip this view
+   */
+  ({ v }) => !Views.isInformative(v) ? 's' : '-',
   /** If the view has no children, don't divide this view */
   ({ v }) => v.children.length == 0 ? 'n' : '-',
   /** If the view is a not text view, and it has no valid
@@ -340,89 +347,48 @@ type HVSepInterval = [Interval, Interval];
 // [a view pool, a view pool]
 type ESepInterval = [DxView[], DxView[]];
 
-// ViewInterval is interval with extra DxView
-class ViewInterval extends XYInterval {
-  constructor(
-    public readonly v: DxView
-  ) {
-    super(...Views.xxyy(v));
-  }
-}
-
 // Find and calculate the separator (elevated, horizontal, vertical) intervals
 // for a segment along with its pool
 function findSepForSeg(
   seg: DxSegment, 
   pool: DxView[]
 ): [ESepInterval[], HVSepInterval[], HVSepInterval[]] {
+  const segInv = XYInterval.of(...Segments.xxyy(seg));
+  const rest = new XYIntervals(segInv);
+  const tree = new XYIntervalTree<DxView|null>();
+  tree.insert(segInv, null);
+  for (const v of pool) {
+    const viewInv = XYInterval.of(...Views.xxyy(v));
+    tree.insert(viewInv, v);
+    rest.remove(viewInv);
+  }
   // eSep are recognized by overlapped regions
   const eSep: ESepInterval[] = [];
-  const xTree = new IntervalTree<DxView|null>();
-  const yTree = new IntervalTree<DxView|null>();
-  yTree.insert(Interval.of(Segments.y0(seg), Segments.y1(seg)), null);
-  xTree.insert(Interval.of(Segments.x0(seg), Segments.x1(seg)), null);
   for (const v of pool) {
-    xTree.insert(Interval.of(Views.x0(v), Views.x1(v)), v);
-    yTree.insert(Interval.of(Views.y0(v), Views.y1(v)), v);
-  }
-  for (const v of pool) {
-    // overlap iff both x- and y-overlap
-    const ove: DxView[] = [];
-    const xOve = xTree.query(Interval.of(Views.x0(v), Views.x1(v)))
-      .map(([, w]) => w);
-    const yOve = yTree.query(Interval.of(Views.y0(v), Views.y1(v)))
-      .map(([, w]) => w);
-    for (const w of xOve) {
-      if (w == null || w == v) {
-        continue;
-      }
-      if (yOve.indexOf(w) != -1) {
-        ove.push(w);
-      }
-    }
+    const ove = tree.query(XYInterval.of(...Views.xxyy(v)))
+      .map(([, w]) => w)
+      .filter(w => w != null && w != v) as DxView[];
     if (ove.length != 0) {
       eSep.push([[v], ove]);
     }
   }
-  const invs = new XYIntervals(
-    new XYInterval(seg.x, seg.x + seg.w, seg.y, seg.y + seg.h)
-  );
-  for (const v of pool) {
-    DxLog.debug('== Find separators');
-    DxLog.debug(`${v.cls} resId=${v.resId} text="${v.text}" desc="${v.desc}"`);
-    DxLog.debug('XXXX (vsep)');
-    for (const i of invs.x()) {
-      DxLog.debug(i.toString());
-    }
-    DxLog.debug('YYYY (hsep)');
-    for (const i of invs.y()) {
-      DxLog.debug(i.toString());
-    }
-    DxLog.debug(`RMX ${Views.x0(v)}-${Views.x1(v)}`);
-    DxLog.debug(`RMY ${Views.y0(v)}-${Views.y1(v)}`);
-    invs.remove(new ViewInterval(v));
-    for (const i of invs.x()) {
-      DxLog.debug(i.toString());
-    }
-    for (const i of invs.y()) {
-      DxLog.debug(i.toString());
-    }
-  }
-  const hSep: HVSepInterval[] = [];
+  // vSep are rest x intervals after removing
   const vSep: HVSepInterval[] = [];
-  for (const inv of invs.x()) {
+  for (const inv of rest.x()) {
     // segment boundary is not a valid separator
-    if (inv.low == seg.x || inv.high == (seg.x + seg.w)) {
+    if (inv.low == Segments.x0(seg) || inv.high == Segments.x1(seg)) {
       continue;
     }
-    vSep.push([inv, Interval.of(seg.y, seg.y + seg.h)]);
+    vSep.push([inv, Interval.of(Segments.y0(seg), Segments.y1(seg))]);
   }
-  for (const inv of invs.y()) {
+  // hSep are rest y intervals after removing
+  const hSep: HVSepInterval[] = [];
+  for (const inv of rest.y()) {
     // segment boundary is not a valid separator
-    if (inv.low == seg.y || inv.high == (seg.y + seg.h)) {
+    if (inv.low == Segments.y0(seg) || inv.high == Segments.y1(seg)) {
       continue;
     }
-    hSep.push([Interval.of(seg.x, seg.x + seg.w), inv]);
+    hSep.push([Interval.of(Segments.x0(seg), Segments.x1(seg)), inv]);
   }
   return [eSep, hSep, vSep];
 }
@@ -633,7 +599,8 @@ function segSeg(seg: DxSegment): DxSegSep | null {
   }
 
   // find the separators for these views
-  const [eSep, hSep, vSep] = findSepForSeg(seg, pool);
+  const [time, [eSep, hSep, vSep]] = timeOf(findSepForSeg, seg, pool);
+  DxLog.debug(`== Find separators: used ${time}ms`);
 
   // no separators, means this segment is minimum
   if (eSep.length == 0 && hSep.length == 0 && vSep.length == 0) {
@@ -701,6 +668,7 @@ function segSeg(seg: DxSegment): DxSegSep | null {
   };
 }
 
+/** Segment the Ui and return the segments and separators */
 export default function segUi(a: DxActivity): [DxSegment[], DxSegSep[]] {
   const decor = a.decorView!; // eslint-disable-line
   const initialSeg = { 
@@ -723,13 +691,13 @@ export default function segUi(a: DxActivity): [DxSegment[], DxSegSep[]] {
     // segment this segment further
     if ((sep == null) || (sep.dir != 'E' && sep.score < DEFAULTS.SP_SCORE_THRESHOLD)) { 
       if (sep != null) {
-        DxLog.debug(`-- abandon ${sep.dir} ${sep.score} ${sep.xinv.low};${sep.yinv.low};${sep.xinv.high};${sep.yinv.high}`);
+        DxLog.debug(`-- decline ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`);
       }
       segments.push(seg);
     } else {
       queue.push(sep.sides[0], sep.sides[1]);
       separators.push(sep);
-      DxLog.debug(`++ add ${sep.dir} ${sep.score} ${sep.xinv.low};${sep.yinv.low};${sep.xinv.high};${sep.yinv.high}`);
+      DxLog.debug(`++ accept ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`);
     }
   }
   return [segments, separators];

@@ -193,6 +193,15 @@ export class Intervals {
 }
 
 export class XYInterval {
+  /** INFINITY interval */
+  static INF = XYInterval.of(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, 
+    Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY);
+
+  /** Create a new interval */
+  static of(x0: number, x1: number, y0: number, y1: number): XYInterval {
+    return new XYInterval(x0, x1, y0, y1);
+  }
+
   /** Return the merged interval of a and b */
   static merge(a: XYInterval, b: XYInterval): XYInterval {
     const mx = Interval.merge(a.x, b.x);
@@ -213,7 +222,7 @@ export class XYInterval {
 
   public x: Interval;
   public y: Interval;
-  constructor(
+  private constructor(
     x0: number,
     x1: number,
     y0: number,
