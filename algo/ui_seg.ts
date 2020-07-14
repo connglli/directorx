@@ -1,20 +1,20 @@
 import DxView, { DxActivity } from '../dxview.ts';
-import DxDroid from '../dxdroid.ts';
-import DxLog from '../dxlog.ts';
+import { DevInfo } from '../dxdroid.ts';
 import { XYIntervalTree } from '../utils/interval_tree.ts';
 import Interval, { XYInterval, XYIntervals } from '../utils/interval.ts';
-import { timeOf } from '../utils/time.ts';
+import DxLog from '../dxlog.ts';
 import { CannotReachHereError } from '../utils/error.ts';
 
 const DEFAULTS = {
-  V_SZ_THRESHOLD: 0.07,
+  SP_OPTIMAL_COUNT: 5,   // optimal H and V separator count
+  V_SZ_THRESHOLD: 0.07,  // size threshold of a sub view
   // The recommended separator size, by default, this
   // value is set to 30px, and this is the value set
   // default by Bootstrap, see also Bootstrap "Grid options"
   // https://getbootstrap.com/docs/4.0/layout/grid/#grid-options
   SP_SZ_RECOMMENDED: 30,
-  SP_E_RECOMMENDED: 15,
-  SP_SCORE_BASE: 100,
+  SP_E_RECOMMENDED: 15,  // recommended number of views for a E sep
+  SP_SCORE_BASE: 100,    // base score for a separator
   SP_SCORE_AWARD: {
     SZ_BEST: 120,        // best score for separator size
     DIFF_NUM: 50,        // different number of views
@@ -97,11 +97,11 @@ class Views {
     return v.width != 0 && v.height != 0;
   }
 
-  static isVisibleToUser(v: DxView): boolean {
+  static isVisibleToUser(v: DxView, d: DevInfo): boolean {
     if (v.flags.V != 'V') {
       return false;
     }
-    const { width, height } = DxDroid.get().dev;
+    const { width, height } = d;
     return XYInterval.overlap(
       XYInterval.of(0, width, 0, height), 
       XYInterval.of(...Views.xxyy(v))
@@ -206,6 +206,7 @@ type RuleContext = {
   v: DxView;    // the view to be checked
   s: DxSegment; // the segment v resides
   p: DxView[];  // the pool including all views that don't divide
+  d: DevInfo;   // the device information
 }
 
 /** Each rule is a predicate indicating whether
@@ -224,7 +225,7 @@ const rules: Rule[] = [ // /* eslint-disable */
   /** If the view is navigation/status bar, then skip it */
   ({ v }) => Views.isNavBar(v) || Views.isStatusBar(v) ? 's' : '-',
   /** If the view is invisible skip it */
-  ({ v }) => !Views.isVisibleToUser(v) ? 's' : '-',
+  ({ v, d }) => !Views.isVisibleToUser(v, d) ? 's' : '-',
   /** If the view is invalid, skip it */
   ({ v }) => !Views.isValid(v) ? 's' : '-',
   /** If the view is not informative (has no children, and 
@@ -321,13 +322,13 @@ const rules: Rule[] = [ // /* eslint-disable */
 ];
 
 /** Segment a view (of a segment) according to the predefined rules */
-function segView(v: DxView, seg: DxSegment, pool: DxView[]) {
-  const ctx = { v, s: seg, p: pool };
+function segView(v: DxView, seg: DxSegment, pool: DxView[], dev: DevInfo) {
+  const ctx = { v, s: seg, p: pool, d: dev };
   for (const r of rules) {
     switch (r(ctx)) {
     case 'y': // divide, recursively to its children
       for (const c of v.children) {
-        segView(c, seg, pool);
+        segView(c, seg, pool, dev);
       }
       return;
     case 'n': // don't divide, put to pool, and return
@@ -591,16 +592,15 @@ function scoreESep(
 }
 
 /** Segment a segment to two sub-segments */
-function segSeg(seg: DxSegment): DxSegSep | null {
+function segSeg(seg: DxSegment, dev: DevInfo): DxSegSep | null {
   // divide views, put non-division to a pool
   const pool: DxView[] = [];
   for (const r of seg.roots) {
-    segView(r, seg, pool);
+    segView(r, seg, pool, dev);
   }
 
   // find the separators for these views
-  const [time, [eSep, hSep, vSep]] = timeOf(findSepForSeg, seg, pool);
-  DxLog.debug(`== Find separators: used ${time}ms`);
+  const [eSep, hSep, vSep] = findSepForSeg(seg, pool);
 
   // no separators, means this segment is minimum
   if (eSep.length == 0 && hSep.length == 0 && vSep.length == 0) {
@@ -669,7 +669,7 @@ function segSeg(seg: DxSegment): DxSegSep | null {
 }
 
 /** Segment the Ui and return the segments and separators */
-export default function segUi(a: DxActivity): [DxSegment[], DxSegSep[]] {
+export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegSep[]] {
   const decor = a.decorView!; // eslint-disable-line
   const initialSeg = { 
     roots: [decor],
@@ -681,15 +681,20 @@ export default function segUi(a: DxActivity): [DxSegment[], DxSegSep[]] {
   const segments: DxSegment[] = [];
   const separators: DxSegSep[] = [];
   const queue: DxSegment[] = [initialSeg];
+  let hvSepCount = 0;
   while (queue.length != 0) {
-    DxLog.debug('>>>> New Iteration');
+    DxLog.debug('New Iteration');
     const seg = queue.shift()!;
-    const sep = segSeg(seg);
+    const sep = segSeg(seg, dev);
     // for elevated separator, directly recognize it as a valid separator,
     // for horizontal/vertical separators, recognize them if and only if 
     // their scores are larger than the predefined threshold, or stop
     // segment this segment further
-    if ((sep == null) || (sep.dir != 'E' && sep.score < DEFAULTS.SP_SCORE_THRESHOLD)) { 
+    if (
+      (sep == null) || // cannot segment further
+      (sep.dir != 'E' && sep.score < DEFAULTS.SP_SCORE_THRESHOLD) || // 'H' or 'V', but score is too low
+      (sep.dir != 'E' && hvSepCount > DEFAULTS.SP_OPTIMAL_COUNT) // 'H' or 'V', but count is already optimal
+    ) { 
       if (sep != null) {
         DxLog.debug(`-- decline ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`);
       }
@@ -697,6 +702,9 @@ export default function segUi(a: DxActivity): [DxSegment[], DxSegSep[]] {
     } else {
       queue.push(sep.sides[0], sep.sides[1]);
       separators.push(sep);
+      if (sep.dir != 'E') {
+        hvSepCount += 1;
+      }
       DxLog.debug(`++ accept ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`);
     }
   }
