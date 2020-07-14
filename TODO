@@ -8,7 +8,8 @@ FEATURES:
    and bb64 deno 3rd party lib)
 4. in DXPK.load() and DXPK.dump() throw meaningful exception and add 
    semantic checking
-5. bundle and minify (uglify)
+5. bundle and minify (uglify) (don't use `deno bundle`, use webpack, 
+   parcel, rollup, etc. instead)
 6. detect text using OCR, and add as a ocr-text attribute to each 
    leaf view
 7. consider rotation, scale, elevation in coordinate of view
