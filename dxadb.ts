@@ -187,7 +187,7 @@ class DumpSysActivityInfo {
 // FIX: some apps/devices often output non-standard attributes 
 // for example aid=1073741824 following resource-id
 const PAT_AV_DECOR = /DecorView@[a-fA-F0-9]+\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
-const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
+const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
 
 export class ActivityDumpSysBuilder {
 
@@ -301,10 +301,13 @@ export class ActivityDumpSysBuilder {
       left: sOffL, top: sOffT, 
       right: sOffR, bottom: sOffB,
       rpkg = '', rtype = '', rentry = '',
+      e: sOffE,
       tx: sTx, ty: sTy, tz: sTz,
       sx: sSx, sy: sSy,
+      shown: sShown,
       desc: sDesc = '', text: sText = '',
-      bgclass: sBgClass, bgcolor: sBgColor,
+      tag: sTag = '', tip: sTip = '', hint: sHint = '',
+      bgclass: sBgClass, bgcolor: sBgColor, fg: sFg,
       pcurr: sPcurr, tcurr: sTcurr
     } = res.groups;
 
@@ -356,7 +359,7 @@ export class ActivityDumpSysBuilder {
       flags.V = 'G';
     }
 
-    // parse background
+    // parse background and foreground
     const bgClass = sBgClass == '.' 
       ? parent.bgClass      // inherits from its parent
       : sBgClass;
@@ -365,21 +368,30 @@ export class ActivityDumpSysBuilder {
       : sBgColor == '.'
         ? null              // not color, maybe ripple, images
         : Number(sBgColor); // color int value
+    // '.' means no foreground
+    const fg = sFg == '.' ? null : sFg;
 
     // calculate absolute bounds, translation, and scroll
     const left = parent.left + Number(sOffL);
     const top = parent.top + Number(sOffT);
     const right = parent.left + Number(sOffR);
     const bottom = parent.top + Number(sOffB);
+    const elevation = parent.elevation + Number(sOffE);
     const tx = parent.translationX + Number(sTx);
     const ty = parent.translationY + Number(sTy);
     const tz = parent.translationZ + Number(sTz);
     const sx = parent.scrollX + Number(sSx);
     const sy = parent.scrollY + Number(sSy);
 
+    // parse shown
+    const shown = sShown == 'true' ? true : false;
+
     // decode if necessary
     const text: string = this.decode ? base64.decode(sText) : sText;
     const desc: string = this.decode ? base64.decode(sDesc) : sDesc; 
+    const tag: string = this.decode ? base64.decode(sTag) : sTag;
+    const tip: string = this.decode ? base64.decode(sTip) : sTip; 
+    const hint: string = this.decode ? base64.decode(sHint) : sTip; 
     
     // create the view
     let view: DxView;
@@ -394,11 +406,12 @@ export class ActivityDumpSysBuilder {
     // reset common properties
     view.reset(
       parent.pkg, cls, flags,
-      bgClass, bgColor,
-      left, top, right, bottom,
+      shown, 
+      bgClass, bgColor, fg,
+      left, top, right, bottom, elevation,
       tx, ty, tz, sx, sy,
       rpkg, rtype, rentry,
-      desc, text
+      desc, text, tag, tip, hint
     );
     // set properties for specific views
     if (sPcurr && view instanceof DxViewPager) {

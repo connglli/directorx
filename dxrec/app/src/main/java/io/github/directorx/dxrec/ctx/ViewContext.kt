@@ -1,5 +1,6 @@
 package io.github.directorx.dxrec.ctx
 
+import android.os.Build
 import android.util.Base64
 import android.view.View
 import android.widget.TabHost
@@ -9,6 +10,7 @@ import de.robv.android.xposed.XposedBridge
 import io.github.directorx.dxrec.DxContext
 import io.github.directorx.dxrec.utils.accessors.getBackgroundColor
 import io.github.directorx.dxrec.utils.accessors.getFieldValue
+import io.github.directorx.dxrec.utils.accessors.getForegroundColor
 import io.github.directorx.dxrec.utils.accessors.isInstanceOf
 
 class ViewContext(val encode: Boolean) : DxContext {
@@ -42,14 +44,27 @@ class ViewContext(val encode: Boolean) : DxContext {
                 val view = param.thisObject as View
                 val desc = view.contentDescription ?: ""
                 val text = if (view is TextView) { view.text ?: "" } else { "" }
+                val tag = view.tag?.toString() ?: ""
+                val tip = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    view.tooltipText?.toString() ?: ""
+                } else {
+                    ""
+                }
+                val hint = if (view is TextView) { view.hint ?: "" } else { "" }
                 val bg = getBackgroundColor(view)
+                val fg = getForegroundColor(view)
+                appendKV(info, "e", view.elevation)
                 appendKV(info, "tx", view.translationX)
                 appendKV(info, "ty", view.translationY)
                 appendKV(info, "tz", view.translationZ)
                 appendKV(info, "sx", view.scrollX)
                 appendKV(info, "sy", view.scrollY)
+                appendKV(info, "shown", view.isShown)
                 appendKString(info, "desc", asString(desc, encode))
                 appendKString(info, "text", asString(text, encode))
+                appendKString(info, "tag", asString(tag, encode))
+                appendKString(info, "tip", asString(tip, encode))
+                appendKString(info, "hint", asString(hint, encode))
                 when {
                     bg.first == null -> { // no background, then inherits from parent
                         appendKV(info, "bg-class", ".")
@@ -62,6 +77,14 @@ class ViewContext(val encode: Boolean) : DxContext {
                     else -> { // has color, but maybe color from ripple (often used in animation)
                         appendKV(info, "bg-class", bg.first!!)
                         appendKV(info, "bg-color", bg.second!!)
+                    }
+                }
+                when (fg) {
+                    null -> { // no foreground
+                        appendKV(info, "fg", ".")
+                    }
+                    else -> { // has color, but maybe color from ripple (often used in animation)
+                        appendKV(info, "fg", fg)
                     }
                 }
 
