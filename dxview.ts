@@ -49,10 +49,10 @@ export enum DxViewType {
  * calculated by `left + translationX - scrollX`, so as the
  * y axis
  * 
- * The DxView#{left,right,top,bottom}() returns the absolute
- * boundary coordinate after layout in pixel of the view. The 
- * DxView#my{left,right,top,bottom}() returns the relative
- * ones
+ * The DxView#{left,right,top,bottom,elevation}() returns the 
+ * absolute boundary coordinate after layout in pixel of the 
+ * view. The DxView#my{left,right,top,bottom,elevation}() 
+ * returns the relative ones
  * 
  * The DxView#translation{X,Y,Z}() returns the absolute 
  * translation (recursively including its parent's translation)
@@ -75,12 +75,15 @@ export default class DxView {
     protected pkg_: string,
     protected cls_: string,
     protected flags_: DxViewFlags,
+    protected shown_: boolean,
     protected bgClass_: string,
     protected bgColor_: number | null,
+    protected fg_: string | null,
     protected left_: number,
     protected top_: number,
     protected right_: number,
     protected bottom_: number,
+    protected elevation_: number,
     protected tx_ = 0,
     protected ty_ = 0,
     protected tz_ = 0,
@@ -91,6 +94,9 @@ export default class DxView {
     protected resEntry_ = '',
     protected desc_ = '',
     protected text_ = '',
+    protected tag_ = '',
+    protected tip_ = '',
+    protected hint_ = '',
     protected parent_: DxView | null = null,
     protected children_: DxView[] = []
   ) {}
@@ -107,12 +113,24 @@ export default class DxView {
     return this.flags_;
   }
 
+  get shown(): boolean {
+    return this.shown_;
+  }
+
   get bgClass(): string {
     return this.bgClass_;
   }
 
   get bgColor(): number | null {
     return this.bgColor_;
+  }
+
+  get background(): string {
+    return `${this.bgClass_}/#${this.bgColor_?.toString(16) ?? 'NNNNNNNN'}`;
+  }
+
+  get foreground(): string | null {
+    return this.fg_;
   }
 
   get parent(): DxView | null {
@@ -137,6 +155,10 @@ export default class DxView {
   
   get bottom(): number {
     return this.bottom_;
+  }
+
+  get elevation(): number {
+    return this.elevation_;
   }
 
   get width(): number {
@@ -176,7 +198,7 @@ export default class DxView {
   }
 
   get z(): number {
-    return this.translationZ;
+    return this.elevation + this.translationZ;
   }
 
   get drawingX(): number {
@@ -185,6 +207,10 @@ export default class DxView {
 
   get drawingY(): number {
     return this.y - (this.parent?.scrollY ?? 0);
+  }
+
+  get drawingZ(): number {
+    return this.z;
   }
 
   get myLeft(): number {
@@ -201,6 +227,10 @@ export default class DxView {
 
   get myBottom(): number {
     return this.myTop + this.height;
+  }
+
+  get myElevation(): number {
+    return this.elevation - (this.parent?.elevation ?? 0);
   }
 
   get myTranslationX(): number {
@@ -249,6 +279,18 @@ export default class DxView {
 
   get text(): string {
     return this.text_;
+  }
+
+  get tag(): string {
+    return this.tag_;
+  }
+
+  get tip(): string {
+    return this.tip_;
+  }
+
+  get hint(): string {
+    return this.hint_;
   }
 
   /** Add view v as a child */
@@ -344,7 +386,7 @@ export default class DxView {
       this.drawingY <= y && y <= (this.drawingY + this.height)
     );
     if (visible) {
-      hit = hit && this.flags.V == 'V';
+      hit = hit && this.shown;
     }
     if (enabled) {
       hit = hit && this.flags.E;
@@ -357,12 +399,15 @@ export default class DxView {
     pkg: string,
     cls: string,
     flags: DxViewFlags,
+    shown: boolean,
     bgClass: string,
     bgColor: number | null,
+    fg: string | null,
     left: number,
     top: number,
     right: number,
     bottom: number,
+    elevation: number,
     tx = 0,
     ty = 0,
     tz = 0,
@@ -373,18 +418,24 @@ export default class DxView {
     rentry = '',
     desc = '',
     text = '',
+    tag = '',
+    tip = '',
+    hint= '',
     parent: DxView | null = null,
     children: DxView[] = []
   ): void {
     this.pkg_ = pkg;
     this.cls_ = cls;
     this.flags_ = flags;
+    this.shown_ = shown;
     this.bgClass_ = bgClass;
     this.bgColor_ = bgColor;
+    this.fg_ = fg;
     this.left_ = left;
     this.top_ = top;
     this.right_ = right;
     this.bottom_ = bottom;
+    this.elevation_ = elevation;
     this.tx_ = tx;
     this.ty_ = ty;
     this.tz_ = tz;
@@ -395,6 +446,9 @@ export default class DxView {
     this.resEntry_ = rentry;
     this.desc_ = desc;
     this.text_ = text;
+    this.tag_ = tag;
+    this.tip_ = tip;
+    this.hint_ = hint;
     this.parent_ = parent;
     this.children_ = children;
   }
@@ -408,12 +462,15 @@ export default class DxView {
       this.pkg_,
       this.cls_,
       this.flags_,
+      this.shown_,
       this.bgClass_,
       this.bgColor_,
+      this.fg_,
       this.left_,
       this.top_,
       this.right_,
       this.bottom_,
+      this.elevation_,
       this.tx_,
       this.ty_,
       this.tz_,
@@ -424,6 +481,9 @@ export default class DxView {
       this.resEntry_,
       this.desc_,
       this.text_,
+      this.tag_,
+      this.tip_,
+      this.hint_,
       parent,
       children
     );
@@ -443,8 +503,9 @@ export class DxDecorView extends DxView {
       pkg,
       DxDecorView.NAME,
       DefaultFlags,
-      bgClass, bgColor,
-      0, 0, width, height
+      true,
+      bgClass, bgColor, null,
+      0, 0, width, height, 0
     );
   }
   copy(): DxDecorView {
@@ -489,12 +550,15 @@ export class DxViewPager extends DxView {
       this.pkg_,
       this.cls_,
       this.flags_,
+      this.shown_,
       this.bgClass_,
       this.bgColor_,
+      this.fg_,
       this.left_,
       this.top_,
       this.right_,
       this.bottom_,
+      this.elevation_,
       this.tx_,
       this.ty_,
       this.tz_,
@@ -505,6 +569,9 @@ export class DxViewPager extends DxView {
       this.resEntry_,
       this.desc_,
       this.text_,
+      this.tag_,
+      this.tip_,
+      this.hint_,
       parent,
       children
     );
@@ -532,12 +599,15 @@ export class DxTabHost extends DxView {
       this.pkg_,
       this.cls_,
       this.flags_,
+      this.shown_,
       this.bgClass_,
       this.bgColor_,
+      this.fg_,
       this.left_,
       this.top_,
       this.right_,
       this.bottom_,
+      this.elevation_,
       this.tx_,
       this.ty_,
       this.tz_,
@@ -548,6 +618,9 @@ export class DxTabHost extends DxView {
       this.resEntry_,
       this.desc_,
       this.text_,
+      this.tag_,
+      this.tip_,
+      this.hint_,
       parent,
       children
     );
@@ -590,11 +663,11 @@ export class DxViewFactory {
     case DxViewType.DECOR:
       return new DxDecorView('', -1, -1, '', null);
     case DxViewType.VIEW_PAGER:
-      return new DxViewPager('', '', DefaultFlags, '', null, -1, -1, -1, -1);
+      return new DxViewPager('', '', DefaultFlags, true, '', null, null, -1, -1, -1, -1, -1);
     case DxViewType.TAB_HOST:
-      return new DxTabHost('', '', DefaultFlags, '', null, -1, -1, -1, -1);
+      return new DxTabHost('', '', DefaultFlags, true, '', null, null, -1, -1, -1, -1, -1);
     case DxViewType.OTHERS:
-      return new DxView('', '', DefaultFlags, '', null, -1, -1, -1, -1);
+      return new DxView('', '', DefaultFlags, true, '', null, null, -1, -1, -1, -1, -1);
     default:
       throw new CannotReachHereError();
     }

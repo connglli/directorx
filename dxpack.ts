@@ -119,41 +119,48 @@ class DXPK {
           app,                               // pkg
           tokens[1],                         // cls
           {                                  // flags
-            V:  tokens[18][0] as ('V' | 'I' | 'G'),
-            f:  tokens[18][1] == 'F',
-            F:  tokens[18][2] == 'F',
-            S:  tokens[18][3] == 'S',
-            E:  tokens[18][4] == 'E',
-            d:  tokens[18][5] == 'D',
-            hs: tokens[18][6] == 'H',
-            vs: tokens[18][7] == 'V',
-            c:  tokens[18][8] == 'C',
-            lc: tokens[18][9] == 'L',
-            cc: tokens[18][10] == 'X'
+            V:  tokens[24][0] as ('V' | 'I' | 'G'),
+            f:  tokens[24][1] == 'F',
+            F:  tokens[24][2] == 'F',
+            S:  tokens[24][3] == 'S',
+            E:  tokens[24][4] == 'E',
+            d:  tokens[24][5] == 'D',
+            hs: tokens[24][6] == 'H',
+            vs: tokens[24][7] == 'V',
+            c:  tokens[24][8] == 'C',
+            lc: tokens[24][9] == 'L',
+            cc: tokens[24][10] == 'X'
           },
-          tokens[16],                        // bgClass
-          tokens[17] == '.'                  // bgColor
+          tokens[5] == 'S' ? true : false,   // shown
+          tokens[21],                        // bgClass
+          tokens[22] == '.'                  // bgColor
             ? null : 
-            Number(tokens[17]),
-          Number(tokens[5]),                 // left
-          Number(tokens[6]),                 // top
-          Number(tokens[7]),                 // right
-          Number(tokens[8]),                 // bottom
-          Number(tokens[9]),                 // tx
-          Number(tokens[10]),                // ty
-          Number(tokens[11]),                // tz
-          Number(tokens[12]),                // sx
-          Number(tokens[13]),                // sy
+            Number(tokens[22]),
+          tokens[23] == '.' 
+            ? null : tokens[23],             // foreground
+          Number(tokens[6]),                 // left
+          Number(tokens[7]),                 // top
+          Number(tokens[8]),                 // right
+          Number(tokens[9]),                 // bottom
+          Number(tokens[10]),                // elevation
+          Number(tokens[11]),                // tx
+          Number(tokens[12]),                // ty
+          Number(tokens[13]),                // tz
+          Number(tokens[14]),                // sx
+          Number(tokens[15]),                // sy
           tokens[2],                         // resPkg
           tokens[3],                         // resType
           tokens[4],                         // resEntry
-          base64.decode(tokens[14]),         // desc
-          base64.decode(tokens[15])          // text
+          base64.decode(tokens[16]),         // desc
+          base64.decode(tokens[17]),         // text
+          base64.decode(tokens[18]),         // tag
+          base64.decode(tokens[19]),         // tip
+          base64.decode(tokens[20])          // hint
         );
         if (view instanceof DxViewPager) {
-          view.currItem = Number(tokens[19]);
+          view.currItem = Number(tokens[25]);
         } else if (view instanceof DxTabHost) {
-          view.currTab = Number(tokens[19]);
+          view.currTab = Number(tokens[25]);
         }
         vpool.push(view);
         size -= 1;
@@ -283,12 +290,14 @@ class DXPK {
     for (const v of dxpk.vpool) {
       const type = DxViewFactory.typeOf(v);
       await DXPK.writeString(buf, `${DXPK.type2str(type)};`, false);
-      await DXPK.writeString(buf, `${v.cls};${v.resPkg};${v.resType};${v.resEntry};`, false);
-      await DXPK.writeString(buf, `${v.left};${v.top};${v.right};${v.bottom};`, false);
+      await DXPK.writeString(buf, `${v.cls};${v.resPkg};${v.resType};${v.resEntry};${v.shown ? 'S' : '.'};`, false);
+      await DXPK.writeString(buf, `${v.left};${v.top};${v.right};${v.bottom};${v.elevation};`, false);
       await DXPK.writeString(buf, `${v.translationX};${v.translationY};${v.translationZ};`, false);
       await DXPK.writeString(buf, `${v.scrollX};${v.scrollY};`, false);
       await DXPK.writeString(buf, `${base64.encode(v.desc)};${base64.encode(v.text)};`, false);
+      await DXPK.writeString(buf, `${base64.encode(v.tag)};${base64.encode(v.tip)};${base64.encode(v.hint)};`, false);
       await DXPK.writeString(buf, `${v.bgClass};${v.bgColor ?? '.'};`, false);
+      await DXPK.writeString(buf, `${v.foreground ?? '.'};`, false);
       let flags = '';
       flags += v.flags.V;
       flags += v.flags.f ? 'F' : '.';

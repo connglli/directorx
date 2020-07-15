@@ -98,7 +98,7 @@ class Views {
   }
 
   static isVisibleToUser(v: DxView, d: DevInfo): boolean {
-    if (v.flags.V != 'V') {
+    if (!v.shown) {
       return false;
     }
     const { width, height } = d;

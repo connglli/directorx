@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.res.ColorStateList
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.RippleDrawable
+import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.iterator
@@ -42,4 +43,17 @@ fun getBackgroundColor(view: View): Pair<String?, Int?> {
         }
     }
     return Pair(type, color)
+}
+
+fun getForegroundColor(view: View): String? {
+    val fg = if (Build.VERSION.SDK_INT < 23) {
+        return null
+    } else {
+        view.foreground ?: return null
+    }
+    return if (fg is ColorDrawable) {
+        "#${Integer.toHexString(fg.color)}"
+    } else {
+        fg.javaClass.simpleName
+    }
 }
