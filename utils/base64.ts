@@ -1,4 +1,4 @@
-import * as base64 from 'https://deno.land/std/encoding/base64.ts';
+import * as base64 from 'https://deno.land/std@0.60.0/encoding/base64.ts';
 
 /** Encode an utf-8 string to a base64 string */
 export function encode(str: string): string {
