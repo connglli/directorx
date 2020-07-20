@@ -1,5 +1,3 @@
-#! /usr/bin/env -S deno run --allow-net --allow-read --allow-write --allow-run --unstable
-
 import { Command, IFlags } from './deps.ts';
 import dxRec from './dxrec.ts';
 import dxPlay, { DxPlayerType } from './dxplay.ts';
