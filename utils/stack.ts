@@ -1,4 +1,4 @@
-import { assert, assertEquals } from 'https://deno.land/std/testing/asserts.ts';
+import { assert, assertEquals } from 'https://deno.land/std@0.60.0/testing/asserts.ts';
 
 export class StackError extends Error {}
 
