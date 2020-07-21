@@ -220,6 +220,10 @@ export class XYInterval {
     }
   }
 
+  toString(): string {
+    return `[${this.x.low}-${this.x.high},${this.y.low}-${this.y.high}]`;
+  }
+
   public x: Interval;
   public y: Interval;
   private constructor(

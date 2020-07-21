@@ -1,4 +1,6 @@
+import { DevInfo } from './dxdroid.ts';
 import LinkedList from './utils/linked_list.ts';
+import { XYInterval } from './utils/interval.ts';
 import { CannotReachHereError } from './utils/error.ts';
 
 export type DxViewFlags = {
@@ -71,6 +73,12 @@ export enum DxViewType {
  * of the view after scrolling
  */
 export default class DxView {
+  // The drawing level is different from the z index of
+  // each view. Views at each level are not overlapped, but
+  // views at adjacent levels are overlapped at least at one
+  // view. To construct the drawing level, invoke method 
+  // DxActivity#buildDrawingLevel()
+  public drawingLevel: number = -1;
   constructor(
     protected pkg_: string,
     protected cls_: string,
@@ -126,7 +134,7 @@ export default class DxView {
   }
 
   get background(): string {
-    return `${this.bgClass_}/#${this.bgColor_?.toString(16) ?? 'NNNNNNNN'}`;
+    return `${this.bgClass_}/#${this.bgColor_?.toString(16) ?? 'nnnn'}`;
   }
 
   get foreground(): string | null {
@@ -380,6 +388,7 @@ export default class DxView {
     return hitViews;
   }
 
+  /** Check whether a point hits self or not */
   hitSelf(x: number, y: number, visible = true, enabled = true): boolean {
     let hit = (
       this.drawingX <= x && x <= (this.drawingX + this.width) &&
@@ -629,6 +638,82 @@ export class DxTabHost extends DxView {
   }
 }
 
+export class Views {
+  static isStatusBar(v: DxView): boolean {
+    return v.resId == 'android:id/statusBarBackground';
+  }
+
+  static isNavBar(v: DxView): boolean {
+    return v.resId == 'android:id/navigationBarBackground';
+  }
+
+  static isInformative(v: DxView): boolean {
+    return v.children.length != 0 || 
+      v.desc.length != 0 || 
+      v.text.length != 0 || 
+      v.resId.length != 0;
+  }
+
+  static isText(v: DxView): boolean {
+    return v.text.length != 0;
+  }
+
+  static isValid(v: DxView): boolean {
+    return v.width != 0 && v.height != 0;
+  }
+
+  static isVisibleToUser(v: DxView, d: DevInfo): boolean {
+    if (!v.shown) {
+      return false;
+    }
+    const { width, height } = d;
+    return XYInterval.overlap(
+      XYInterval.of(0, width, 0, height), 
+      Views.bounds(v)
+    ) != null;
+  }
+
+  static hasValidChild(v: DxView): boolean {
+    return v.children.some(c => this.isValid(c));
+  }
+
+  static areaOf(v: DxView): number {
+    return v.width * v.height;
+  }
+
+  static siblings(v: DxView, self = false): DxView[] {
+    if (self) {
+      return v.parent?.children ?? [];
+    } else {
+      return v.parent?.children.filter(c => c != v) ?? [];
+    }
+  }
+
+  static bounds(v: DxView): XYInterval {
+    return XYInterval.of(...Views.xxyy(v));
+  }
+
+  static xxyy(v: DxView): [number, number, number, number] {
+    return [Views.x0(v), Views.x1(v), Views.y0(v), Views.y1(v)];
+  }
+
+  static x0(v: DxView): number {
+    return v.drawingX;
+  }
+
+  static x1(v: DxView): number {
+    return v.drawingX + v.width;
+  }
+
+  static y0(v: DxView): number {
+    return v.drawingY;
+  }
+
+  static y1(v: DxView): number {
+    return v.drawingY + v.height;
+  }
+}
+
 export class DxActivity {
   private decor: DxDecorView | null = null;
 
@@ -654,6 +739,45 @@ export class DxActivity {
 
   findViewByXY(x: number, y: number, visible = true): DxView | null {
     return this.decor?.findViewByXY(x, y, visible) ?? null;
+  }
+
+  /** Build the drawing level top-down. Views at each level are 
+   * not overlapped, but views at adjacent levels are overlapped 
+   * at least at one view. */
+  buildDrawingLevelLists(): DxView[][] {
+    const levelLists: DxView[][] = [];
+
+    function doBuildForView(view: DxView, level: number) {
+      let viewLevel = level;
+      const viewBounds = Views.bounds(view);
+      if (view.shown) {
+        // Find how many levels we can step up from our base level 
+        // (level), the levels we can step up are those where there 
+        // are views inside overlapping with us. And the level where
+        // no views inside are overlapped with us is our level
+        const levelUp = levelLists
+          .slice(level, levelLists.length)
+          .findIndex(l => l.filter(node => XYInterval.overlap(Views.bounds(node), viewBounds)).length == 0);
+        if (levelUp == -1) { 
+          // as long as we are overlapped with all preceding 
+          // levels, let's create a new level
+          viewLevel = levelLists.length;
+          levelLists.push([] as DxView[]);
+        } else {
+          // we've found our level up, add it
+          viewLevel += levelUp;
+        }
+        // set our level, and add us to the out level list
+        view.drawingLevel = viewLevel;
+        levelLists[viewLevel].push(view);
+      }
+      view.children.forEach(v => doBuildForView(v, viewLevel));
+    }
+
+    const decor = this.decorView!;
+    decor.children.forEach(v => doBuildForView(v, levelLists.length));
+
+    return levelLists;
   }
 }
 
