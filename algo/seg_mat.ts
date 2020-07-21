@@ -5,7 +5,7 @@ import * as vecutil from '../utils/vecutil.ts';
 import * as strutil  from '../utils/strutil.ts';
 
 export const NO_MATCH: DxSegment = {
-  roots: [], x: -1, y: -1, w: -1, h: -1,
+  roots: [], x: -1, y: -1, w: -1, h: -1, level: -1,
 };
 export type DxSegMatch = [DxSegment, DxSegment, number][];
 
@@ -21,7 +21,10 @@ function newWordFreq(seg: DxSegment): WordFreq {
     const ws = [
       ...strutil.words(view.resEntry).map(w => w.toLowerCase()),
       ...strutil.words(view.desc).map(w => w.toLowerCase()),
-      ...strutil.words(view.text).map(w => w.toLowerCase())
+      ...strutil.words(view.text).map(w => w.toLowerCase()),
+      ...strutil.words(view.tag).map(w => w.toLowerCase()),
+      ...strutil.words(view.tip).map(w => w.toLowerCase()),
+      ...strutil.words(view.hint).map(w => w.toLowerCase())
     ];
     for (const w of ws) {
       vec[w] = 1 + (vec[w] ?? 0);

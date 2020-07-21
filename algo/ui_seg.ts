@@ -1,4 +1,4 @@
-import DxView, { DxActivity } from '../dxview.ts';
+import DxView, { DxActivity, Views } from '../dxview.ts';
 import { DevInfo } from '../dxdroid.ts';
 import { XYIntervalTree } from '../utils/interval_tree.ts';
 import Interval, { XYInterval, XYIntervals } from '../utils/interval.ts';
@@ -6,28 +6,29 @@ import DxLog from '../dxlog.ts';
 import { CannotReachHereError } from '../utils/error.ts';
 
 const DEFAULTS = {
-  SP_OPTIMAL_COUNT: 5,   // optimal H and V separator count
-  V_SZ_THRESHOLD: 0.07,  // size threshold of a sub view
+  SP_OPTIMAL_COUNT: 5,      // optimal H and V separator count
+  V_SZ_THRESHOLD: 0.07,     // size threshold of a sub view
   // The recommended separator size, by default, this
   // value is set to 30px, and this is the value set
   // default by Bootstrap, see also Bootstrap "Grid options"
   // https://getbootstrap.com/docs/4.0/layout/grid/#grid-options
   SP_SZ_RECOMMENDED: 30,
-  SP_E_RECOMMENDED: 15,  // recommended number of views for a E sep
-  SP_SCORE_BASE: 100,    // base score for a separator
+  SP_E_RECOMMENDED: 15,     // recommended number of views for a E sep
+  SP_E_RECOMMENDED_DIFF: 5, // recommended number of different views for a E sep
+  SP_SCORE_BASE: 100,       // base score for a separator
   SP_SCORE_AWARD: {
-    SZ_BEST: 120,        // best score for separator size
-    DIFF_NUM: 50,        // different number of views
-    DIFF_CLS: 10,        // different view classes
-    SAME_CLS: -50,       // same view class
-    SAME_VS_PARENT: -80, // same vertical scrollable parent
-    SAME_HS_PARENT: -80, // same horizontal scrollable parent
-    DIFF_BG: 200,        // different bg classes and colors
-    DIFF_BG_CLS: 50,     // different bg classes
-    DIFF_BG_COLOR: 100,  // different bg colors
-    SAME_BG: -80,        // same background
-    BOTH_TXT: -80,       // both are text views
-    DIFF_TEXT: 200,      // one side is text, the other is not
+    SZ_BEST: 120,           // best score for separator size
+    DIFF_NUM: 50,           // different number of views
+    DIFF_CLS: 10,           // different view classes
+    SAME_CLS: -50,          // same view class
+    SAME_VS_PARENT: -80,    // same vertical scrollable parent
+    SAME_HS_PARENT: -80,    // same horizontal scrollable parent
+    DIFF_BG: 200,           // different bg classes and colors
+    DIFF_BG_CLS: 50,        // different bg classes
+    DIFF_BG_COLOR: 100,     // different bg colors
+    SAME_BG: -80,           // same background
+    BOTH_TXT: -80,          // both are text views
+    DIFF_TEXT: 200,         // one side is text, the other is not
   },
   get SP_SCORE_THRESHOLD(): number {
     let minAward = Number.MAX_VALUE;
@@ -50,7 +51,9 @@ export class UiSegError extends Error {
 
 /** DxSegment */
 export type DxSegment = {
-  roots: DxView[],
+  roots: DxView[];
+  // the drawing level
+  level: number;
   x: number;
   y: number;
   w: number;
@@ -73,95 +76,24 @@ export type DxSegSep = {
   sides: [DxSegment, DxSegment];
 };
 
-class Views {
-  static isStatusBar(v: DxView): boolean {
-    return v.resId == 'android:id/statusBarBackground';
-  }
-
-  static isNavBar(v: DxView): boolean {
-    return v.resId == 'android:id/navigationBarBackground';
-  }
-
-  static isInformative(v: DxView): boolean {
-    return v.children.length != 0 || 
-      v.desc.length != 0 || 
-      v.text.length != 0 || 
-      v.resId.length != 0;
-  }
-
-  static isText(v: DxView): boolean {
-    return v.text.length != 0;
-  }
-
-  static isValid(v: DxView): boolean {
-    return v.width != 0 && v.height != 0;
-  }
-
-  static isVisibleToUser(v: DxView, d: DevInfo): boolean {
-    if (!v.shown) {
-      return false;
-    }
-    const { width, height } = d;
-    return XYInterval.overlap(
-      XYInterval.of(0, width, 0, height), 
-      XYInterval.of(...Views.xxyy(v))
-    ) != null;
-  }
-
-  static hasValidChild(v: DxView): boolean {
-    return v.children.some(c => this.isValid(c));
-  }
-
-  static areaOf(v: DxView): number {
-    return v.width * v.height;
-  }
-
-  static siblings(v: DxView, self = false): DxView[] {
-    if (self) {
-      return v.parent?.children ?? [];
-    } else {
-      return v.parent?.children.filter(c => c != v) ?? [];
-    }
-  }
-
-  static xxyy(v: DxView): [number, number, number, number] {
-    return [Views.x0(v), Views.x1(v), Views.y0(v), Views.y1(v)];
-  }
-
-  static x0(v: DxView): number {
-    return v.drawingX;
-  }
-
-  static x1(v: DxView): number {
-    return v.drawingX + v.width;
-  }
-
-  static y0(v: DxView): number {
-    return v.drawingY;
-  }
-
-  static y1(v: DxView): number {
-    return v.drawingY + v.height;
-  }
-}
-
-class Segments {
+export class Segments {
   static adjust(
     roots: DxView[]
   ): DxSegment {
     if (roots.length == 0) {
       throw new UiSegError('roots is empty');
     }
-    let xy = XYInterval.of(...Views.xxyy(roots[0]));
+    let xy = Views.bounds(roots[0]);
     for (let i = 1; i < roots.length; i ++) {
-      xy = XYInterval.merge(xy, XYInterval.of(...Views.xxyy(roots[i])));
+      xy = XYInterval.merge(xy, Views.bounds(roots[i]));
     }
     return {
       roots: roots,
+      level: Math.max(...roots.map(v => v.drawingLevel)),
       x: xy.x.low,
       y: xy.y.low,
       w: xy.x.high - xy.x.low,
-      h: xy.y.high - xy.y.low
+      h: xy.y.high - xy.y.low,
     };
   }
 
@@ -169,10 +101,10 @@ class Segments {
     return s.w * s.h;
   }
 
-  static coverAll(s: DxSegment, vs: DxView[]) {
-    const xy = XYInterval.of(...Segments.xxyy(s));
+  static coverViews(s: DxSegment, vs: DxView[]) {
+    const xy = Segments.bounds(s);
     for (const v of vs) {
-      const c = XYInterval.of(...Views.xxyy(v));
+      const c = Views.bounds(v);
       if (Interval.cover(xy.x, c.x) < 0 || Interval.cover(xy.y, c.y) < 0) {
         return false;
       }
@@ -180,8 +112,25 @@ class Segments {
     return true;
   }
 
+  static cover(a: DxSegment, b: DxSegment): boolean {
+    return Interval.cover(Segments.xx(a), Segments.xx(b)) >= 0 
+      && Interval.cover(Segments.yy(a), Segments.yy(b)) >= 0;
+  }
+
+  static bounds(s: DxSegment): XYInterval {
+    return XYInterval.of(...Segments.xxyy(s));
+  }
+
   static xxyy(s: DxSegment): [number, number, number, number] {
     return [Segments.x0(s), Segments.x1(s), Segments.y0(s), Segments.y1(s)];
+  }
+
+  static xx(s: DxSegment): Interval {
+    return Interval.of(Segments.x0(s), Segments.x1(s));
+  }
+
+  static yy(s: DxSegment): Interval {
+    return Interval.of(Segments.y0(s), Segments.y1(s));
   }
 
   static x0(s: DxSegment): number {
@@ -345,7 +294,8 @@ function segView(v: DxView, seg: DxSegment, pool: DxView[], dev: DevInfo) {
 
 // [(x0, x1), (y0, y1)]
 type HVSepInterval = [Interval, Interval]; 
-// [a view pool, a view pool]
+// [a view pool in same drawing level, 
+//  a view pool overlapped with the first pool]
 type ESepInterval = [DxView[], DxView[]];
 
 // Find and calculate the separator (elevated, horizontal, vertical) intervals
@@ -354,23 +304,24 @@ function findSepForSeg(
   seg: DxSegment, 
   pool: DxView[]
 ): [ESepInterval[], HVSepInterval[], HVSepInterval[]] {
-  const segInv = XYInterval.of(...Segments.xxyy(seg));
+  const segInv = Segments.bounds(seg)
   const rest = new XYIntervals(segInv);
   const tree = new XYIntervalTree<DxView|null>();
   tree.insert(segInv, null);
   for (const v of pool) {
-    const viewInv = XYInterval.of(...Views.xxyy(v));
-    tree.insert(viewInv, v);
-    rest.remove(viewInv);
+    const bounds = Views.bounds(v);
+    tree.insert(bounds, v);
+    rest.remove(bounds);
   }
-  // eSep are recognized by overlapped regions
+  // eSep are recognized by overlapped regions, 
+  // they must belong to different drawing levels
   const eSep: ESepInterval[] = [];
   for (const v of pool) {
-    const ove = tree.query(XYInterval.of(...Views.xxyy(v)))
+    const ove = tree.query(Views.bounds(v))
       .map(([, w]) => w)
       .filter(w => w != null && w != v) as DxView[];
     if (ove.length != 0) {
-      eSep.push([[v], ove]);
+      eSep.push([pool.filter(w => w.drawingLevel == v.drawingLevel), ove]);
     }
   }
   // vSep are rest x intervals after removing
@@ -467,49 +418,15 @@ function findHVBothSides(
 }
 
 // Find both-side views of a e separator, return
-// [lessSide, mostSide] for e separator
+// [sameLevel, allOthers] for e separator
 function findEBothSides(
   sep: ESepInterval,
   seg: DxSegment,
   pool: DxView[]
 ): [DxView[], DxView[]] {
-  // Always put other views in pool to mostSide
-  let less: number;
-  if (sep[0].length < sep[1].length) {
-    less = 0;
-  } else if (sep[0].length > sep[1].length) {
-    less = 1;
-  } else {
-    // However, if there are same number of sides
-    // in sep, then treat the sep which is outside
-    // of the seg as less side
-    const r0 = Segments.coverAll(seg, sep[0]);
-    const r1 = Segments.coverAll(seg, sep[1]);
-    if (r0 && !r1) {
-      less = 1;
-    } else if (r1 && !r0) {
-      less = 0;
-    } else {
-      // However, if they are all covered by seg,
-      // then always choose the smaller one as the
-      // less one, because the smaller one is always
-      // more scattered than the larger one
-      const sz0 = sep[0].reduce((s, v) => s + Views.areaOf(v), 0);
-      const sz1 = sep[1].reduce((s, v) => s + Views.areaOf(v), 0);
-      less = sz0 >= sz1 ? 1 : 0;
-    }
-  }
-  const more = 1 - less;
-
-  const lessSide = [...sep[less]];
-  const moreSide = [...sep[more]];
-  for (const v of pool) {
-    if (lessSide.indexOf(v) == -1 && moreSide.indexOf(v) == -1) {
-      moreSide.push(v);
-    }
-  }
-
-  return [lessSide, moreSide];
+  // sep[0] are always in the same level, put all 
+  // views not in sep[0] to the other side
+  return [sep[0], pool.filter(v => sep[0].indexOf(v) == -1)];
 }
 
 // Score a hv separator
@@ -588,6 +505,7 @@ function scoreESep(
 ): number { 
   let score = DEFAULTS.SP_SCORE_BASE;
   score += Math.min((sep[0].length + sep[1].length) / DEFAULTS.SP_E_RECOMMENDED, 1) * 100;
+  score += Math.min(Math.abs(sep[0].length - sep[1].length) / DEFAULTS.SP_E_RECOMMENDED_DIFF, 1) * 100;
   return score;
 }
 
@@ -671,16 +589,9 @@ function segSeg(seg: DxSegment, dev: DevInfo): DxSegSep | null {
 /** Segment the Ui and return the segments and separators */
 export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegSep[]] {
   const decor = a.decorView!; // eslint-disable-line
-  const initialSeg = { 
-    roots: [decor],
-    x: decor.drawingX,
-    y: decor.drawingY,
-    w: decor.width,
-    h: decor.height
-  };
   const segments: DxSegment[] = [];
   const separators: DxSegSep[] = [];
-  const queue: DxSegment[] = [initialSeg];
+  const queue: DxSegment[] = [Segments.adjust([decor])];
   let hvSepCount = 0;
   while (queue.length != 0) {
     DxLog.debug('New Iteration');
