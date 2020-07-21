@@ -61,20 +61,39 @@ export type DxSegment = {
 }
 
 /** Segment separator */
-export type DxSegSep = {
-  /** Score of this sep */
-  score: number;
-  /** Separator direction */
-  dir: 'H' | 'V' | 'E';
-  /** Separator intervals, DON'T use them when dir is 'E' */
-  xinv: Interval; // [x0, x1]
-  yinv: Interval; // [y0, y1]
-  /** Segments both sides, 
-   * V: [left, right], or
-   * H: [top, bottom]
-   */
-  sides: [DxSegment, DxSegment];
-};
+export interface DxSegSep {}
+
+/** Elevated/Horizontal/Vertical separator */
+export class DxHVESegSep implements DxSegSep {
+  constructor(
+    /** Score of this sep */
+    public readonly score: number,
+    /** Separator direction */
+    public readonly dir: 'H' | 'V' | 'E',
+    /** Separator intervals, DON'T use them when dir is 'E' */
+    public readonly xinv: Interval, // [x0, x1]
+    public readonly yinv: Interval, // [y0, y1]
+    /** Segments both sides, 
+     * V: [left, right], or
+     * H: [top, bottom]
+     */
+    public readonly sides: [DxSegment, DxSegment]
+  ) {}
+}
+
+/** A shrink sep means there are no
+ * separators found for a segment,
+ * but there are views segmented, 
+ * then create a new shrink segment
+ * rooted by roots, and segment them
+ * further 
+ */
+class DxShrinkSegSep implements DxSegSep {
+  constructor(
+    public readonly before: DxSegment, 
+    public readonly after: DxSegment
+  ) {}
+}
 
 export class Segments {
   static adjust(
@@ -510,7 +529,7 @@ function scoreESep(
 }
 
 /** Segment a segment to two sub-segments */
-function segSeg(seg: DxSegment, dev: DevInfo): DxSegSep | null {
+function segSeg(seg: DxSegment, dev: DevInfo): DxShrinkSegSep | DxHVESegSep | null {
   // divide views, put non-division to a pool
   const pool: DxView[] = [];
   for (const r of seg.roots) {
@@ -520,9 +539,19 @@ function segSeg(seg: DxSegment, dev: DevInfo): DxSegSep | null {
   // find the separators for these views
   const [eSep, hSep, vSep] = findSepForSeg(seg, pool);
 
-  // no separators, means this segment is minimum
+  // no separators found
   if (eSep.length == 0 && hSep.length == 0 && vSep.length == 0) {
-    return null;
+    // there are views that are not in root,
+    // this means there are views that are segmented,
+    // then return a specific shrink separator
+    if (pool.some(v => seg.roots.indexOf(v) == -1)) {
+      return new DxShrinkSegSep(seg, Segments.adjust(pool));
+    } 
+    // all views in pool are in roots, meaning this
+    // segment is minimum and can no longer segmented
+    else {
+      return null;
+    }
   }
 
   // if there are eseps, only take care of eseps
@@ -537,16 +566,16 @@ function segSeg(seg: DxSegment, dev: DevInfo): DxSegSep | null {
       }
     }
     const [s1, s2] = findEBothSides(bestSep!, seg, pool); // eslint-disable-line
-    return {
-      score: best,
-      dir: 'E',
-      xinv: Interval.INF,
-      yinv: Interval.INF,
-      sides: [
+    return new DxHVESegSep(
+      best,
+      'E',
+      Interval.INF,
+      Interval.INF,
+      [
         Segments.adjust(s1),
         Segments.adjust(s2)
       ],
-    };
+    );
   }
 
   // calculate scores for each hsep and rsep
@@ -576,14 +605,14 @@ function segSeg(seg: DxSegment, dev: DevInfo): DxSegSep | null {
   // construct seg for separator
   const [s1, s2] = findHVBothSides(bestSep!, bestSepDir, pool); // eslint-disable-line
   const sides: [DxSegment, DxSegment] = [Segments.adjust(s1), Segments.adjust(s2)];
-  return {
+  return new DxHVESegSep(
     /* eslint-disable */
-    score: best,
-    dir: bestSepDir,
-    xinv: bestSep![0],
-    yinv: bestSep![1], 
+    best,
+    bestSepDir,
+    bestSep![0],
+    bestSep![1], 
     sides
-  };
+  );
 }
 
 /** Segment the Ui and return the segments and separators */
@@ -597,11 +626,16 @@ export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegS
     DxLog.debug('New Iteration');
     const seg = queue.shift()!;
     const sep = segSeg(seg, dev);
+    // for shrink separator, create new segment and segment further,
     // for elevated separator, directly recognize it as a valid separator,
     // for horizontal/vertical separators, recognize them if and only if 
     // their scores are larger than the predefined threshold, or stop
     // segment this segment further
-    if (
+    if (sep instanceof DxShrinkSegSep) { // shrink and push to queue head
+      queue.unshift(sep.after);
+      separators.push(sep);
+      DxLog.debug(`++ accept S for segment xxyy=${Segments.xxyy(seg)} level=${seg.level}`);
+    } else if (
       (sep == null) || // cannot segment further
       (sep.dir != 'E' && sep.score < DEFAULTS.SP_SCORE_THRESHOLD) || // 'H' or 'V', but score is too low
       (sep.dir != 'E' && hvSepCount > DEFAULTS.SP_OPTIMAL_COUNT) // 'H' or 'V', but count is already optimal
