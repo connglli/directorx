@@ -87,6 +87,7 @@ class ViewContext(val encode: Boolean) : DxContext {
                         appendKV(info, "fg", fg)
                     }
                 }
+                appendKV(info, "im-acc", view.isImportantForAccessibility)
 
                 // tab host properties
                 if (view is TabHost) {

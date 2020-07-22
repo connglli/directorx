@@ -5,7 +5,7 @@ import * as vecutil from '../utils/vecutil.ts';
 import * as strutil  from '../utils/strutil.ts';
 
 export const NO_MATCH: DxSegment = {
-  roots: [], x: -1, y: -1, w: -1, h: -1, level: -1,
+  roots: [], x: -1, y: -1, w: -1, h: -1, level: -1, parent: null,
 };
 export type DxSegMatch = [DxSegment, DxSegment, number][];
 

@@ -1,6 +1,6 @@
 #! /bin/sh
 
-deno run \
+exec deno run \
   --unstable \
   --allow-read \
   --allow-write \

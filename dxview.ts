@@ -14,7 +14,8 @@ export type DxViewFlags = {
   vs: boolean;        // vertical scrollable
   c: boolean;         // clickable
   lc: boolean;        // long clickable
-  cc: boolean;        // context clickable  
+  cc: boolean;        // context clickable
+  a: boolean;         // important for accessibility
 }
 
 export const DefaultFlags: DxViewFlags = {
@@ -29,6 +30,7 @@ export const DefaultFlags: DxViewFlags = {
   c: false,
   lc: false,
   cc: false,
+  a: true,
 };
 
 export enum DxViewType {
@@ -647,11 +649,45 @@ export class Views {
     return v.resId == 'android:id/navigationBarBackground';
   }
 
-  static isInformative(v: DxView): boolean {
-    return v.children.length != 0 || 
-      v.desc.length != 0 || 
-      v.text.length != 0 || 
-      v.resId.length != 0;
+  static isViewAccImportant(v: DxView): boolean {
+    return v.flags.a;
+  }
+
+  static isViewHierarchyAccImportant(v: DxView): boolean {
+    if (Views.isViewAccImportant(v)) {
+        return true;
+    }
+    for (const cv of v.children) {
+      if (Views.isViewHierarchyAccImportant(cv)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Informative level of a view, return
+   * 0: not informative,
+   * 1: informative,
+   * 2: very informative,
+   * 3: great informative
+   */
+  static informativeLevel(v: DxView): number {
+    return (
+      (v.desc.length != 0 ? 1 : 0) +
+      (v.text.length != 0 ? 1 : 0) +
+      (v.resId.length != 0 ? 1 : 0)
+    );
+  }
+
+  static drawingLevelRange(v: DxView): [number, number] {
+    let max = v.drawingLevel;
+    let min = v.drawingLevel;
+    for (const cv of v.children) {
+      const next = Views.drawingLevelRange(cv);
+      min = Math.min(min, next[0]);
+      max = Math.max(max, next[1]);
+    }
+    return [min, max];
   }
 
   static isText(v: DxView): boolean {
