@@ -2,32 +2,33 @@ import { DxSegment } from './ui_seg.ts';
 import DxView from '../dxview.ts';
 import { BiGraph } from '../utils/bigraph.ts';
 import * as vecutil from '../utils/vecutil.ts';
-import * as strutil  from '../utils/strutil.ts';
+import { 
+  filterStopwords, 
+  splitAsWords
+} from '../utils/strutil.ts';
+
+type WordFreq = vecutil.WordFreq;
+type WordVec = vecutil.WordVec;
 
 export const NO_MATCH: DxSegment = {
   roots: [], x: -1, y: -1, w: -1, h: -1, level: -1, parent: null,
 };
 export type DxSegMatch = [DxSegment, DxSegment, number][];
 
-type WordFreq = {
-  // word -> frequency
-  [word: string]: number;
-}
-
 /** Collect the words and create a WordFreq from a segment */
 function newWordFreq(seg: DxSegment): WordFreq {
-  const vec: WordFreq = {};
+  const freq: WordFreq = {};
   function collect(view: DxView) {
     const ws = [
-      ...strutil.words(view.resEntry).map(w => w.toLowerCase()),
-      ...strutil.words(view.desc).map(w => w.toLowerCase()),
-      ...strutil.words(view.text).map(w => w.toLowerCase()),
-      ...strutil.words(view.tag).map(w => w.toLowerCase()),
-      ...strutil.words(view.tip).map(w => w.toLowerCase()),
-      ...strutil.words(view.hint).map(w => w.toLowerCase())
+      ...filterStopwords(splitAsWords(view.resEntry).map(w => w.toLowerCase())),
+      ...filterStopwords(splitAsWords(view.desc).map(w => w.toLowerCase())),
+      ...filterStopwords(splitAsWords(view.text).map(w => w.toLowerCase())),
+      ...filterStopwords(splitAsWords(view.tag).map(w => w.toLowerCase())),
+      ...filterStopwords(splitAsWords(view.tip).map(w => w.toLowerCase())),
+      ...filterStopwords(splitAsWords(view.hint).map(w => w.toLowerCase()))
     ];
     for (const w of ws) {
-      vec[w] = 1 + (vec[w] ?? 0);
+      freq[w] = 1 + (freq[w] ?? 0);
     }
     for (const c of view.children) {
       collect(c);
@@ -36,68 +37,50 @@ function newWordFreq(seg: DxSegment): WordFreq {
   for (const r of seg.roots) {
     collect(r);
   }
-  return vec;
-}
-
-type WordVector = {
-  words: string[];
-  vector: number[];
-};
-
-/** Create a WordVector from a WordFreq and a set of words */
-function newWordVector(
-  wf: WordFreq, 
-  words = Object.keys(wf)
-): WordVector {
-  return {
-    words: words.slice(),
-    vector: words.map(w => wf[w] ?? 0)
-  };
+  return freq;
 }
 
 /** Calculator similarity of two word vectors (cosine similarity) */
-function similarity(v1: WordVector, v2: WordVector): number {
-  const sc = 1000;
-  const dt = vecutil.dot(v1.vector, v2.vector);
-  const n1 = vecutil.norm(v1.vector);
-  const n2 = vecutil.norm(v2.vector);
-  return Math.round(sc * dt / (n1 * n2));
+function similarity(v1: WordVec, v2: WordVec): number {
+  return Math.round(100 * vecutil.similarity.cosine(v1.vector, v2.vector));
 }
 
+/** Match segments in a and b, and return a match result */
 export function matchSeg(a: DxSegment[], b: DxSegment[]): DxSegMatch {
-  const left = a.slice();
-  const right = b.slice();
-  const diff = left.length - right.length;
+  // append NO_MATCH to make them equal-length
+  const side1 = a.slice();
+  const side2 = b.slice();
+  const diff = side1.length - side2.length;
   if (diff > 0) {
-    for (let i = 0; i < diff; i ++) {
-      right.push(NO_MATCH);
-    }
+    side2.push(...new Array<DxSegment>(diff).fill(NO_MATCH));
   } else if (diff < 0) {
-    for (let i = 0; i < -diff; i ++) {
-      left.push(NO_MATCH);
-    }
+    side1.push(...new Array<DxSegment>(-diff).fill(NO_MATCH));
   }
-  const size = left.length;
+  const size = side1.length;
   
-  // create word frequency
-  const leftWfs = left.map(s => newWordFreq(s));
-  const rightWfs = right.map(s => newWordFreq(s));
-  // collect all words
-  const words = Array.from(new Set([...leftWfs, ...rightWfs].flatMap(f => Object.keys(f))));
-  // create word vector
-  const leftWvs = leftWfs.map(wf => newWordVector(wf, words));
-  const rightWvs = rightWfs.map(wf => newWordVector(wf, words));
-  
-  // similarity as weights, and make the similarity of 
-  // NO_MATCH to any as 0
+  // count word frequency
+  const freqs1 = side1.map(newWordFreq);
+  const freqs2 = side2.map(newWordFreq);
+  // create the word list
+  const words = Array.from(new Set([...freqs1, ...freqs2].flatMap(Object.keys)));
+  // calculate the tf-idf for each word
+  const tfidfs = vecutil.tfidf([...freqs1, ...freqs2]);
+  const tfidfs1 = tfidfs.slice(0, freqs1.length);
+  const tfidfs2 = tfidfs.slice(freqs1.length);
+  // create word vector from tfidf
+  const vecs1 = tfidfs1.map(tfidf => vecutil.freq2vec(tfidf, words));
+  const vecs2 = tfidfs2.map(tfidf => vecutil.freq2vec(tfidf, words));
+
+  // treat similarity as weights, and make the 
+  // similarity of NO_MATCH to any as 0
   const weights: number[][] = [];
   for (let v = 0; v < size; v ++) {
-    if (left[v] == NO_MATCH) {
+    if (side1[v] == NO_MATCH) {
       weights.push(new Array<number>(size).fill(0));
     } else {
-      const v1 = leftWvs[v];
-      weights.push(rightWvs.map(
-        (v2, w) => right[w] == NO_MATCH ? 0 : similarity(v1, v2)
+      const v1 = vecs1[v];
+      weights.push(vecs2.map(
+        (v2, w) => side2[w] == NO_MATCH ? 0 : similarity(v1, v2)
       ));
     }
   }
@@ -109,9 +92,9 @@ export function matchSeg(a: DxSegment[], b: DxSegment[]): DxSegMatch {
 
   // construct and return the matched result 
   const mat: DxSegMatch = [];
-  for (let v = 0; v < left.length; v ++) {
+  for (let v = 0; v < side1.length; v ++) {
     const w = graph.getMatch(v, true);
-    mat.push([left[v], right[w], weights[v][w]]);
+    mat.push([side1[v], side2[w], weights[v][w]]);
   }
   
   return mat;

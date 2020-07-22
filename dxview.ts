@@ -679,6 +679,16 @@ export class Views {
     );
   }
 
+  static layoutSummary(v: DxView, d = 1): string {
+    let summary = `${v.cls}:${Math.max(Views.informativeLevel(v), 2)};`;
+    if (d != 1) {
+      for (const c of v.children) {
+        summary += Views.layoutSummary(c, d - 1);
+      }
+    }
+    return summary;
+  } 
+
   static drawingLevelRange(v: DxView): [number, number] {
     let max = v.drawingLevel;
     let min = v.drawingLevel;

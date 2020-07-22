@@ -9,7 +9,10 @@ type N<T> = T | null;
 
 const DEFAULTS = {
   SP_OPTIMAL_COUNT: 5,      // optimal H and V separator count
-  V_SZ_THRESHOLD: 0.07,     // size threshold of a sub view
+  THRESHOLD: {
+    V_IN_SCR: 0.04,         // size threshold of a view in screen
+    V_IN_SEG: 0.75          // size threshold of a view in segment
+  },
   // The recommended separator size, by default, this
   // value is set to 30px, and this is the value set
   // default by Bootstrap, see also Bootstrap "Grid options"
@@ -20,28 +23,30 @@ const DEFAULTS = {
   SP_SCORE_BASE: 100,       // base score for a separator
   SP_SCORE_AWARD: {
     SZ_BEST: 120,           // best score for separator size
-    DIFF_NUM: 50,           // different number of views
-    DIFF_CLS: 10,           // different view classes
-    SAME_CLS: -50,          // same view class
-    SAME_VS_PARENT: -80,    // same vertical scrollable parent
-    SAME_HS_PARENT: -80,    // same horizontal scrollable parent
-    DIFF_BG: 200,           // different bg classes and colors
-    DIFF_BG_CLS: 50,        // different bg classes
-    DIFF_BG_COLOR: 100,     // different bg colors
-    SAME_BG: -80,           // same background
-    BOTH_TXT: -80,          // both are text views
-    DIFF_TEXT: 200,         // one side is text, the other is not
+    NUM: 50,                // different number of views
+    CLS: 10,                // different view classes
+    VS_PARENT: 80,          // same vertical scrollable parent
+    HS_PARENT: 80,          // same horizontal scrollable parent
+    BG: 500,                // different bg classes and colors
+    BG_CLS: 200,            // different bg classes
+    BG_COLOR: 250,          // different bg colors
+    INFO: 50,               // same informative level
+    TEXT: 200,              // one side is text, the other is not
   },
   get SP_SCORE_THRESHOLD(): number {
-    let minAward = Number.MAX_VALUE;
+    let min1Award = Number.MAX_VALUE;
+    let min2Award = Number.MAX_VALUE;
     for (const k in this.SP_SCORE_AWARD) {
       const v = (this.SP_SCORE_AWARD as {[key: string]: number})[k];
       // only check award (no punishment)
-      if (v > 0 && v < minAward) {
-        minAward = v;
+      if (v < min1Award) {
+        min2Award = min1Award;
+        min1Award = v;
+      } else if (v < min2Award) {
+        min2Award = v;
       }
     }
-    return this.SP_SCORE_BASE + minAward;
+    return this.SP_SCORE_BASE + min1Award + min2Award;
   }
 };
 
@@ -258,10 +263,32 @@ const rules: Rule[] = [ // /* eslint-disable */
     }
     return '-';
   },
+  /** If the view has many similar layout children (the layout 
+   * similarity is determined by bfs the view hierarchy class 
+   * and informative level, but consider only 2 further depth), 
+   * don't divide this view */
+  ({ v }) => {
+    // it's difficult to determine when too less
+    if (v.children.length <= 3) {
+      return '-';
+    }
+    const set = new Set<string>();
+    for (const cv of v.children) {
+      set.add(Views.layoutSummary(cv, 3));
+    }
+    // tolerate 1-2 different layout
+    return set.size <= 3 ? 'n' : '-';
+  },
   /** If the view is the *only* root of a segment, divide 
    * the view
    */
   ({v, s}) => s.roots.indexOf(v) != -1 && s.roots.length == 1 ? 'y' : '-',
+  /** If the view is less than the size threshold,
+   * then don't divide this view
+   */
+  ({ v, s, d }) => (
+    Views.areaOf(v) < d.width * d.height * DEFAULTS.THRESHOLD.V_IN_SCR
+  ) ? 'n' : '-',
   /** If sum of all the children's size is greater than 
    * this view's size, then divide this view
    */
@@ -294,7 +321,7 @@ const rules: Rule[] = [ // /* eslint-disable */
   ({v, s}) => {
     // TODO relative size
     return (
-      ((Views.areaOf(v) < Segments.areaOf(s) * DEFAULTS.V_SZ_THRESHOLD) &&
+      ((Views.areaOf(v) < Segments.areaOf(s) * DEFAULTS.THRESHOLD.V_IN_SEG) &&
         (v.children.some((c) => Views.isText(c)))) ? 'n' : '-'
     );
   },
@@ -306,7 +333,7 @@ const rules: Rule[] = [ // /* eslint-disable */
       const area = Views.areaOf(c);
       return area > max ? area : max;
     }, -1);
-    return max < Segments.areaOf(s) * DEFAULTS.V_SZ_THRESHOLD 
+    return max < Segments.areaOf(s) * DEFAULTS.THRESHOLD.V_IN_SEG
       ? 'n' : '-';
   },
   /** If previous siblings has not been divided, don't divide 
@@ -511,46 +538,43 @@ function scoreHVSep(
   }
   // a better sep can separate more views
   if (s1.length != s2.length) {
-    score += AWARD.DIFF_NUM;
+    score += AWARD.NUM;
   }
   // a better sep can separate diverse views
-  for(const a of s1) {
-    for(const b of s2) {
-      // same class? very much bad
-      if (a.cls == b.cls) {
-        score += AWARD.SAME_CLS;
-      } else {
-        score += AWARD.DIFF_CLS;
+  for (const a of s1) {
+    for (const b of s2) {
+      // different class is better
+      if (a.cls != b.cls) {
+        score += AWARD.CLS;
       }
-      // same scrollable parent? no
+      // different scrollable parent is better
       {
         let scrollParent = a.findVScrollableParent();
-        if (scrollParent != null && scrollParent == b.findVScrollableParent()) {
-          score += AWARD.SAME_VS_PARENT;
+        if (scrollParent != null && scrollParent != b.findVScrollableParent()) {
+          score += AWARD.VS_PARENT;
         }
         scrollParent = a.findHScrollableParent();
-        if (scrollParent != null && scrollParent == b.findHScrollableParent()) {
-          score += AWARD.SAME_HS_PARENT;
+        if (scrollParent != null && scrollParent != b.findHScrollableParent()) {
+          score += AWARD.HS_PARENT;
         }
       }
-      // thee diverse the background, the better
+      // different background is better
       if (a.bgClass != b.bgClass && a.bgColor != b.bgColor) {
-        score += AWARD.DIFF_BG;
+        score += AWARD.BG;
       } else if (a.bgClass != b.bgClass) {
-        score += AWARD.DIFF_BG_CLS;
+        score += AWARD.BG_CLS;
       } else if (a.bgColor != b.bgColor) {
-        score += AWARD.DIFF_BG_COLOR;
-      } else {
-        score += AWARD.SAME_BG;
+        score += AWARD.BG_COLOR;
       }
-      // both a are text views
+      // different informative is better
       {
         const aIsText = Views.isText(a);
         const bIsText = Views.isText(b);
-        if (aIsText && bIsText) {
-          score += AWARD.BOTH_TXT;
-        } else if (aIsText != bIsText) {
-          score += AWARD.DIFF_TEXT;
+        if (aIsText != bIsText) {
+          score += AWARD.TEXT;
+          score += AWARD.INFO;
+        } else if (Views.informativeLevel(a) != Views.informativeLevel(b)) {
+          score += AWARD.INFO;
         }
       }
     }
@@ -680,7 +704,7 @@ export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegS
     if (sep instanceof DxShrinkSegSep) { // shrink and push to queue head
       queue.unshift(sep.after);
       separators.push(sep);
-      DxLog.debug(`++ accept S for segment xxyy=${Segments.xxyy(seg)} level=${seg.level}`);
+      DxLog.debug(`++ accept S xxyy=${Segments.xxyy(seg)} level=${seg.level}`);
     } else if (
       (sep == null) || // cannot segment further
       (sep.dir != 'E' && sep.score < DEFAULTS.SP_SCORE_THRESHOLD) || // 'H' or 'V', but score is too low
