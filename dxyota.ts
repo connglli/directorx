@@ -124,7 +124,6 @@ function makeSelectOpts(opt: SelectOptions): string {
   return args;
 }
 
-
 export interface ViewMap {
   'index': number;
   'package': string;
@@ -222,6 +221,7 @@ export class ActivityYotaBuilder {
           c: vhm.clickable,
           lc: vhm['long-clickable'],
           cc: vhm['context-clickable'],
+          a: true // TODO, for a non-compressed dump, this is not correct
         },
         vhm.visible,
         'ColorDrawable',

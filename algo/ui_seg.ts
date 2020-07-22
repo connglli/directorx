@@ -5,6 +5,8 @@ import Interval, { XYInterval, XYIntervals } from '../utils/interval.ts';
 import DxLog from '../dxlog.ts';
 import { CannotReachHereError } from '../utils/error.ts';
 
+type N<T> = T | null;
+
 const DEFAULTS = {
   SP_OPTIMAL_COUNT: 5,      // optimal H and V separator count
   V_SZ_THRESHOLD: 0.07,     // size threshold of a sub view
@@ -51,6 +53,7 @@ export class UiSegError extends Error {
 
 /** DxSegment */
 export type DxSegment = {
+  parent: N<DxSegment>;
   roots: DxView[];
   // the drawing level
   level: number;
@@ -96,8 +99,9 @@ class DxShrinkSegSep implements DxSegSep {
 }
 
 export class Segments {
-  static adjust(
-    roots: DxView[]
+  static create(
+    roots: DxView[],
+    parent: N<DxSegment>
   ): DxSegment {
     if (roots.length == 0) {
       throw new UiSegError('roots is empty');
@@ -107,6 +111,7 @@ export class Segments {
       xy = XYInterval.merge(xy, Views.bounds(roots[i]));
     }
     return {
+      parent: parent,
       roots: roots,
       level: Math.max(...roots.map(v => v.drawingLevel)),
       x: xy.x.low,
@@ -118,6 +123,17 @@ export class Segments {
 
   static areaOf(s: DxSegment) {
     return s.w * s.h;
+  }
+
+  static drawingLevelRange(s: DxSegment): [number, number] {
+    const min = [];
+    const max = [];
+    for (const r of s.roots) {
+      const next = Views.drawingLevelRange(r);
+      min.push(next[0]);
+      max.push(next[1]);
+    }
+    return [Math.min(...min), Math.max(...max)];
   }
 
   static coverViews(s: DxSegment, vs: DxView[]) {
@@ -134,6 +150,15 @@ export class Segments {
   static cover(a: DxSegment, b: DxSegment): boolean {
     return Interval.cover(Segments.xx(a), Segments.xx(b)) >= 0 
       && Interval.cover(Segments.yy(a), Segments.yy(b)) >= 0;
+  }
+
+  static isAccImportant(s: DxSegment): boolean {
+    for (const r of s.roots) {
+      if (Views.isViewHierarchyAccImportant(r)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static bounds(s: DxSegment): XYInterval {
@@ -196,12 +221,28 @@ const rules: Rule[] = [ // /* eslint-disable */
   ({ v, d }) => !Views.isVisibleToUser(v, d) ? 's' : '-',
   /** If the view is invalid, skip it */
   ({ v }) => !Views.isValid(v) ? 's' : '-',
-  /** If the view is not informative (has no children, and 
-   * provides no useful information), skip this view
+  /** If the view has no children, and is not informative 
+   * (provides no useful information), and not important for
+   * accessibility, skip this view
    */
-  ({ v }) => !Views.isInformative(v) ? 's' : '-',
-  /** If the view has no children, don't divide this view */
-  ({ v }) => v.children.length == 0 ? 'n' : '-',
+  ({ v }) => (
+    v.children.length == 0 && 
+    Views.informativeLevel(v) == 0 &&
+    !Views.isViewAccImportant(v)
+  ) ? 's' : '-',
+  /** If the view is very informative (providing sufficient
+   * information), then don't divide this view
+   */
+  ({ v }) => Views.informativeLevel(v) >= 2 ? 'n' : '-',
+  /** If the view has no children, and important for
+   * accessibility or a text view, then don't divide this view
+    */
+  ({ v }) => (
+    v.children.length == 0 && 
+    (Views.isViewAccImportant(v) || Views.isText(v))
+  ) ? 'n' : '-',
+  /** If the view has no children, skip this view */
+  ({ v }) => v.children.length == 0 ? 's' : '-',
   /** If the view is a not text view, and it has no valid
    * child view, then this view cannot be divided and will
    * be cut
@@ -529,7 +570,7 @@ function scoreESep(
 }
 
 /** Segment a segment to two sub-segments */
-function segSeg(seg: DxSegment, dev: DevInfo): DxShrinkSegSep | DxHVESegSep | null {
+function segSeg(seg: DxSegment, dev: DevInfo): N<DxShrinkSegSep | DxHVESegSep> {
   // divide views, put non-division to a pool
   const pool: DxView[] = [];
   for (const r of seg.roots) {
@@ -545,7 +586,7 @@ function segSeg(seg: DxSegment, dev: DevInfo): DxShrinkSegSep | DxHVESegSep | nu
     // this means there are views that are segmented,
     // then return a specific shrink separator
     if (pool.some(v => seg.roots.indexOf(v) == -1)) {
-      return new DxShrinkSegSep(seg, Segments.adjust(pool));
+      return new DxShrinkSegSep(seg, Segments.create(pool, seg));
     } 
     // all views in pool are in roots, meaning this
     // segment is minimum and can no longer segmented
@@ -557,7 +598,7 @@ function segSeg(seg: DxSegment, dev: DevInfo): DxShrinkSegSep | DxHVESegSep | nu
   // if there are eseps, only take care of eseps
   if (eSep.length != 0) {
     let best = Number.MIN_SAFE_INTEGER;
-    let bestSep: ESepInterval | null = null;
+    let bestSep: N<ESepInterval> = null;
     for (const sep of eSep) {
       const score = scoreESep(sep, seg);
       if (score > best) {
@@ -572,15 +613,15 @@ function segSeg(seg: DxSegment, dev: DevInfo): DxShrinkSegSep | DxHVESegSep | nu
       Interval.INF,
       Interval.INF,
       [
-        Segments.adjust(s1),
-        Segments.adjust(s2)
+        Segments.create(s1, seg),
+        Segments.create(s2, seg)
       ],
     );
   }
 
   // calculate scores for each hsep and rsep
   let best = Number.MIN_SAFE_INTEGER;
-  let bestSep: HVSepInterval | null = null;
+  let bestSep: N<HVSepInterval> = null;
   let bestSepDir: 'H' | 'V' = 'H';
 
   for (const sep of vSep) {
@@ -604,23 +645,28 @@ function segSeg(seg: DxSegment, dev: DevInfo): DxShrinkSegSep | DxHVESegSep | nu
 
   // construct seg for separator
   const [s1, s2] = findHVBothSides(bestSep!, bestSepDir, pool); // eslint-disable-line
-  const sides: [DxSegment, DxSegment] = [Segments.adjust(s1), Segments.adjust(s2)];
   return new DxHVESegSep(
     /* eslint-disable */
     best,
     bestSepDir,
     bestSep![0],
     bestSep![1], 
-    sides
+    [
+      Segments.create(s1, seg), 
+      Segments.create(s2, seg)
+    ]
   );
 }
 
 /** Segment the Ui and return the segments and separators */
 export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegSep[]] {
+  // firstly, we segment the ui but reserve the low-level
+  // overlapped segments, 'cause it is often difficult and 
+  // time-consuming to fully delete them safely 
   const decor = a.decorView!; // eslint-disable-line
-  const segments: DxSegment[] = [];
+  let segments: DxSegment[] = [];
   const separators: DxSegSep[] = [];
-  const queue: DxSegment[] = [Segments.adjust([decor])];
+  const queue: DxSegment[] = [Segments.create([decor], null)];
   let hvSepCount = 0;
   while (queue.length != 0) {
     DxLog.debug('New Iteration');
@@ -638,7 +684,7 @@ export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegS
     } else if (
       (sep == null) || // cannot segment further
       (sep.dir != 'E' && sep.score < DEFAULTS.SP_SCORE_THRESHOLD) || // 'H' or 'V', but score is too low
-      (sep.dir != 'E' && hvSepCount > DEFAULTS.SP_OPTIMAL_COUNT) // 'H' or 'V', but count is already optimal
+      (sep.dir != 'E' && hvSepCount >= DEFAULTS.SP_OPTIMAL_COUNT) // 'H' or 'V', but count is already optimal
     ) { 
       if (sep != null) {
         DxLog.debug(`-- decline ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`);
@@ -652,6 +698,56 @@ export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegS
       }
       DxLog.debug(`++ accept ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`);
     }
+  }
+  // secondly, we delete the low-level and overlapped
+  // segments by their important for accessibility, 
+  // 'cause low-level and overlapped segments are often
+  // not important for accessibility (a better method
+  // deletes the low-level overlapped segments by the
+  // drawing level, however, the drawing level algorithm
+  // of Android Studio Dynamic Layout Inspector is 
+  // different from that of the drawing mechanism of
+  // android itself, 'cause the actually drawing is
+  // sometimes defined and controlled by the developers)
+  segments = segments.filter(Segments.isAccImportant);
+  if (false) {
+    // secondly, we delete the low-level and overlapped
+    // segments by their drawing levels
+    const tree = new XYIntervalTree<DxSegment>();
+    segments.forEach(s => tree.insert(Segments.bounds(s), s));
+    segments = segments.filter(s => {
+      const ove = tree.query(Segments.bounds(s))
+        .map(([, o]) => o)
+        .filter(o => o != s);
+      // no overlapping
+      if (ove.length != 0) {
+        return true;
+      }
+      const min = Math.min(...[s.level, ...ove.map(o => o.level)]);
+      const max = Math.max(...[s.level, ...ove.map(o => o.level)]);
+      // v is not the low-level or is the max level
+      if (min != s.level || max == s.level) {
+        return true;
+      }
+      const inv = new XYIntervals(Segments.bounds(s));
+      for (const o of ove) {
+        inv.remove(Segments.bounds(o));
+      }
+      let vIsCovered = true;
+      for (const j of inv.x()) {
+        if (j.low != j.high) {
+          vIsCovered = false;
+          break;
+        }
+      }
+      for (const j of inv.y()) {
+        if (j.low != j.high) {
+          vIsCovered = false;
+          break;
+        }
+      }
+      return !vIsCovered;
+    });
   }
   return [segments, separators];
 }

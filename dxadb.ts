@@ -187,7 +187,7 @@ class DumpSysActivityInfo {
 // FIX: some apps/devices often output non-standard attributes 
 // for example aid=1073741824 following resource-id
 const PAT_AV_DECOR = /DecorView@[a-fA-F0-9]+\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
-const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
+const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)\sdx-im-acc=(?<acc>true|false)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
 
 export class ActivityDumpSysBuilder {
 
@@ -308,6 +308,7 @@ export class ActivityDumpSysBuilder {
       desc: sDesc = '', text: sText = '',
       tag: sTag = '', tip: sTip = '', hint: sHint = '',
       bgclass: sBgClass, bgcolor: sBgColor, fg: sFg,
+      acc: sAcc,
       pcurr: sPcurr, tcurr: sTcurr
     } = res.groups;
 
@@ -347,7 +348,8 @@ export class ActivityDumpSysBuilder {
       vs: sFlags[5] == 'V',
       c: sFlags[6] == 'C',
       lc: sFlags[7] == 'L',
-      cc: sFlags[8] == 'X'
+      cc: sFlags[8] == 'X',
+      a: sAcc == 'true'
     };
 
     // tune visibility according its parent's visibility
@@ -384,7 +386,7 @@ export class ActivityDumpSysBuilder {
     const sy = parent.scrollY + Number(sSy);
 
     // parse shown
-    const shown = sShown == 'true' ? true : false;
+    const shown = sShown == 'true';
 
     // decode if necessary
     const text: string = this.decode ? base64.decode(sText) : sText;
@@ -491,7 +493,7 @@ export default class DxAdb {
     const info = await this.dumpTopActivity(pkg);
     const vhIndex = info.viewHierarchy;
     const viewHierarchy = info.get().slice(vhIndex[0], vhIndex[1]);
-    return new ActivityDumpSysBuilder(pkg, info.name)
+    const act = new ActivityDumpSysBuilder(pkg, info.name)
       .withHeight(dev.height)
       .withWidth(dev.width)
       .withDecoding(decoding)
@@ -499,6 +501,8 @@ export default class DxAdb {
       .withStep(2)         // hard code here
       .withViewHierarchy(viewHierarchy)
       .build();
+    act.buildDrawingLevelLists();
+    return act;
   }
 
   async fetchInfo(): Promise<DevInfo> {

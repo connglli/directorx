@@ -129,7 +129,8 @@ class DXPK {
             vs: tokens[24][7] == 'V',
             c:  tokens[24][8] == 'C',
             lc: tokens[24][9] == 'L',
-            cc: tokens[24][10] == 'X'
+            cc: tokens[24][10] == 'X',
+            a: tokens[24][11] == 'A'
           },
           tokens[5] == 'S' ? true : false,   // shown
           tokens[21],                        // bgClass
@@ -310,6 +311,7 @@ class DXPK {
       flags += v.flags.c ? 'C' : '.';
       flags += v.flags.lc ? 'L' : '.';
       flags += v.flags.cc ? 'X' : '.';
+      flags += v.flags.a ? 'A' : '.';
       if (v instanceof DxViewPager) {
         await DXPK.writeString(buf, `${flags};`, false);
         await DXPK.writeString(buf, `${v.currItem}`);

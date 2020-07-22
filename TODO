@@ -56,3 +56,4 @@ BUGS:
        package name of the activity different from that of the app, and
        task name different
 8. yota info commands may fail on real devices
+****9. dumpsys activity can only dump activity, but not dialogs
