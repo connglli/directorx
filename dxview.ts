@@ -371,10 +371,51 @@ export default class DxView {
   findViewByXY(x: number, y: number, visible = true, enabled = true): DxView | null {
     const views = this.findViewsByXY(x, y, visible, enabled);
     if (views.length > 0) {
-      return views[0];
+      return views.find(v => v.flags.a) ?? null;
     } else {
       return null;
     }
+  }
+
+  /** Find the first met view with text t */
+  findViewByText(t: string): DxView | null {
+    if (this.text == t) {
+      return this;
+    }
+    for (const v of this.children) {
+      const found = v.findViewByText(t);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  /** Find the first met view with desc t */
+  findViewByDesc(t: string): DxView | null {
+    if (this.desc == t) {
+      return this;
+    }
+    for (const v of this.children) {
+      const found = v.findViewByDesc(t);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  /** Find the view by children indices */
+  findViewByIndices(indices: number[]): DxView | null {
+    let p: DxView = this;
+    for (let i = 0; i < indices.length; i ++) {
+      const ind = indices[i];
+      if (ind < 0 || ind >= p.children.length) {
+        return null;
+      }
+      p = p.children[ind];
+    }
+    return p;
   }
 
   /** Find all views by x, y coordinate, set visible to false 
@@ -723,6 +764,10 @@ export class Views {
     return v.children.some(c => this.isValid(c));
   }
 
+  static indexOf(v: DxView): number {
+    return v.parent?.children.indexOf(v) ?? -1;
+  }
+
   static areaOf(v: DxView): number {
     return v.width * v.height;
   }
@@ -733,6 +778,17 @@ export class Views {
     } else {
       return v.parent?.children.filter(c => c != v) ?? [];
     }
+  }
+
+  static isChildOf(v: DxView, r: DxView): boolean {
+    let p = v.parent;
+    while (p) {
+      if (p == r) {
+        return true;
+      }
+      p = p.parent;
+    }
+    return false;
   }
 
   static bounds(v: DxView): XYInterval {

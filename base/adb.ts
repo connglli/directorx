@@ -21,6 +21,14 @@ export class ProcessError extends Error {
   }
 }
 
+function safeClose(c: Deno.Closer) {
+  try {
+    c.close();
+  } catch (x) {
+    // do nothing
+  }
+}
+
 function makeAdbCmd(subCmd: string, opt: AdbGlobalOptions = {}): string[] {
   let cmd = 'adb ';
   const { serial } = opt;
@@ -51,12 +59,12 @@ async function exec(
   let out: string;
   if (code == 0) {
     out = new TextDecoder().decode(rawOut);
-    proc.stderr.close(); // eslint-disable-line
+    safeClose(proc.stderr); // eslint-disable-line
   } else {
     out = new TextDecoder().decode(await proc.stderrOutput());
-    proc.stdout.close();
+    safeClose(proc.stdout);
   }
-  proc.close();
+  safeClose(proc);
   return { code, out };
 }
 
@@ -74,13 +82,13 @@ async function* poll(
   try {
     if (code != 0) {
       const err = new TextDecoder().decode(await proc.stderrOutput());
-      proc.stdout.close();
+      safeClose(proc.stdout);
       throw new ProcessError(code, err);
     }
-    proc.stdout.close();
-    proc.stderr.close();
+    safeClose(proc.stdout);
+    safeClose(proc.stderr);
   } finally {
-    proc.close();
+    safeClose(proc);
   }
 }
 
