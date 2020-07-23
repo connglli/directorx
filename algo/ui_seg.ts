@@ -277,7 +277,9 @@ const rules: Rule[] = [ // /* eslint-disable */
       set.add(Views.layoutSummary(cv, 3));
     }
     // tolerate 1-2 different layout
-    return set.size <= 3 ? 'n' : '-';
+    const diff = set.size - 1;
+    const same = v.children.length - diff;
+    return (same > diff && diff <= 2) ? 'n' : '-';
   },
   /** If the view is the *only* root of a segment, divide 
    * the view
