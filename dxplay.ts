@@ -10,23 +10,28 @@ import DxEvent, {
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
-import DxView, { DxActivity } from './dxview.ts';
+import DxView, { DxActivity, Views } from './dxview.ts';
 import DxDroid, {
   DevInfo,
   ViewInputOptions, 
   SelectOptions,
   ViewMap
 } from './dxdroid.ts';
+import segUi, { DxSegment } from './algo/ui_seg.ts';
+import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';
 import * as time from './utils/time.ts';
 import { 
   IllegalStateError, 
   NotImplementedError, 
   CannotReachHereError 
 } from './utils/error.ts';
+import regPat from './algo/pat_syn.ts';
+
+type N<T> = T | null;
 
 abstract class DxPlayer {
   public readonly timeSensitive = true;
-  protected seq: DxEvSeq | null = null;
+  protected seq: N<DxEvSeq> = null;
   constructor(
     public readonly app: string,   // app to play
   ) {}
@@ -214,7 +219,7 @@ class ResPlayer extends DxPlayer {
     super(app);
   }
 
-  protected async playEvent(e: DxEvent): Promise<void> {
+  protected async playEvent(e: DxEvent, rDev: DevInfo): Promise<void> {
     if (!isXYEvent(e)) {
       if (e.ty == 'key') {
         await DxDroid.get().input.key((e as DxKeyEvent).k);
@@ -224,7 +229,7 @@ class ResPlayer extends DxPlayer {
       return;
     }
 
-    // find the widget first
+    // find the view in playee first
     let v = await this.find(e);
     if (v != null) {
       return await this.fireOnViewMap(e, v);
@@ -243,11 +248,65 @@ class ResPlayer extends DxPlayer {
       }
     }
 
-    // ui segmentation -> segment matching -> synthesis
-    throw new NotImplementedError('Ui Segmentation -> Segment Matching -> Synthesis');
+    // when lookahead fails, segment the ui, 
+    // and find the matched segment, and synthesize
+    // the equivalent event sequence
+    const rAct = e.a;
+    const w = rAct.findViewByXY(e.x, e.y);
+    if (w == null) {
+      throw new IllegalStateError(`No visible view found on rec tree at (${e.x}, ${e.y})`);
+    }
+
+    // segment the ui
+    const droid = DxDroid.get();
+    const [rSegs] = segUi(rAct, rDev);
+    const pAct = await droid.topActivity(this.app, this.decode, 'dumpsys');
+    const pDev = droid.dev;
+    const [pSegs] = segUi(pAct, pDev);
+
+    // match segment and find the target segment
+    const match = matchSeg(pSegs, rSegs);
+    // find the segment where the w resides
+    const rSeg = this.findSegByView(w, rSegs);
+    const pSeg = match.getMatch(rSeg);
+    if (!pSeg) {
+      throw new IllegalStateError('Does not found any matched segment, event NO_MATCH');
+    } else if (pSeg == NO_MATCH) {
+      throw new NotImplementedError('Matched segment is NO_MATCH');
+    }
+
+    // recognize the pattern
+    const patArg = {
+      v: w, r: { a: rAct, s: rSeg }, p: { a: pAct, s: pSeg }
+    };
+    const pat = regPat(patArg);
+    if (pat == null) {
+      throw new NotImplementedError('No pattern is recognized');
+    } else {
+      DxLog.info(`pattern ${pat.name()}`)
+    }
+    // apply the rules to get the synthesized event
+    const ne = pat.apply(patArg);
+    // fire the event
+    await this.playEvent(ne, rDev);
+
+    // push the raw event back to the sequence,
+    // and try again
+    this.seq?.push(e);
   }
 
-  private async find(e: DxXYEvent): Promise<ViewMap | null> {
+  private findSegByView(v: DxView, segs: DxSegment[]): DxSegment {
+    for (const s of segs) {
+      for (const r of s.roots) {
+        if (Views.isChildOf(v, r)) {
+          return s;
+        }
+      }
+    }
+    throw new IllegalStateError('Cannot find the view on any segment');
+  }
+
+  private async find(e: DxXYEvent): Promise<N<ViewMap>> {
     const { a, x, y } = e;
     const v = a.findViewByXY(x, y);
     if (v == null) {
@@ -256,13 +315,11 @@ class ResPlayer extends DxPlayer {
     const opt: SelectOptions = {
       n: 1
     };
-    if (v.resId.length != 0) {
-      opt.resIdContains = v.resEntry;
-    }
     if (v.text.length != 0) {
       opt.textContains = v.text;
-    }
-    if (v.desc.length != 0) {
+    } else if (v.resId.length != 0) {
+      opt.resIdContains = v.resEntry;
+    } else if (v.desc.length != 0) {
       opt.descContains = v.desc;
     }
     if (!opt.resIdContains && !opt.textContains && !opt.descContains) {

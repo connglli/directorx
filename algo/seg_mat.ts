@@ -13,7 +13,30 @@ type WordVec = vecutil.WordVec;
 export const NO_MATCH: DxSegment = {
   roots: [], x: -1, y: -1, w: -1, h: -1, level: -1, parent: null,
 };
-export type DxSegMatch = [DxSegment, DxSegment, number][];
+
+type MatchItem = [DxSegment, DxSegment, number];
+
+export class DxSegMatch {
+  constructor(
+    // seg, seg, score
+    private match: MatchItem[]
+  ) {}
+  
+  getMatch(s: DxSegment): DxSegment | null {
+    for (const [a, b] of this.match) {
+      if (a == s) {
+        return b;
+      } else if (b == s) {
+        return a;
+      }
+    }
+    return null;
+  }
+
+  *[Symbol.iterator](): IterableIterator<MatchItem> {
+    yield* this.match;
+  }
+}
 
 /** Collect the words and create a WordFreq from a segment */
 function newWordFreq(seg: DxSegment): WordFreq {
@@ -46,7 +69,7 @@ function similarity(v1: WordVec, v2: WordVec): number {
 }
 
 /** Match segments in a and b, and return a match result */
-export function matchSeg(a: DxSegment[], b: DxSegment[]): DxSegMatch {
+export default function matchSeg(a: DxSegment[], b: DxSegment[]): DxSegMatch {
   // append NO_MATCH to make them equal-length
   const side1 = a.slice();
   const side2 = b.slice();
@@ -91,11 +114,11 @@ export function matchSeg(a: DxSegment[], b: DxSegment[]): DxSegMatch {
   graph.match();
 
   // construct and return the matched result 
-  const mat: DxSegMatch = [];
+  const mat: MatchItem[] = [];
   for (let v = 0; v < side1.length; v ++) {
     const w = graph.getMatch(v, true);
     mat.push([side1[v], side2[w], weights[v][w]]);
   }
   
-  return mat;
+  return new DxSegMatch(mat);
 }

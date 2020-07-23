@@ -57,3 +57,5 @@ BUGS:
        task name different
 8. yota info commands may fail on real devices
 ****9. dumpsys activity can only dump activity, but not dialogs, popupwindow, ...
+10. In TabHost pattern is not strictly a Tab name, then how to resolve the tab 
+    name where v resides? Maybe we can do something when recording?
