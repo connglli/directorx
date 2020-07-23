@@ -705,7 +705,7 @@ export class Views {
   }
 
   static isValid(v: DxView): boolean {
-    return v.width != 0 && v.height != 0;
+    return v.width>= 5 && v.height >= 5;
   }
 
   static isVisibleToUser(v: DxView, d: DevInfo): boolean {
