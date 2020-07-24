@@ -1,13 +1,12 @@
 import DxAdb, { DevInfo } from './dxadb.ts';
-import DxYota, { ViewInputOptions, SelectOptions, ViewMap, ViewHierarchyMap } from './dxyota.ts';
+import DxYota, { ViewInputOptions, SelectOptions, ViewMap } from './dxyota.ts';
 import { DxActivity } from './dxview.ts';
 
 export {
   DevInfo,
   ViewInputOptions, 
   SelectOptions,
-  ViewMap,
-  ViewHierarchyMap,
+  ViewMap
 };
 
 export class DxDroidError extends Error {}

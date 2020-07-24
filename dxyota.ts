@@ -124,7 +124,8 @@ function makeSelectOpts(opt: SelectOptions): string {
   return args;
 }
 
-export interface ViewMap {
+// Dumped view map properties
+interface DumpViewProps {
   'index': number;
   'package': string;
   'class': string;
@@ -143,6 +144,7 @@ export interface ViewMap {
   'selected': boolean;
   'password': boolean;
   'enabled': boolean;
+  'important': boolean;
   'background'?: number;
   'bounds': { // the visible and drawing bounds
     'left': number;
@@ -152,8 +154,35 @@ export interface ViewMap {
   }
 }
 
-export interface ViewHierarchyMap extends ViewMap {
-  'children': ViewHierarchyMap[]
+// Dumped view hierarchy properties
+interface DumpViewHierarchyProps extends DumpViewProps {
+  'children': DumpViewHierarchyProps[]
+}
+
+// Computed view map properties
+interface CompViewProps {
+  'resource-pkg': string;
+  'resource-type': string;
+  'resource-entry': string;
+}
+
+/** Exported ViewMap includes all properties from
+ * dumped and computed
+ */
+export type ViewMap = (DumpViewProps & CompViewProps);
+
+function splitResourceId(resId: string): [string, string, string] {
+  if (resId.length == 0) return ['', '', ''];
+  const colon = resId.indexOf(':');
+  const slash = resId.indexOf('/');
+  if (colon == -1 || slash == -1) {
+    return ['', '', ''];
+  }
+  return [
+    resId.substring(0, colon),
+    resId.substring(colon + 1, slash),
+    resId.substring(slash + 1),
+  ];
 }
 
 export class ActivityYotaBuilder {
@@ -178,15 +207,15 @@ export class ActivityYotaBuilder {
   build(): DxActivity {
     const a = new DxActivity(this.app, this.name);
     const obj = JSON.parse(this.dump);
-    const vhm = obj['hierarchy'] as ViewHierarchyMap;
+    const vhm = obj['hierarchy'] as DumpViewHierarchyProps;
     this.buildView(vhm, a);
     return a;
   }
 
-  private buildView(vhm: ViewHierarchyMap, a: DxActivity): DxView {
+  private buildView(vhp: DumpViewHierarchyProps, a: DxActivity): DxView {
     let v: DxView;
     if (a.decorView == null) {
-      const decor = vhm;
+      const decor = vhp;
       if (decor.bounds.left != 0 || decor.bounds.top != 0) {
         throw new IllegalStateError(`Expect the decor at (0, 0), but at (${decor.bounds.left}, ${decor.bounds.top})`);
       }
@@ -197,49 +226,41 @@ export class ActivityYotaBuilder {
       v = a.decorView;
     } else {
       v = DxViewFactory.create(DxViewType.OTHERS);
-      let [resPkg, resType, resEntry] = ['', '', ''];
-      if (vhm['resource-id'].length != 0) {
-        const resId = vhm['resource-id'];
-        const colon = resId.indexOf(':');
-        const slash = resId.indexOf('/');
-        resPkg = resId.substring(0, colon);
-        resType = resId.substring(colon + 1, slash);
-        resEntry = resId.substring(slash + 1);
-      }
+      let [resPkg, resType, resEntry] = splitResourceId(vhp['resource-id']);
       v.reset(
-        vhm.package,
-        vhm.class,
+        vhp.package,
+        vhp.class,
         {
-          V: vhm.visible ? 'V' : 'I',
-          f: vhm.focusable,
-          F: vhm.focused,
-          S: vhm.selected,
-          E: vhm.enabled,
+          V: vhp.visible ? 'V' : 'I',
+          f: vhp.focusable,
+          F: vhp.focused,
+          S: vhp.selected,
+          E: vhp.enabled,
           d: true,
-          hs: vhm.scrollable,
-          vs: vhm.scrollable,
-          c: vhm.clickable,
-          lc: vhm['long-clickable'],
-          cc: vhm['context-clickable'],
-          a: true // TODO, for a non-compressed dump, this is not correct
+          hs: vhp.scrollable,
+          vs: vhp.scrollable,
+          c: vhp.clickable,
+          lc: vhp['long-clickable'],
+          cc: vhp['context-clickable'],
+          a: vhp['important']
         },
-        vhm.visible,
+        vhp.visible,
         'ColorDrawable',
-        vhm.background!, // eslint-disable-line
+        vhp.background!, // eslint-disable-line
         null,
-        vhm.bounds.left,
-        vhm.bounds.top,
-        vhm.bounds.right,
-        vhm.bounds.bottom,
+        vhp.bounds.left,
+        vhp.bounds.top,
+        vhp.bounds.right,
+        vhp.bounds.bottom,
         0,
         0, 0, 0, 0, 0,
         resPkg, resType, resEntry,
-        vhm['content-desc'],
-        vhm.text
+        vhp['content-desc'],
+        vhp.text
       );
     }
 
-    for (const chm of vhm.children) {
+    for (const chm of vhp.children) {
       v!.addView(this.buildView(chm, a)); // eslint-disable-line
     }
 
@@ -322,8 +343,16 @@ export default class DxYota {
     if (status.code != 0) {
       throw new AdbError('yota select', status.code, status.out);
     }
-    const map = JSON.parse(status.out);
-    return map as ViewMap[];
+    const dvps = JSON.parse(status.out) as DumpViewProps[];
+    return dvps.map(dvp => {
+      const [resPkg, resType, resEntry] = splitResourceId(dvp['resource-id']);
+      const cvp: CompViewProps = {
+        'resource-pkg': resPkg,
+        'resource-type': resType,
+        'resource-entry': resEntry
+      }
+      return { ...dvp, ...cvp };
+    });
   }
 
   async info(cmd: string): Promise<string> {

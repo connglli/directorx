@@ -1,59 +1,130 @@
 import DxView, { DxTabHost, DxViewPager, DxActivity, Views } from '../dxview.ts';
 import { DxSegment } from './ui_seg.ts';
 import DxEvent, { DxTapEvent } from '../dxevent.ts';
+import { DevInfo } from '../dxdroid.ts';
 import { NotImplementedError, IllegalStateError } from '../utils/error.ts';
 
 type N<T> = T | null;
 
-export type PatRegArgs = {
-  // view on recordee
-  v: DxView,
-  // the recordee
-  r: {
-    s: DxSegment,
-    a: DxActivity
-  },
-  // the playee
-  p: {
-    s: DxSegment,
-    a: DxActivity
+/** Synthetic event returned by applying each pattern */
+export class SyntEvent {
+  constructor(
+    public readonly e: DxEvent
+  ) {}
+}
+
+export interface PatRecArgs {}
+
+export abstract class DxPat {
+  constructor(
+    protected readonly args: PatRecArgs
+  ) {}
+  abstract match(): boolean;
+  abstract apply(): SyntEvent;
+}
+
+export interface InvisiblePatRecArgs extends PatRecArgs {
+  v: DxView;
+  // playee activity
+  a: DxActivity;
+  // playee device
+  d: DevInfo;
+}
+
+/** Invisible pattern is used for those invisible views */
+export class Invisible extends DxPat {
+  private vParent: N<DxView> = null;
+  constructor(
+    protected args: InvisiblePatRecArgs
+  ) {
+    super(args);
+  }
+
+  match(): boolean {
+    const { 
+      v: view, a: act, d: dev 
+    } = this.args;
+    let p = view.parent;
+    while (p) {
+      if (Views.isViewAccImportant(p) && Views.isVisibleToUser(p, dev)) {
+        this.vParent = p;
+        return true;
+      }
+      p = p.parent;
+    }
+    return false;
+  }
+
+  apply(): SyntEvent {
+    if (this.vParent == null) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    return new SyntEvent(new DxTapEvent(
+      this.args.a,
+      this.vParent.drawingX + 1,
+      this.vParent.drawingY + 1,
+      -1
+    ));
   }
 }
 
-export abstract class DxPat {
-  abstract name(): string;
-  abstract match(args: PatRegArgs): boolean;
-  abstract apply(args: PatRegArgs): DxEvent;
+export interface BpPatRecArgs extends PatRecArgs {
+  // view on recordee
+  v: DxView;
+  // the recordee
+  r: {
+    s: DxSegment;
+    a: DxActivity;
+  };
+  // the playee
+  p: {
+    s: DxSegment;
+    a: DxActivity;
+  };
 }
 
-class Expand extends DxPat {
-  name() { return 'expand'; }
+/** Bottom-up patterns that our pattern recognition 
+ * algorithm used. The level denotes the level the
+ * pattern resides. To implements 
+ */
+export abstract class DxBpPat extends DxPat {
+  constructor(
+    protected args: BpPatRecArgs
+  ) {
+    super(args);
+  }
 
-  match(args: PatRegArgs): boolean {
+  abstract level(): string;
+}
+
+class Expand extends DxBpPat {
+  level() { return 'expand'; }
+
+  match(): boolean {
     return (
-      !!args.v.findVScrollableParent() || 
-      !!args.v.findHScrollableParent()
+      !!this.args.v.findVScrollableParent() || 
+      !!this.args.v.findHScrollableParent()
     );
   }
 
-  apply(): DxEvent {
+  apply(): SyntEvent {
     throw new NotImplementedError();
   }
 }
 
-abstract class Reveal extends DxPat {
-  name() { return 'reveal'; }
+abstract class Reveal extends DxBpPat {
+  level() { return 'reveal'; }
 }
 
 class MoreOptions extends Reveal {
   static DESC = 'More options';
   // the MoreOptions button
-  private vMoreOptions: DxView | null = null;
+  private vMoreOptions: N<DxView> = null;
 
-  match(args: PatRegArgs): boolean {
+  match(): boolean {
     // check if there are MoreOptions button
     // buttons in the playee segment
-    for (const r of args.p.s.roots) {
+    for (const r of this.args.p.s.roots) {
       const mo = r.findViewByDesc(MoreOptions.DESC)
       if (mo != null) {
         this.vMoreOptions = mo;
@@ -63,17 +134,19 @@ class MoreOptions extends Reveal {
     return false;
   }
 
-  apply(args: PatRegArgs): DxEvent {
+  apply(): SyntEvent {
     if (this.vMoreOptions == null) {
       throw new IllegalStateError('Pattern is not satisfied, don\'t apply');
     }
     // synthesize a tap event on the
     // more options button
-    return new DxTapEvent(
-      args.p.a,
-      this.vMoreOptions.drawingX + 1,
-      this.vMoreOptions.drawingY + 1,
-      -1
+    return new SyntEvent(
+      new DxTapEvent(
+        this.args.p.a,
+        Views.x0(this.vMoreOptions) + 1,
+        Views.y0(this.vMoreOptions) + 1,
+        -1
+      )
     );
   }
 }
@@ -82,10 +155,10 @@ class TabHost extends Reveal {
   // the path from the view to the TabHost
   private vPath: DxView[] = [];
 
-  match(args: PatRegArgs): boolean {
+  match(): boolean {
     // check whether v is in a TabHost
-    this.vPath.unshift(args.v);
-    let p = args.v.parent;
+    this.vPath.unshift(this.args.v);
+    let p = this.args.v.parent;
     while (p) {
       this.vPath.unshift(p);
       if (p instanceof DxTabHost) {
@@ -98,15 +171,15 @@ class TabHost extends Reveal {
     return false;
   }
 
-  apply(args: PatRegArgs): DxEvent {
-    // TODO v is not strictly a Tab name, then how to
-    // resolve the tab name where v resides? Maybe we
-    // can do something when recording?
-    const pSeg = args.p.s;
+  apply(): SyntEvent {
     // find all tabs in recordee
     if (this.vPath.length == 0) {
       throw new IllegalStateError('Pattern is not satisfied, don\'t apply');
     }
+    // TODO v is not strictly a Tab name, then how to
+    // resolve the tab name where v resides? Maybe we
+    // can do something when recording?
+    const pSeg = this.args.p.s;
     // find the tab's direct parent, 'cause
     // sometimes the TabHost does not directly
     // host the tabs, but its children
@@ -141,11 +214,13 @@ class TabHost extends Reveal {
         for (const r of pSeg.roots) {
           const found = r.findViewByText(v.text);
           if (found) {
-            return new DxTapEvent(
-              args.p.a,
-              found.drawingX + 1,
-              found.drawingY + 1,
-              -1
+            return new SyntEvent(
+              new DxTapEvent(
+                this.args.p.a,
+                Views.x0(found) + 1,
+                Views.y0(found) + 1,
+                -1
+              )
             );
           }
         }
@@ -157,11 +232,13 @@ class TabHost extends Reveal {
         for (const r of pSeg.roots) {
           const found = r.findViewByDesc(v.desc);
           if (found) {
-            return new DxTapEvent(
-              args.p.a,
-              found.drawingX + 1,
-              found.drawingY + 1,
-              -1
+            return new SyntEvent(
+              new DxTapEvent(
+                this.args.p.a,
+                Views.x0(found) + 1,
+                Views.y0(found) + 1,
+                -1
+              )
             );
           }
         }
@@ -176,8 +253,8 @@ class TabHost extends Reveal {
 }
 
 class ViewPager extends Reveal {
-  match(args: PatRegArgs): boolean {
-    const p = args.v.parent;
+  match(): boolean {
+    const p = this.args.v.parent;
     while (p) {
       if (p instanceof DxViewPager) {
         return true;
@@ -186,7 +263,7 @@ class ViewPager extends Reveal {
     return false;
   }
 
-  apply(): DxEvent {
+  apply(): SyntEvent {
     throw new NotImplementedError();
   }
 }
@@ -195,11 +272,11 @@ class ViewPager extends Reveal {
 // [None, Reflow, Expand, Merge, Reveal, Transform]
 const patterns = [
   // Expand
-  new Expand(),
+  Expand,
   // Reveal
-  new MoreOptions(),
-  new TabHost(),
-  new ViewPager()
+  MoreOptions,
+  TabHost,
+  ViewPager
 ];
 
 /** Recognize the pattern bottom-up from None to 
@@ -208,9 +285,10 @@ const patterns = [
  * Confirm the pattern and return if and only if the 
  * condition passes, or test next pattern
  */
-export default function regPat(args: PatRegArgs): N<DxPat> {
-  for (const pat of patterns) {
-    if (pat.match(args)) {
+export default function regBpPat(args: BpPatRecArgs): N<DxBpPat> {
+  for (const Pat of patterns) {
+    const pat = new Pat(args);
+    if (pat.match()) {
       return pat;
     }
   }

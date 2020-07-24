@@ -371,7 +371,8 @@ export default class DxView {
   findViewByXY(x: number, y: number, visible = true, enabled = true): DxView | null {
     const views = this.findViewsByXY(x, y, visible, enabled);
     if (views.length > 0) {
-      return views.find(v => v.flags.a) ?? null;
+      // only those important for accessibility are useful
+      return visible ? (views.find(v => v.flags.a) ?? null) : views[0];
     } else {
       return null;
     }
@@ -398,6 +399,20 @@ export default class DxView {
     }
     for (const v of this.children) {
       const found = v.findViewByDesc(t);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  /** Find the first met view with resource type and entry */
+  findViewByResource(type: string, entry: string): DxView | null {
+    if (this.resType == type && this.resEntry == entry) {
+      return this;
+    }
+    for (const v of this.children) {
+      const found = v.findViewByResource(type, entry);
       if (found) {
         return found;
       }
@@ -580,18 +595,6 @@ export class DxViewPager extends DxView {
 
   set currItem(newItem: number) {
     this.currItem_ = newItem;
-  }
-
-  findViewsByXY(x: number, y: number, visible = true, enabled = true): DxView[] {
-    let hitViews: DxView[] = [];
-    if (this.hitSelf(x, y, visible, enabled)) {
-      hitViews.push(this);
-    }
-    if (this.currItem < this.children.length) {
-      const c = this.children[this.currItem];
-      hitViews = [...c.findViewsByXY(x, y, visible, enabled), ...hitViews];
-    }
-    return hitViews;
   }
 
   copy(
@@ -843,9 +846,23 @@ export class DxActivity {
     return this.decor?.findViewByXY(x, y, visible) ?? null;
   }
 
+  findViewByText(t: string): DxView | null {
+    return this.decor?.findViewByText(t) ?? null;
+  }
+
+  findViewByDesc(d: string): DxView | null {
+    return this.decor?.findViewByDesc(d) ?? null;
+  }
+
+  findViewByResource(type: string, entry: string): DxView | null {
+    return this.decor?.findViewByResource(type, entry) ?? null;
+  }
+
   /** Build the drawing level top-down. Views at each level are 
    * not overlapped, but views at adjacent levels are overlapped 
-   * at least at one view. */
+   * at least at one view. See more in source code of 
+   * Android Studio Dynamic Layout Inspector:
+   * https://android.googlesource.com/platform/tools/adt/idea/+/refs/heads/studio-master-dev/layout-inspector/src/com/android/tools/idea/layoutinspector/ui/DeviceViewPanelModel.kt#175 */
   buildDrawingLevelLists(): DxView[][] {
     const levelLists: DxView[][] = [];
 

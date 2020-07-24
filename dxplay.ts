@@ -19,25 +19,32 @@ import DxDroid, {
 } from './dxdroid.ts';
 import segUi, { DxSegment } from './algo/ui_seg.ts';
 import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';
+import regBpPat, { Invisible, SyntEvent } from './algo/pat_syn.ts';
 import * as time from './utils/time.ts';
 import { 
   IllegalStateError, 
   NotImplementedError, 
   CannotReachHereError 
 } from './utils/error.ts';
-import regPat from './algo/pat_syn.ts';
 
 type N<T> = T | null;
 
 abstract class DxPlayer {
   public readonly timeSensitive = true;
-  protected seq: N<DxEvSeq> = null;
+  private seq_: N<DxEvSeq> = null;
   constructor(
     public readonly app: string,   // app to play
   ) {}
 
+  get seq(): DxEvSeq {
+    if (this.seq_) {
+      return this.seq_;
+    }
+    throw new IllegalStateError('Not in playing state');
+  }
+
   async play(seq: DxEvSeq, rDev: DevInfo): Promise<void> {
-    this.seq = seq;
+    this.seq_ = seq;
     let lastMs = -1;
     while (!this.seq.empty()) {
       const e = this.seq.pop();
@@ -60,7 +67,7 @@ abstract class DxPlayer {
 
 /** PxPlayer plays each event pixel by pixel */
 class PxPlayer extends DxPlayer {
-  protected async playEvent(e: DxEvent): Promise<void> {
+  async playEvent(e: DxEvent): Promise<void> {
     const input = DxDroid.get().input;
     switch (e.ty) {
     case 'tap':
@@ -89,7 +96,7 @@ class PxPlayer extends DxPlayer {
 
 /** PtPlayer plays each event percentage by percentage */
 class PtPlayer extends DxPlayer {
-  protected async playEvent(e: DxEvent, rDev: DevInfo): Promise<void> {
+  async playEvent(e: DxEvent, rDev: DevInfo): Promise<void> {
     const input = DxDroid.get().input;
     const dev = DxDroid.get().dev;
     if (e.ty == 'tap') {
@@ -147,7 +154,7 @@ class PtPlayer extends DxPlayer {
  * If no views are found, a YotaNoSuchViewException is thrown.
  */
 class WdgPlayer extends DxPlayer {
-  protected async playEvent(e: DxEvent): Promise<void> {
+  async playEvent(e: DxEvent): Promise<void> {
     const input = DxDroid.get().input;
     const dev = DxDroid.get().dev;
     if (e.ty == 'tap') {
@@ -211,15 +218,17 @@ class WdgPlayer extends DxPlayer {
 
 /** ResPlayer plays each event responsively */
 class ResPlayer extends DxPlayer {
+  private pxp: PxPlayer;
   constructor(
     app: string,
     public readonly decode: boolean,
     public readonly K: number
   ) {
     super(app);
+    this.pxp = new PxPlayer(app);
   }
 
-  protected async playEvent(e: DxEvent, rDev: DevInfo): Promise<void> {
+  async playEvent(e: DxEvent, rDev: DevInfo): Promise<void> {
     if (!isXYEvent(e)) {
       if (e.ty == 'key') {
         await DxDroid.get().input.key((e as DxKeyEvent).k);
@@ -230,9 +239,42 @@ class ResPlayer extends DxPlayer {
     }
 
     // find the view in playee first
-    let v = await this.find(e);
-    if (v != null) {
-      return await this.fireOnViewMap(e, v);
+    let vm = await this.find(e);
+    if (vm != null) {
+      if (vm.important && vm.visible) {
+        await this.fireOnViewMap(e, vm);
+        return;
+      }
+      // sometimes an important or invisible view may got,
+      // even though it is not suitable to fire it, it provides
+      // useful information, specific patterns can be used.
+      const droid = DxDroid.get();
+      const pAct = await this.top();
+      let v: DxView | null = null;
+      if (vm.text.length > 0) {
+        v = pAct.findViewByText(vm.text);
+      } else if (vm['resource-id'].length > 0) {
+        v = pAct.findViewByResource(vm['resource-type'], vm['resource-entry']);
+      } else if (vm['content-desc'].length > 0) {
+        v = pAct.findViewByDesc(vm['content-desc']);
+      } else {
+        v = pAct.findViewByXY(vm.bounds.left + 1, vm.bounds.top + 1);
+      }
+      if (v == null) {
+        throw new IllegalStateError('Cannot find view on playee tree');
+      }
+      const pat = new Invisible({
+        v, a: pAct, d: droid.dev,
+      });
+      if (!pat.match()) {
+        throw new NotImplementedError('Pattern is not invisible');
+      } else {
+        DxLog.info('pattern invisible');
+      }
+      const ne = pat.apply();
+      await this.fireSyntEvent(ne);
+      this.seq?.push(e);
+      return;
     }
 
     // try to look ahead next K events
@@ -240,11 +282,11 @@ class ResPlayer extends DxPlayer {
     for (const i in nextK) {
       const ne = nextK[i];
       if (!isXYEvent(ne)) { continue; }
-      v = await this.find(ne);
-      if (v != null) { // find one, directly skip all previously
+      vm = await this.find(ne);
+      if (vm != null) { // find one, directly skip all previously
         this.seq!.popN(Number(i) + 1); // eslint-disable-line
         DxLog.info(`/* skip ${e.toString()} */`);
-        return await this.fireOnViewMap(ne, v);
+        return await this.fireOnViewMap(ne, vm);
       }
     }
 
@@ -252,22 +294,22 @@ class ResPlayer extends DxPlayer {
     // and find the matched segment, and synthesize
     // the equivalent event sequence
     const rAct = e.a;
-    const w = rAct.findViewByXY(e.x, e.y);
-    if (w == null) {
+    const v = rAct.findViewByXY(e.x, e.y);
+    if (v == null) {
       throw new IllegalStateError(`No visible view found on rec tree at (${e.x}, ${e.y})`);
     }
 
     // segment the ui
     const droid = DxDroid.get();
     const [rSegs] = segUi(rAct, rDev);
-    const pAct = await droid.topActivity(this.app, this.decode, 'dumpsys');
+    const pAct = await this.top();
     const pDev = droid.dev;
     const [pSegs] = segUi(pAct, pDev);
 
     // match segment and find the target segment
     const match = matchSeg(pSegs, rSegs);
     // find the segment where the w resides
-    const rSeg = this.findSegByView(w, rSegs);
+    const rSeg = this.findSegByView(v, rSegs);
     const pSeg = match.getMatch(rSeg);
     if (!pSeg) {
       throw new IllegalStateError('Does not found any matched segment, event NO_MATCH');
@@ -276,19 +318,19 @@ class ResPlayer extends DxPlayer {
     }
 
     // recognize the pattern
-    const patArg = {
-      v: w, r: { a: rAct, s: rSeg }, p: { a: pAct, s: pSeg }
+    const bpArgs = {
+      v, r: { a: rAct, s: rSeg }, p: { a: pAct, s: pSeg }
     };
-    const pat = regPat(patArg);
+    const pat = regBpPat(bpArgs);
     if (pat == null) {
       throw new NotImplementedError('No pattern is recognized');
     } else {
-      DxLog.info(`pattern ${pat.name()}`)
+      DxLog.info(`pattern ${pat.level()}`)
     }
     // apply the rules to get the synthesized event
-    const ne = pat.apply(patArg);
+    const ne = pat.apply();
     // fire the event
-    await this.playEvent(ne, rDev);
+    await this.fireSyntEvent(ne);
 
     // push the raw event back to the sequence,
     // and try again
@@ -308,9 +350,10 @@ class ResPlayer extends DxPlayer {
 
   private async find(e: DxXYEvent): Promise<N<ViewMap>> {
     const { a, x, y } = e;
+    // retrieve the view on recordee
     const v = a.findViewByXY(x, y);
     if (v == null) {
-      throw new IllegalStateError(`No visible view found on rec tree at (${x}, ${y})`);
+      throw new IllegalStateError(`No visible view found on recordee tree at (${x}, ${y})`);
     }
     const opt: SelectOptions = {
       n: 1
@@ -325,12 +368,9 @@ class ResPlayer extends DxPlayer {
     if (!opt.resIdContains && !opt.textContains && !opt.descContains) {
       throw new NotImplementedError('resId, text and desc are all empty');
     }
+    // try to select its corresponding view on playee
     const vms = await DxDroid.get().input.select(opt);
-    if (vms.length == 0) {
-      return null;
-    } else {
-      return vms[0];
-    }
+    return vms.length == 0 ? null : vms[0];
   }
 
   private async fireOnViewMap(e: DxEvent, v: ViewMap) {
@@ -349,6 +389,14 @@ class ResPlayer extends DxPlayer {
     default:
       throw new CannotReachHereError();
     }
+  }
+
+  private async fireSyntEvent(se: SyntEvent) {
+    return await this.pxp.playEvent(se.e);
+  }
+
+  private async top(): Promise<DxActivity> {
+    return await DxDroid.get().topActivity(this.app, this.decode, 'dumpsys');
   }
 }
 
