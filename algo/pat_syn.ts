@@ -1,4 +1,4 @@
-import DxView, { DxTabHost, DxViewPager, DxActivity, Views } from '../dxview.ts';
+import DxView, { DxTabHost, DxViewPager, DxActivity, Views, ViewFinder } from '../dxview.ts';
 import { DxSegment } from './ui_seg.ts';
 import DxEvent, { DxTapEvent } from '../dxevent.ts';
 import { DevInfo } from '../dxdroid.ts';
@@ -46,7 +46,7 @@ export class Invisible extends DxPat {
     } = this.args;
     let p = view.parent;
     while (p) {
-      if (Views.isViewAccImportant(p) && Views.isVisibleToUser(p, dev)) {
+      if (Views.isViewImportantForA11n(p) && Views.isVisibleToUser(p, dev)) {
         this.vParent = p;
         return true;
       }
@@ -102,8 +102,8 @@ class Expand extends DxBpPat {
 
   match(): boolean {
     return (
-      !!this.args.v.findVScrollableParent() || 
-      !!this.args.v.findHScrollableParent()
+      !!ViewFinder.findVScrollableParent(this.args.v) || 
+      !!ViewFinder.findHScrollableParent(this.args.v)
     );
   }
 
@@ -125,7 +125,7 @@ class MoreOptions extends Reveal {
     // check if there are MoreOptions button
     // buttons in the playee segment
     for (const r of this.args.p.s.roots) {
-      const mo = r.findViewByDesc(MoreOptions.DESC)
+      const mo = ViewFinder.findViewByDesc(r, MoreOptions.DESC)
       if (mo != null) {
         this.vMoreOptions = mo;
         return true;
@@ -200,9 +200,9 @@ class TabHost extends Reveal {
       if (i == currTab) {
         continue;
       }
-      const tab = parent.findViewByIndices([
-        i, ...indices.slice(1)
-      ]);
+      const tab = ViewFinder.findViewByIndices(
+        parent, [i, ...indices.slice(1)]
+      );
       if (tab) {
         sibTabs.push(tab);
       }
@@ -212,7 +212,7 @@ class TabHost extends Reveal {
     for (const v of sibTabs) {
       if (v.text.length > 0) {
         for (const r of pSeg.roots) {
-          const found = r.findViewByText(v.text);
+          const found = ViewFinder.findViewByText(r, v.text);
           if (found) {
             return new SyntEvent(
               new DxTapEvent(
@@ -230,7 +230,7 @@ class TabHost extends Reveal {
     for (const v of sibTabs) {
       if (v.desc.length > 0) {
         for (const r of pSeg.roots) {
-          const found = r.findViewByDesc(v.desc);
+          const found = ViewFinder.findViewByDesc(r, v.desc);
           if (found) {
             return new SyntEvent(
               new DxTapEvent(
@@ -248,7 +248,7 @@ class TabHost extends Reveal {
   }
 
   private goodChildren(v: DxView): DxView[] {
-    return v.children.filter(c => Views.isValid(c) && Views.isViewHierarchyAccImportant(c));
+    return v.children.filter(c => Views.isValid(c) && Views.isViewHierarchyImportantForA11n(c));
   }
 }
 

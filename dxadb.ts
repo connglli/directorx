@@ -591,13 +591,3 @@ export default class DxAdb {
     return new DumpSysActivityInfo(pkg, info);
   }
 }
-
-if (import.meta.main) {
-  const adb = new DxAdb({});
-  const act = await adb.topActivity('com.microsoft.office.word', true, await adb.fetchInfo());
-  console.log(act.app);
-  console.log(act.name);
-  for (const v of act.decorView!.findViewsByXY(980, 200)) { // eslint-disable-line
-    console.log(`cls=${v.cls} resId=${v.resId} text="${v.text}" desc="${v.desc}"`);
-  }
-}

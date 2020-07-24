@@ -13,7 +13,8 @@ import DxView, {
   DxViewPager,
   DxTabHost,
   DxViewFactory,
-  DxViewType
+  DxViewType,
+  ViewFinder
 } from './dxview.ts';
 import { DevInfo } from './dxadb.ts';
 import * as base64 from './utils/base64.ts';
@@ -507,7 +508,8 @@ export default class DxPacker {
     case 'tap':
       this.infoLogInner(
         e,
-        e.a.decorView!.findViewsByXY(
+        ViewFinder.findViewByXY(
+          e.a.decorView!,
           (e as DxTapEvent).x,
           (e as DxTapEvent).y
         )
@@ -517,7 +519,8 @@ export default class DxPacker {
     case 'double-tap':
       this.infoLogInner(
         e,
-        e.a.decorView!.findViewsByXY(
+        ViewFinder.findViewByXY(
+          e.a.decorView!,
           (e as DxDoubleTapEvent).x,
           (e as DxDoubleTapEvent).y
         )
@@ -527,7 +530,8 @@ export default class DxPacker {
     case 'long-tap':
       this.infoLogInner(
         e,
-        e.a.decorView!.findViewsByXY(
+        ViewFinder.findViewByXY(
+          e.a.decorView!,
           (e as DxLongTapEvent).x,
           (e as DxLongTapEvent).y
         )
@@ -537,7 +541,8 @@ export default class DxPacker {
     case 'swipe':
       this.infoLogInner(
         e,
-        e.a.decorView!.findViewsByXY(
+        ViewFinder.findViewByXY(
+          e.a.decorView!,
           (e as DxSwipeEvent).x,
           (e as DxSwipeEvent).y
         )
@@ -545,17 +550,18 @@ export default class DxPacker {
       break;
   
     case 'key':
-      this.infoLogInner(e, []);
+      this.infoLogInner(e, null);
       break;
     }
   }
 
-  private infoLogInner(e: DxEvent, views: DxView[]) {
-    if (views.length != 0) {
-      const v = views[0];
-      DxLog.info(`${e.toString()} cls=${v.cls} id="${v.resId}" text="${v.text}" desc="${v.desc}" x=${v.x}-${v.x + v.width} y=${v.y}-${v.y + v.height} z=${v.z}`);
-    } else if (e.ty == 'key') {
-      DxLog.info(e.toString());
+  private infoLogInner(e: DxEvent, v: DxView | null) {
+    if (v) {
+      if (e.ty == 'key') {
+        DxLog.info(e.toString());
+      } else {
+         DxLog.info(`${e.toString()} cls=${v.cls} id="${v.resId}" text="${v.text}" desc="${v.desc}" x=${v.x}-${v.x + v.width} y=${v.y}-${v.y + v.height} z=${v.z}`);
+      } 
     }
   }
 }

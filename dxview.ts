@@ -3,6 +3,8 @@ import LinkedList from './utils/linked_list.ts';
 import { XYInterval } from './utils/interval.ts';
 import { CannotReachHereError } from './utils/error.ts';
 
+type N<T> = T | null;
+
 export type DxViewFlags = {
   V: 'V' | 'G' | 'I'; // visibility
   f: boolean;         // focusable
@@ -107,7 +109,7 @@ export default class DxView {
     protected tag_ = '',
     protected tip_ = '',
     protected hint_ = '',
-    protected parent_: DxView | null = null,
+    protected parent_: N<DxView> = null,
     protected children_: DxView[] = []
   ) {}
 
@@ -143,7 +145,7 @@ export default class DxView {
     return this.fg_;
   }
 
-  get parent(): DxView | null {
+  get parent(): N<DxView> {
     return this.parent_;
   }
 
@@ -303,6 +305,10 @@ export default class DxView {
     return this.hint_;
   }
 
+  get siblings(): DxView[] {
+    return (this.parent?.children ?? []).filter(v => v != this);
+  }
+
   /** Add view v as a child */
   addView(v: DxView): void {
     v.parent_ = this;
@@ -332,135 +338,6 @@ export default class DxView {
     this.parent?.removeView(this);
   }
 
-  /** Walk the hierarchy up to find a horizontally scrollable parent. 
-   * A scrollable parent indicates that this node may be in a content
-   * where it is partially visible due to scrolling. its clickable 
-   * center maybe invisible and adjustments should be made to the 
-   * click coordinates.
-   */
-  findHScrollableParent(): DxView | null {
-    let v = this.parent;
-    while (v != null) {
-      if (v.flags.hs) {
-        return v;
-      }
-      v = v.parent;
-    }
-    return null;
-  }
-
-  /** Walk the hierarchy up to find a vertically scrollable parent. 
-   * A scrollable parent indicates that this node may be in a content
-   * where it is partially visible due to scrolling. its clickable 
-   * center maybe invisible and adjustments should be made to the 
-   * click coordinates.
-   */
-  findVScrollableParent(): DxView | null {
-    let v = this.parent;
-    while (v != null) {
-      if (v.flags.vs) {
-        return v;
-      }
-      v = v.parent;
-    }
-    return null;
-  }
-
-  /** Find a most detailed view by x, y coordinate, set visible to false 
-   * if need to find invisible also */
-  findViewByXY(x: number, y: number, visible = true, enabled = true): DxView | null {
-    const views = this.findViewsByXY(x, y, visible, enabled);
-    if (views.length > 0) {
-      // only those important for accessibility are useful
-      return visible ? (views.find(v => v.flags.a) ?? null) : views[0];
-    } else {
-      return null;
-    }
-  }
-
-  /** Find the first met view with text t */
-  findViewByText(t: string): DxView | null {
-    if (this.text == t) {
-      return this;
-    }
-    for (const v of this.children) {
-      const found = v.findViewByText(t);
-      if (found) {
-        return found;
-      }
-    }
-    return null;
-  }
-
-  /** Find the first met view with desc t */
-  findViewByDesc(t: string): DxView | null {
-    if (this.desc == t) {
-      return this;
-    }
-    for (const v of this.children) {
-      const found = v.findViewByDesc(t);
-      if (found) {
-        return found;
-      }
-    }
-    return null;
-  }
-
-  /** Find the first met view with resource type and entry */
-  findViewByResource(type: string, entry: string): DxView | null {
-    if (this.resType == type && this.resEntry == entry) {
-      return this;
-    }
-    for (const v of this.children) {
-      const found = v.findViewByResource(type, entry);
-      if (found) {
-        return found;
-      }
-    }
-    return null;
-  }
-
-  /** Find the view by children indices */
-  findViewByIndices(indices: number[]): DxView | null {
-    let p: DxView = this;
-    for (let i = 0; i < indices.length; i ++) {
-      const ind = indices[i];
-      if (ind < 0 || ind >= p.children.length) {
-        return null;
-      }
-      p = p.children[ind];
-    }
-    return p;
-  }
-
-  /** Find all views by x, y coordinate, set visible to false 
-   * if need to find invisible ones also */
-  findViewsByXY(x: number, y: number, visible = true, enabled = true): DxView[] {
-    let hitViews = [];
-    if (this.hitSelf(x, y, visible, enabled)) {
-      hitViews.push(this);
-    }
-    for (const c of this.children) {
-      hitViews = [...c.findViewsByXY(x, y), ...hitViews];
-    }
-    return hitViews;
-  }
-
-  /** Check whether a point hits self or not */
-  hitSelf(x: number, y: number, visible = true, enabled = true): boolean {
-    let hit = (
-      this.drawingX <= x && x <= (this.drawingX + this.width) &&
-      this.drawingY <= y && y <= (this.drawingY + this.height)
-    );
-    if (visible) {
-      hit = hit && this.shown;
-    }
-    if (enabled) {
-      hit = hit && this.flags.E;
-    }
-    return hit;
-  }
-
   /** Reset view properties: remember to detach from parents first */
   reset(
     pkg: string,
@@ -488,7 +365,7 @@ export default class DxView {
     tag = '',
     tip = '',
     hint= '',
-    parent: DxView | null = null,
+    parent: N<DxView> = null,
     children: DxView[] = []
   ): void {
     this.pkg_ = pkg;
@@ -522,7 +399,7 @@ export default class DxView {
 
   /** Return a new DxView that are copied from this */
   copy(
-    parent: DxView | null = null, 
+    parent: N<DxView> = null, 
     children: DxView[] = []
   ): DxView {
     return new DxView(
@@ -598,7 +475,7 @@ export class DxViewPager extends DxView {
   }
 
   copy(
-    parent: DxView | null = null, 
+    parent: N<DxView> = null, 
     children: DxView[] = []
   ): DxView {
     const view = new DxViewPager(
@@ -647,7 +524,7 @@ export class DxTabHost extends DxView {
   }
 
   copy(
-    parent: DxView | null = null, 
+    parent: N<DxView> = null, 
     children: DxView[] = []
   ): DxView {
     const view = new DxTabHost(
@@ -684,6 +561,151 @@ export class DxTabHost extends DxView {
   }
 }
 
+export type ViewWalkerListenerFn = (v: DxView) => void;
+
+export interface ViewWalkerListener {
+  onWalk: ViewWalkerListenerFn;
+}
+
+/** Utility to find a specific */
+export class ViewFinder {
+  /** Dfs walk the tree, and trigger the listener */
+  static walk(v: DxView, walker: ViewWalkerListener | ViewWalkerListenerFn) {
+    if (typeof walker == 'function') {
+      walker(v);
+    } else {
+      walker.onWalk(v);
+    }
+    for (const cv of v.children) {
+      ViewFinder.walk(cv, walker);
+    }
+  }
+
+  /** Find the first view via dfs that satisfy the predicate */
+  static findFirst(v: DxView, pred: (v: DxView) => boolean): N<DxView> {
+    let found: N<DxView> = null;
+    ViewFinder.walk(v, w => {
+      if (!found && pred(w)) { found = w; }
+    });
+    return found;
+  }
+
+  /** Walk the hierarchy up to find a horizontally scrollable parent. 
+   * A scrollable parent indicates that this node may be in a content
+   * where it is partially visible due to scrolling. its clickable 
+   * center maybe invisible and adjustments should be made to the 
+   * click coordinates.
+   */
+  static findHScrollableParent(v: DxView): N<DxView> {
+    let p = v.parent;
+    while (p != null) {
+      if (p.flags.hs) {
+        return p;
+      }
+      p = p.parent;
+    }
+    return null;
+  }
+
+  /** Walk the hierarchy up to find a vertically scrollable parent. 
+   * A scrollable parent indicates that this node may be in a content
+   * where it is partially visible due to scrolling. its clickable 
+   * center maybe invisible and adjustments should be made to the 
+   * click coordinates.
+   */
+  static findVScrollableParent(v: DxView, ): N<DxView> {
+    let p = v.parent;
+    while (p != null) {
+      if (p.flags.vs) {
+        return p;
+      }
+      p = p.parent;
+    }
+    return null;
+  }
+
+  /** Find a most detailed view by x, y coordinate, set visible to false 
+   * if need to find invisible also */
+  static findViewByXY(
+    v: DxView, x: number, y: number, 
+    visible = true, 
+    enabled = true
+  ): N<DxView> {
+    const views = ViewFinder.findViewsByXY(v, x, y, visible, enabled);
+    if (views.length > 0) {
+      // only those important for accessibility are useful
+      return visible 
+        ? (views.find(v => v.flags.a) ?? null) 
+        : views[0];
+    } else {
+      return null;
+    }
+  }
+
+  /** Find the first met view with text t */
+  static findViewByText(v: DxView, text: string): N<DxView> {
+    return ViewFinder.findFirst(v, w => w.text == text);
+  }
+
+  /** Find the first met view with desc t */
+  static findViewByDesc(v: DxView, desc: string): N<DxView> {
+    return ViewFinder.findFirst(v, w => w.desc == desc);
+  }
+
+  /** Find the first met view with resource type and entry */
+  static findViewByResource(v: DxView, type: string, entry: string): N<DxView> {
+    return ViewFinder.findFirst(v, w => w.resType == type && w.resEntry == entry);
+  }
+
+  /** Find the view by children indices */
+  static findViewByIndices(v: DxView, indices: number[]): N<DxView> {
+    let p: DxView = v;
+    for (let i = 0; i < indices.length; i ++) {
+      const ind = indices[i];
+      if (ind < 0 || ind >= p.children.length) {
+        return null;
+      }
+      p = p.children[ind];
+    }
+    return p;
+  }
+
+  /** Find all views by x, y coordinate, set visible to false 
+   * if need to find invisible ones also */
+  static findViewsByXY(
+    v: DxView, x: number, y: number,
+    visible = true, enabled = true
+  ): DxView[] {
+    let found: DxView[] = [];
+    if (ViewFinder.isInView(v, x, y, visible, enabled)) {
+      found.push(v);
+    }
+    for (const c of v.children) {
+      found = [...ViewFinder.findViewsByXY(c, x, y, visible, enabled), ...found];
+    }
+    return found;
+  }
+
+  /** Check whether a point hits self or not */
+  static isInView(
+    v: DxView, x: number, y: number, 
+    visible = true, enabled = true
+  ): boolean {
+    let hit = (
+      Views.x0(v) <= x && x <= Views.x1(v) &&
+      Views.y0(v) <= y && y <= Views.y1(v)
+    );
+    if (visible) {
+      hit = hit && v.shown;
+    }
+    if (enabled) {
+      hit = hit && v.flags.E;
+    }
+    return hit;
+  }
+}
+
+/** Utility to compute some view properties */
 export class Views {
   static isStatusBar(v: DxView): boolean {
     return v.resId == 'android:id/statusBarBackground';
@@ -693,16 +715,16 @@ export class Views {
     return v.resId == 'android:id/navigationBarBackground';
   }
 
-  static isViewAccImportant(v: DxView): boolean {
+  static isViewImportantForA11n(v: DxView): boolean {
     return v.flags.a;
   }
 
-  static isViewHierarchyAccImportant(v: DxView): boolean {
-    if (Views.isViewAccImportant(v)) {
+  static isViewHierarchyImportantForA11n(v: DxView): boolean {
+    if (Views.isViewImportantForA11n(v)) {
         return true;
     }
     for (const cv of v.children) {
-      if (Views.isViewHierarchyAccImportant(cv)) {
+      if (Views.isViewHierarchyImportantForA11n(cv)) {
         return true;
       }
     }
@@ -715,7 +737,7 @@ export class Views {
    * 2: very informative,
    * 3: great informative
    */
-  static informativeLevel(v: DxView): number {
+  static informativeLevelOf(v: DxView): number {
     return (
       (v.desc.length != 0 ? 1 : 0) +
       (v.text.length != 0 ? 1 : 0) +
@@ -723,21 +745,21 @@ export class Views {
     );
   }
 
-  static layoutSummary(v: DxView, d = 1): string {
-    let summary = `${v.cls}:${Math.max(Views.informativeLevel(v), 2)};`;
+  static layoutSummaryOf(v: DxView, d = 1): string {
+    let summary = `${v.cls}:${Math.max(Views.informativeLevelOf(v), 2)};`;
     if (d != 1) {
       for (const c of v.children) {
-        summary += Views.layoutSummary(c, d - 1);
+        summary += Views.layoutSummaryOf(c, d - 1);
       }
     }
     return summary;
   } 
 
-  static drawingLevelRange(v: DxView): [number, number] {
+  static drawingLevelRangeOf(v: DxView): [number, number] {
     let max = v.drawingLevel;
     let min = v.drawingLevel;
     for (const cv of v.children) {
-      const next = Views.drawingLevelRange(cv);
+      const next = Views.drawingLevelRangeOf(cv);
       min = Math.min(min, next[0]);
       max = Math.max(max, next[1]);
     }
@@ -775,15 +797,7 @@ export class Views {
     return v.width * v.height;
   }
 
-  static siblings(v: DxView, self = false): DxView[] {
-    if (self) {
-      return v.parent?.children ?? [];
-    } else {
-      return v.parent?.children.filter(c => c != v) ?? [];
-    }
-  }
-
-  static isChildOf(v: DxView, r: DxView): boolean {
+  static isChild(v: DxView, r: DxView): boolean {
     let p = v.parent;
     while (p) {
       if (p == r) {
@@ -842,20 +856,28 @@ export class DxActivity {
     this.decor = decor;
   }
 
-  findViewByXY(x: number, y: number, visible = true): DxView | null {
-    return this.decor?.findViewByXY(x, y, visible) ?? null;
+  findViewByXY(x: number, y: number, visible = true): N<DxView> {
+    return this.decor
+      ? ViewFinder.findViewByXY(this.decor, x, y, visible)
+      : null;
   }
 
-  findViewByText(t: string): DxView | null {
-    return this.decor?.findViewByText(t) ?? null;
+  findViewByText(text: string): N<DxView> {
+    return this.decor
+      ? ViewFinder.findViewByText(this.decor, text)
+      : null;
   }
 
-  findViewByDesc(d: string): DxView | null {
-    return this.decor?.findViewByDesc(d) ?? null;
+  findViewByDesc(desc: string): N<DxView> {
+    return this.decor
+      ? ViewFinder.findViewByDesc(this.decor, desc)
+      : null;
   }
 
-  findViewByResource(type: string, entry: string): DxView | null {
-    return this.decor?.findViewByResource(type, entry) ?? null;
+  findViewByResource(type: string, entry: string): N<DxView> {
+    return this.decor
+      ? ViewFinder.findViewByResource(this.decor, type, entry)
+      : null;
   }
 
   /** Build the drawing level top-down. Views at each level are 

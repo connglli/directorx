@@ -1,4 +1,4 @@
-import DxView, { DxActivity, Views } from '../dxview.ts';
+import DxView, { DxActivity, Views, ViewFinder } from '../dxview.ts';
 import { DevInfo } from '../dxdroid.ts';
 import { XYIntervalTree } from '../utils/interval_tree.ts';
 import Interval, { XYInterval, XYIntervals } from '../utils/interval.ts';
@@ -130,11 +130,11 @@ export class Segments {
     return s.w * s.h;
   }
 
-  static drawingLevelRange(s: DxSegment): [number, number] {
+  static drawingLevelRangeOf(s: DxSegment): [number, number] {
     const min = [];
     const max = [];
     for (const r of s.roots) {
-      const next = Views.drawingLevelRange(r);
+      const next = Views.drawingLevelRangeOf(r);
       min.push(next[0]);
       max.push(next[1]);
     }
@@ -157,9 +157,9 @@ export class Segments {
       && Interval.cover(Segments.yy(a), Segments.yy(b)) >= 0;
   }
 
-  static isAccImportant(s: DxSegment): boolean {
+  static isImportantForA11n(s: DxSegment): boolean {
     for (const r of s.roots) {
-      if (Views.isViewHierarchyAccImportant(r)) {
+      if (Views.isViewHierarchyImportantForA11n(r)) {
         return true;
       }
     }
@@ -232,19 +232,19 @@ const rules: Rule[] = [ // /* eslint-disable */
    */
   ({ v }) => (
     v.children.length == 0 && 
-    Views.informativeLevel(v) == 0 &&
-    !Views.isViewAccImportant(v)
+    Views.informativeLevelOf(v) == 0 &&
+    !Views.isViewImportantForA11n(v)
   ) ? 's' : '-',
   /** If the view is very informative (providing sufficient
    * information), then don't divide this view
    */
-  ({ v }) => Views.informativeLevel(v) >= 2 ? 'n' : '-',
+  ({ v }) => Views.informativeLevelOf(v) >= 2 ? 'n' : '-',
   /** If the view has no children, and important for
    * accessibility or a text view, then don't divide this view
     */
   ({ v }) => (
     v.children.length == 0 && 
-    (Views.isViewAccImportant(v) || Views.isText(v))
+    (Views.isViewImportantForA11n(v) || Views.isText(v))
   ) ? 'n' : '-',
   /** If the view has no children, skip this view */
   ({ v }) => v.children.length == 0 ? 's' : '-',
@@ -274,7 +274,7 @@ const rules: Rule[] = [ // /* eslint-disable */
     }
     const set = new Set<string>();
     for (const cv of v.children) {
-      set.add(Views.layoutSummary(cv, 3));
+      set.add(Views.layoutSummaryOf(cv, 3));
     }
     // tolerate 1-2 different layout
     const diff = set.size - 1;
@@ -341,7 +341,7 @@ const rules: Rule[] = [ // /* eslint-disable */
   /** If previous siblings has not been divided, don't divide 
    * this view */
   ({ v, p }) => {
-    const siblings = Views.siblings(v, true);
+    const siblings = v.parent?.children ?? [];
     if (siblings.indexOf(v) == 0) {
       return '-';
     }
@@ -551,12 +551,12 @@ function scoreHVSep(
       }
       // different scrollable parent is better
       {
-        let scrollParent = a.findVScrollableParent();
-        if (scrollParent != null && scrollParent != b.findVScrollableParent()) {
+        let scrollParent = ViewFinder.findVScrollableParent(a);
+        if (scrollParent != null && scrollParent != ViewFinder.findVScrollableParent(b)) {
           score += AWARD.VS_PARENT;
         }
-        scrollParent = a.findHScrollableParent();
-        if (scrollParent != null && scrollParent != b.findHScrollableParent()) {
+        scrollParent = ViewFinder.findHScrollableParent(a);
+        if (scrollParent != null && scrollParent != ViewFinder.findHScrollableParent(b)) {
           score += AWARD.HS_PARENT;
         }
       }
@@ -575,7 +575,7 @@ function scoreHVSep(
         if (aIsText != bIsText) {
           score += AWARD.TEXT;
           score += AWARD.INFO;
-        } else if (Views.informativeLevel(a) != Views.informativeLevel(b)) {
+        } else if (Views.informativeLevelOf(a) != Views.informativeLevelOf(b)) {
           score += AWARD.INFO;
         }
       }
@@ -735,7 +735,7 @@ export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegS
   // different from that of the drawing mechanism of
   // android itself, 'cause the actually drawing is
   // sometimes defined and controlled by the developers)
-  segments = segments.filter(Segments.isAccImportant);
+  segments = segments.filter(Segments.isImportantForA11n);
   if (false) {
     // secondly, we delete the low-level and overlapped
     // segments by their drawing levels
