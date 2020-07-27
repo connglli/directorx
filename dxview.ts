@@ -578,6 +578,17 @@ export class ViewFinder {
     }
   }
 
+  /** Find all views that satisfy the predicate */
+  static find(v: DxView, pred: (v: DxView) => boolean): DxView[] {
+    let found: DxView[] = [];
+    ViewFinder.walk(v, (w) => {
+      if (pred(w)) {
+        found.push(w);
+      }
+    });
+    return found;
+  }
+
   /** Find the first view via dfs that satisfy the predicate */
   static findFirst(v: DxView, pred: (v: DxView) => boolean): N<DxView> {
     let found: N<DxView> = null;
@@ -589,16 +600,24 @@ export class ViewFinder {
     return found;
   }
 
-  /** Walk the hierarchy up to find a horizontally scrollable parent.
-   * A scrollable parent indicates that this node may be in a content
-   * where it is partially visible due to scrolling. its clickable
-   * center maybe invisible and adjustments should be made to the
-   * click coordinates.
-   */
-  static findHScrollableParent(v: DxView): N<DxView> {
+  /** Walk the hierarchy up to find all parents that satisfy the predicate */
+  static findParents(v: DxView, pred: (v: DxView) => boolean): DxView[] {
+    let found: DxView[] = [];
     let p = v.parent;
     while (p != null) {
-      if (p.flags.hs) {
+      if (pred(p)) {
+        found.push(p);
+      }
+      p = p.parent;
+    }
+    return found;
+  }
+
+  /** Walk the hierarchy up to find the first parent that satisfy the predicate */
+  static findParent(v: DxView, pred: (v: DxView) => boolean): N<DxView> {
+    let p = v.parent;
+    while (p != null) {
+      if (pred(p)) {
         return p;
       }
       p = p.parent;
@@ -606,21 +625,14 @@ export class ViewFinder {
     return null;
   }
 
-  /** Walk the hierarchy up to find a vertically scrollable parent.
-   * A scrollable parent indicates that this node may be in a content
-   * where it is partially visible due to scrolling. its clickable
-   * center maybe invisible and adjustments should be made to the
-   * click coordinates.
-   */
+  /** Find the first horizontally scrollable parent */
+  static findHScrollableParent(v: DxView): N<DxView> {
+    return ViewFinder.findParent(v, (p) => p.flags.hs);
+  }
+
+  /** Find the first horizontally scrollable parent */
   static findVScrollableParent(v: DxView): N<DxView> {
-    let p = v.parent;
-    while (p != null) {
-      if (p.flags.vs) {
-        return p;
-      }
-      p = p.parent;
-    }
-    return null;
+    return ViewFinder.findParent(v, (p) => p.flags.vs);
   }
 
   /** Find a most detailed view by x, y coordinate, set visible to false
@@ -670,6 +682,11 @@ export class ViewFinder {
       p = p.children[ind];
     }
     return p;
+  }
+
+  /** Find all views that classes by cls */
+  static findViewsByClass(v: DxView, cls: string): DxView[] {
+    return this.find(v, (w) => w.cls == cls);
   }
 
   /** Find all views by x, y coordinate, set visible to false
@@ -727,16 +744,16 @@ export class Views {
     return v.resId == 'android:id/navigationBarBackground';
   }
 
-  static isViewImportantForA11n(v: DxView): boolean {
+  static isViewImportantForA11y(v: DxView): boolean {
     return v.flags.a;
   }
 
-  static isViewHierarchyImportantForA11n(v: DxView): boolean {
-    if (Views.isViewImportantForA11n(v)) {
+  static isViewHierarchyImportantForA11y(v: DxView): boolean {
+    if (Views.isViewImportantForA11y(v)) {
       return true;
     }
     for (const cv of v.children) {
-      if (Views.isViewHierarchyImportantForA11n(cv)) {
+      if (Views.isViewHierarchyImportantForA11y(cv)) {
         return true;
       }
     }

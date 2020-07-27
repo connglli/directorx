@@ -363,7 +363,7 @@ export default class DxYota {
   }
 
   async info(cmd: string): Promise<string> {
-    // TODO info commands may fail on real devices
+    // TODO: info commands may fail on real devices
     return await this.adb.unsafeShell(`${DxYota.BIN} info ${cmd}`);
   }
 

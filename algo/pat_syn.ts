@@ -33,27 +33,29 @@ export interface InvisiblePatRecArgs extends PatRecArgs {
   d: DevInfo;
 }
 
-/** Invisible pattern is used for those invisible views */
+/** Invisible pattern is used for those views which are
+ * invisible but still presented on the view tree
+ */
 export class Invisible extends DxPat {
+  // parent that are visible to user
   private vParent: N<DxView> = null;
   constructor(protected args: InvisiblePatRecArgs) {
     super(args);
   }
 
   match(): boolean {
+    // find its visible parent
     const { v: view, a: act, d: dev } = this.args;
-    let p = view.parent;
-    while (p) {
-      if (Views.isViewImportantForA11n(p) && Views.isVisibleToUser(p, dev)) {
-        this.vParent = p;
-        return true;
-      }
-      p = p.parent;
-    }
-    return false;
+    this.vParent = ViewFinder.findParent(
+      view,
+      (p) => Views.isViewImportantForA11y(p) && Views.isVisibleToUser(p, dev)
+    );
+    return !!this.vParent;
   }
 
   apply(): SyntEvent {
+    // TODO: what if the view is not triggered by
+    // tapping its visible parent?
     if (this.vParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
@@ -118,7 +120,9 @@ abstract class Reveal extends DxBpPat {
   }
 }
 
+/** MoreOption is the pattern for more options */
 class MoreOptions extends Reveal {
+  // All more options has a view whose desc is More options
   static DESC = 'More options';
   // the MoreOptions button
   private vMoreOptions: N<DxView> = null;
@@ -153,51 +157,40 @@ class MoreOptions extends Reveal {
   }
 }
 
-class TabHost extends Reveal {
-  // the path from the view to the TabHost
-  private vPath: DxView[] = [];
+/** TabHostTab is the pattern for tabs of a TabHost */
+class TabHostTab extends Reveal {
+  // tabs are direct children of the a view
+  // whose resource-id is android:id/tabs
+  static isTabHostTabs(v: DxView): boolean {
+    return v.resId == 'android:id/tabs';
+  }
+
+  // the path from the view to the tab's parent
+  protected vPath: DxView[] = [];
 
   match(): boolean {
     // check whether v is in a TabHost
     this.vPath.unshift(this.args.v);
-    let p = this.args.v.parent;
-    while (p) {
+    const found = ViewFinder.findParent(this.args.v, (p) => {
       this.vPath.unshift(p);
-      if (p instanceof DxTabHost) {
-        return true;
-      }
-      p = p.parent;
+      return TabHostTab.isTabHostTabs(p);
+    });
+    if (!found) {
+      // clear the path
+      this.vPath.splice(0, this.vPath.length);
     }
-    // clear the path
-    this.vPath.splice(0, this.vPath.length);
-    return false;
+    return !!found;
   }
 
   apply(): SyntEvent {
-    // find all tabs in recordee
-    if (this.vPath.length == 0) {
-      throw new IllegalStateError("Pattern is not satisfied, don't apply");
-    }
-    // TODO v is not strictly a Tab name, then how to
-    // resolve the tab name where v resides? Maybe we
-    // can do something when recording?
     const pSeg = this.args.p.s;
-    // find the tab's direct parent, 'cause
-    // sometimes the TabHost does not directly
-    // host the tabs, but its children
-    while (
-      this.vPath.length > 0 &&
-      this.goodChildren(this.vPath[0]).length == 1
-    ) {
-      this.vPath.shift();
-    }
+    // vPath[0] is the direct parent of all tabs;
     const parent = this.vPath.shift();
     if (!parent) {
       throw new IllegalStateError(
         'Pattern apply failed, cannot find the direct parent of the tab'
       );
     }
-    // now vPath[0] is the direct parent of all tabs;
     // extract their indices first, and change the
     // indices to make the path points to next tab
     const indices = this.vPath.map((v) => Views.indexOf(v));
@@ -216,57 +209,65 @@ class TabHost extends Reveal {
       }
     }
     // find the available tabs in the playee segment
-    // firstly try the text
+    // firstly try the text, and collect ones having
+    // valid content descriptions
+    let found: N<DxView> = null;
+    const descViews: DxView[] = [];
     for (const v of sibTabs) {
       if (v.text.length > 0) {
         for (const r of pSeg.roots) {
-          const found = ViewFinder.findViewByText(r, v.text);
+          found = ViewFinder.findViewByText(r, v.text);
           if (found) {
-            return new SyntEvent(
-              new DxTapEvent(
-                this.args.p.a,
-                Views.x0(found) + 1,
-                Views.y0(found) + 1,
-                -1
-              )
-            );
+            break;
           }
         }
+      } else if (v.desc.length > 0) {
+        descViews.push(v);
+      }
+      if (found) {
+        break;
       }
     }
     // if no text are available, then try the desc
-    for (const v of sibTabs) {
-      if (v.desc.length > 0) {
+    if (!found) {
+      for (const v of descViews) {
         for (const r of pSeg.roots) {
-          const found = ViewFinder.findViewByDesc(r, v.desc);
+          found = ViewFinder.findViewByDesc(r, v.desc);
           if (found) {
-            return new SyntEvent(
-              new DxTapEvent(
-                this.args.p.a,
-                Views.x0(found) + 1,
-                Views.y0(found) + 1,
-                -1
-              )
-            );
+            break;
           }
+        }
+        if (found) {
+          break;
         }
       }
     }
-    throw new NotImplementedError('TabHost');
-  }
-
-  private goodChildren(v: DxView): DxView[] {
-    return v.children.filter(
-      (c) => Views.isValid(c) && Views.isViewHierarchyImportantForA11n(c)
+    if (!found) {
+      throw new NotImplementedError('View not found');
+    }
+    return new SyntEvent(
+      new DxTapEvent(
+        this.args.p.a,
+        Views.x0(found) + 1,
+        Views.y0(found) + 1,
+        -1
+      )
     );
   }
 }
 
-class ViewPager extends Reveal {
+/** TabHostContent is the pattern for contents of a TabHost */
+class TabHostContent extends Reveal {
+  // tab contents are direct children of the a view
+  // whose resource-id is android:id/tabcontent
+  static isTabHostContent(v: DxView): boolean {
+    return v.resId == 'android:id/tabcontent';
+  }
+
   match(): boolean {
     const p = this.args.v.parent;
     while (p) {
-      if (p instanceof DxViewPager) {
+      if (TabHostContent.isTabHostContent(p)) {
         return true;
       }
     }
@@ -278,6 +279,170 @@ class ViewPager extends Reveal {
   }
 }
 
+/** A much robust heuristic for TabHost, for handling
+ * cases where android:id/tabs does not exist
+ */
+class TabHost extends TabHostTab {
+  // tabs are all children of TabHost
+  static isTabHost(v: DxView): v is DxTabHost {
+    return v instanceof DxTabHost;
+  }
+
+  match(): boolean {
+    // TODO: what if v is a tab content, then how to
+    // resolve the tab name where v resides? Maybe we
+    // can do something when recording?
+
+    // check whether v is in a TabHost
+    this.vPath.unshift(this.args.v);
+    const found = ViewFinder.findParent(this.args.v, (p) => {
+      this.vPath.unshift(p);
+      return TabHost.isTabHost(p);
+    });
+    if (!found) {
+      // clear the path
+      this.vPath.splice(0, this.vPath.length);
+    }
+    return !!found;
+  }
+
+  apply(): SyntEvent {
+    // find all tabs in recordee
+    if (this.vPath.length == 0) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    // find the tab's direct parent, 'cause
+    // sometimes the TabHost does not directly
+    // host the tabs, but its children
+    while (
+      this.vPath.length > 0 &&
+      this.goodChildren(this.vPath[0]).length == 1
+    ) {
+      this.vPath.shift();
+    }
+    return super.apply();
+  }
+
+  private goodChildren(v: DxView): DxView[] {
+    return v.children.filter(
+      (c) => Views.isValid(c) && Views.isViewHierarchyImportantForA11y(c)
+    );
+  }
+}
+
+/** ViewPager is the pattern for handling ViewPager */
+class ViewPager extends Reveal {
+  // pages are all children of ViewPager
+  static isViewPager(v: DxView): v is DxViewPager {
+    return v instanceof DxViewPager;
+  }
+
+  static findPagerParent(v: DxView): N<DxViewPager> {
+    return ViewFinder.findParent(v, (p) => ViewPager.isViewPager(p)) as N<
+      DxViewPager
+    >;
+  }
+
+  // the page's parent pager in recordee
+  private vRPager: N<DxViewPager> = null;
+  // the page's parent pager in playee
+  private vPPager: N<DxViewPager> = null;
+
+  match(): boolean {
+    this.vRPager = ViewPager.findPagerParent(this.args.v);
+    if (!this.vRPager) {
+      return false;
+    }
+
+    const pSeg = this.args.p.s;
+    // look for all pagers in the playee segment
+    const pagers: DxViewPager[] = [];
+    for (const r of pSeg.roots) {
+      if (this.vRPager.resId.length > 0) {
+        pagers.push(
+          ...(ViewFinder.find(
+            r,
+            (w) => w instanceof DxViewPager
+          ) as DxViewPager[])
+        );
+        // the pager is maybe segmented to multiple
+        // segments, and the pager itself does not belong
+        // to any leaf segment, so find the parent of
+        // each root, maybe there are pagers
+        const parent = ViewPager.findPagerParent(r);
+        if (parent) {
+          pagers.push(parent);
+        }
+      }
+    }
+    if (pagers.length == 0) {
+      return false;
+    }
+    // look for the specific pager that matched
+    let index = -1;
+    if (this.vRPager.resId.length > 0) {
+      index = pagers.findIndex((p) => p.resId == this.vRPager?.resId);
+    }
+    if (index == -1 && this.vRPager.text.length > 0) {
+      index = pagers.findIndex((p) => p.text == this.vRPager?.text);
+    }
+    if (index == -1 && this.vRPager.desc.length > 0) {
+      index = pagers.findIndex((p) => p.desc == this.vRPager?.desc);
+    }
+    if (index == -1) {
+      return false;
+    }
+    this.vPPager = pagers[index];
+    return true;
+  }
+
+  apply(): SyntEvent {
+    const v = this.args.v;
+    if (!this.vRPager || !this.vPPager) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    // TODO: instead of jump direct from this.vPPager.currItem
+    // to this.vRPager.curr, we find the page that containing
+    // v, and then jump to that
+    let targetPage: N<DxView> = null;
+    if (v.text.length > 0) {
+      for (const page of this.vPPager.children) {
+        if (ViewFinder.findViewByText(page, v.text)) {
+          targetPage = page;
+          break;
+        }
+      }
+    }
+    if (!targetPage && v.resId.length > 0) {
+      for (const page of this.vPPager.children) {
+        if (ViewFinder.findViewByResource(page, v.resType, v.resEntry)) {
+          targetPage = page;
+          break;
+        }
+      }
+    }
+    if (!targetPage && v.resId.length > 0) {
+      for (const page of this.vPPager.children) {
+        if (ViewFinder.findViewByDesc(page, v.desc)) {
+          targetPage = page;
+          break;
+        }
+      }
+    }
+    if (!targetPage) {
+      throw new NotImplementedError('Page containing v does not found');
+    }
+    return new SyntEvent(
+      new DxTapEvent(
+        this.args.p.a,
+        Views.x0(targetPage) + 1,
+        Views.y0(targetPage) + 1,
+        -1
+      )
+    );
+  }
+}
+
 // The Pattern is sorted bottom-up, in order of
 // [None, Reflow, Expand, Merge, Reveal, Transform]
 const patterns = [
@@ -285,6 +450,8 @@ const patterns = [
   Expand,
   // Reveal
   MoreOptions,
+  TabHostTab,
+  TabHostContent,
   TabHost,
   ViewPager,
 ];
@@ -295,7 +462,7 @@ const patterns = [
  * Confirm the pattern and return if and only if the
  * condition passes, or test next pattern
  */
-export default function regBpPat(args: BpPatRecArgs): N<DxBpPat> {
+export default function recBpPat(args: BpPatRecArgs): N<DxBpPat> {
   for (const Pat of patterns) {
     const pat = new Pat(args);
     if (pat.match()) {

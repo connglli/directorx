@@ -2,3 +2,4 @@ node_modules
 *.dxpk
 .DS_Store
 .vscode/launch.json
+dxrec/.idea/checkstyle-idea.xml

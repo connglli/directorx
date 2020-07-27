@@ -86,7 +86,7 @@ class DXPK {
 
   /** Parse an dxpk file and return */
   static async load(path: string): Promise<DxpkFields> {
-    // TODO throw meaningful exception and
+    // TODO: throw meaningful exception and
     // add semantic checking
     const vpool: DxView[] = [];
     const eseq: EventPack[] = [];

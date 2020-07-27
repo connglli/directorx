@@ -156,9 +156,9 @@ export class Segments {
     );
   }
 
-  static isImportantForA11n(s: DxSegment): boolean {
+  static isImportantForA11y(s: DxSegment): boolean {
     for (const r of s.roots) {
-      if (Views.isViewHierarchyImportantForA11n(r)) {
+      if (Views.isViewHierarchyImportantForA11y(r)) {
         return true;
       }
     }
@@ -233,7 +233,7 @@ const rules: Rule[] = [
   ({ v }) =>
     v.children.length == 0 &&
     Views.informativeLevelOf(v) == 0 &&
-    !Views.isViewImportantForA11n(v)
+    !Views.isViewImportantForA11y(v)
       ? 's'
       : '-',
   /** If the view is very informative (providing sufficient
@@ -245,7 +245,7 @@ const rules: Rule[] = [
    */
   ({ v }) =>
     v.children.length == 0 &&
-    (Views.isViewImportantForA11n(v) || Views.isText(v))
+    (Views.isViewImportantForA11y(v) || Views.isText(v))
       ? 'n'
       : '-',
   /** If the view has no children, skip this view */
@@ -307,7 +307,7 @@ const rules: Rule[] = [
    * will not be divided in this round
    */
   ({ v }) => {
-    // TODO iteration
+    // TODO: iteration
     const diff = v.children.filter((c) => {
       // ATTENTION: 'cause ripple is often used in animation,
       // we treat ripple as inherited
@@ -324,7 +324,7 @@ const rules: Rule[] = [
    * divide this view
    */
   ({ v, s }) => {
-    // TODO relative size
+    // TODO: relative size
     return Views.areaOf(v) < Segments.areaOf(s) * DEFAULTS.THRESHOLD.V_IN_SEG &&
       v.children.some((c) => Views.isText(c))
       ? 'n'
@@ -767,7 +767,7 @@ export default function segUi(
   // different from that of the drawing mechanism of
   // android itself, 'cause the actually drawing is
   // sometimes defined and controlled by the developers)
-  segments = segments.filter(Segments.isImportantForA11n);
+  segments = segments.filter(Segments.isImportantForA11y);
   if (false) {
     // secondly, we delete the low-level and overlapped
     // segments by their drawing levels

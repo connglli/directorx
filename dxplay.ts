@@ -19,7 +19,7 @@ import DxDroid, {
 } from './dxdroid.ts';
 import segUi, { DxSegment } from './algo/ui_seg.ts';
 import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';
-import regBpPat, { Invisible, SyntEvent } from './algo/pat_syn.ts';
+import recBpPat, { Invisible, SyntEvent } from './algo/pat_syn.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,
@@ -245,7 +245,7 @@ class ResPlayer extends DxPlayer {
     // find the view in playee first
     let vm = await this.find(e);
     if (vm != null) {
-      if (vm.important && vm.visible) {
+      if (this.isVmVisibleToUser(vm)) {
         await this.fireOnViewMap(e, vm);
         return;
       }
@@ -279,28 +279,29 @@ class ResPlayer extends DxPlayer {
       }
       const ne = pat.apply();
       await this.fireSyntEvent(ne);
-      this.seq?.push(e);
+      this.seq.push(e);
       return;
     }
 
     // try to look ahead next K events
-    const nextK = this.seq!.topN(this.K); // eslint-disable-line
+    // TODO: not all events can be skipped, check for reasonable events
+    const nextK = this.seq.topN(this.K);
     for (const i in nextK) {
       const ne = nextK[i];
       if (!isXYEvent(ne)) {
         continue;
       }
       vm = await this.find(ne);
-      if (vm != null) {
+      if (vm != null && this.isVmVisibleToUser(vm)) {
         // find one, directly skip all previously
-        this.seq!.popN(Number(i) + 1); // eslint-disable-line
+        this.seq.popN(Number(i) + 1);
         DxLog.info(`/* skip ${e.toString()} */`);
         return await this.fireOnViewMap(ne, vm);
       }
     }
 
     // when lookahead fails, segment the ui,
-    // and find the matched segment, and synthesize
+    // find the matched segment, and synthesize
     // the equivalent event sequence
     const rAct = e.a;
     const v = rAct.findViewByXY(e.x, e.y);
@@ -336,7 +337,7 @@ class ResPlayer extends DxPlayer {
       r: { a: rAct, s: rSeg },
       p: { a: pAct, s: pSeg },
     };
-    const pat = regBpPat(bpArgs);
+    const pat = recBpPat(bpArgs);
     if (pat == null) {
       throw new NotImplementedError('No pattern is recognized');
     } else {
@@ -349,7 +350,7 @@ class ResPlayer extends DxPlayer {
 
     // push the raw event back to the sequence,
     // and try again
-    this.seq?.push(e);
+    this.seq.push(e);
   }
 
   private findSegByView(v: DxView, segs: DxSegment[]): DxSegment {
@@ -416,6 +417,10 @@ class ResPlayer extends DxPlayer {
 
   private async top(): Promise<DxActivity> {
     return await DxDroid.get().topActivity(this.app, this.decode, 'dumpsys');
+  }
+
+  private isVmVisibleToUser(vm: ViewMap): boolean {
+    return vm.visible && vm.important;
   }
 }
 

@@ -115,7 +115,7 @@ class DxRecParser {
     }
     const type = res.groups!.type; // eslint-disable-line
     if (type == 'crash') {
-      // TODO collecting crash information
+      // TODO: collecting crash information
       throw new IllegalStateError('App crashed');
     }
     return true;
