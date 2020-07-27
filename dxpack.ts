@@ -503,6 +503,7 @@ export default class DxPacker {
       throw new IllegalStateError('Expect a DxDecorView as root');
     }
     a.replaceDecor(v as DxDecorView);
+    a.buildDrawingLevelLists();
     return a;
   }
 
