@@ -97,14 +97,16 @@ export abstract class DxBpPat extends DxPat {
   abstract level(): string;
 }
 
-/** Expand is the pattern that handles scrollable parent */
-class Expand extends DxBpPat {
-  private vHSParent: N<DxView> = null;
-  private vVSParent: N<DxView> = null;
-
+abstract class Expand extends DxBpPat {
   level() {
     return 'expand';
   }
+}
+
+/** Scroll is the pattern that handles scrollable parent */
+class Scroll extends Expand {
+  private vHSParent: N<DxView> = null;
+  private vVSParent: N<DxView> = null;
 
   // TODO: what if the parent is segmented to several segments,
   // and the parent itself does not belong to any leaf segments?
@@ -248,20 +250,18 @@ abstract class Reveal extends DxBpPat {
   }
 }
 
-/** MoreOption is the pattern for more options */
-class MoreOptions extends Reveal {
-  // All more options has a view whose desc is More options
-  static DESC = 'More options';
-  // the MoreOptions button
-  private vMoreOptions: N<DxView> = null;
+/** SpecialButton is the pattern for some special buttons */
+abstract class SpecialButton extends Reveal {
+  // the specific button that triggers a specific functionality
+  protected vButton: N<DxView> = null;
 
   match(): boolean {
     // check if there are MoreOptions button
     // buttons in the playee segment
     for (const r of this.args.p.s.roots) {
-      const mo = ViewFinder.findViewByDesc(r, MoreOptions.DESC);
-      if (mo != null) {
-        this.vMoreOptions = mo;
+      const btn = this.findView(r);
+      if (btn != null) {
+        this.vButton = btn;
         return true;
       }
     }
@@ -269,7 +269,7 @@ class MoreOptions extends Reveal {
   }
 
   apply(): SyntEvent {
-    if (this.vMoreOptions == null) {
+    if (this.vButton == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
     // synthesize a tap event on the
@@ -277,11 +277,31 @@ class MoreOptions extends Reveal {
     return new SyntEvent(
       new DxTapEvent(
         this.args.p.a,
-        Views.x0(this.vMoreOptions) + 1,
-        Views.y0(this.vMoreOptions) + 1,
+        Views.x0(this.vButton) + 1,
+        Views.y0(this.vButton) + 1,
         -1
       )
     );
+  }
+
+  abstract findView(v: DxView): N<DxView>;
+}
+
+/** MoreOption is the pattern for more options */
+class MoreOptions extends SpecialButton {
+  static DESC = 'More options';
+
+  findView(v: DxView): N<DxView> {
+    return ViewFinder.findViewByDesc(v, MoreOptions.DESC);
+  }
+}
+
+/** DrawerMenu is the pattern for drawer */
+class DrawerMenu extends SpecialButton {
+  static DESC = 'Open navigation drawer';
+
+  findView(v: DxView): N<DxView> {
+    return ViewFinder.findViewByDesc(v, DrawerMenu.DESC);
   }
 }
 
@@ -568,9 +588,10 @@ class ViewPager extends Reveal {
 // [None, Reflow, Expand, Merge, Reveal, Transform]
 const patterns = [
   // Expand
-  Expand,
+  Scroll,
   // Reveal
   MoreOptions,
+  DrawerMenu,
   TabHostTab,
   TabHostContent,
   TabHost,
