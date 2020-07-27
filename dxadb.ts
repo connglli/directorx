@@ -1,18 +1,18 @@
-import { 
-  AdbBindShape, 
-  bindAdb, 
-  AdbGlobalOptions, 
-  LogcatBuffer, 
-  LogcatBufferSize 
+import {
+  AdbBindShape,
+  bindAdb,
+  AdbGlobalOptions,
+  LogcatBuffer,
+  LogcatBufferSize,
 } from './base/adb.ts';
-import DxView, { 
-  DxActivity, 
-  DxViewFlags, 
+import DxView, {
+  DxActivity,
+  DxViewFlags,
   DxViewPager,
   DxTabHost,
   DxViewType,
   DxViewCache,
-  DxViewFactory
+  DxViewFactory,
 } from './dxview.ts';
 import * as base64 from './utils/base64.ts';
 import { IllegalStateError } from './utils/error.ts';
@@ -20,11 +20,7 @@ import { IllegalStateError } from './utils/error.ts';
 export * from './base/adb.ts';
 
 export class AdbError extends Error {
-  constructor(
-    public cmd: string, 
-    public code: number, 
-    public msg: string
-  ) {
+  constructor(public cmd: string, public code: number, public msg: string) {
     super(`AdbError[\`${cmd}\`=>${code}] ${msg}`);
   }
 }
@@ -34,15 +30,15 @@ const PAT_DEVICE_DENS = /Physical\sdensity:\s(?<pd>\d+)(\nOverride\sdensity:\s(?
 
 export class DevInfo {
   constructor(
-    public readonly board: string,  // device base board, e.g., sdm845
-    public readonly brand: string,  // device brand, e.g., OnePlus
-    public readonly model: string,  // device brand mode, e.g, OnePlus6T
-    public readonly abi: string,    // device cpu abi
-    public readonly width: number,  // device width, in pixel
+    public readonly board: string, // device base board, e.g., sdm845
+    public readonly brand: string, // device brand, e.g., OnePlus
+    public readonly model: string, // device brand mode, e.g, OnePlus6T
+    public readonly abi: string, // device cpu abi
+    public readonly width: number, // device width, in pixel
     public readonly height: number, // device height, in pixel
-    public readonly dpi: number,    // device dpi (dots per inch) = density * 160
-    public readonly sdk: number,    // Android sdk version
-    public readonly release: number // Android release version 
+    public readonly dpi: number, // device dpi (dots per inch) = density * 160
+    public readonly sdk: number, // Android sdk version
+    public readonly release: number // Android release version
   ) {}
 
   get density(): number {
@@ -64,17 +60,14 @@ class DumpSysActivityInfo {
   private viewHierarchy_: [number, number] = [-1, -1];
   private name_ = '';
 
-  constructor(
-    private readonly pkg_: string, 
-    private readonly info: string[]
-  ) {
+  constructor(private readonly pkg_: string, private readonly info: string[]) {
     this.init();
   }
 
   get(): string[] {
     return this.info;
   }
-  
+
   get pkg(): string {
     return this.pkg_;
   }
@@ -108,7 +101,7 @@ class DumpSysActivityInfo {
       throw new IllegalStateError('Expect pkg and name in ACTIVITY header');
     }
     if (name.startsWith('.')) {
-      name = pkg + name; 
+      name = pkg + name;
     }
     this.name_ = name;
   }
@@ -117,19 +110,23 @@ class DumpSysActivityInfo {
     // find the view hierarchy start line
     let viewHierarchyStartLine = -1;
     const viewHierarchyStartLinePrefix = '  View Hierarchy:';
-    for (let i = 0; i < this.info.length; i ++) {
+    for (let i = 0; i < this.info.length; i++) {
       if (this.info[i].startsWith(viewHierarchyStartLinePrefix)) {
         viewHierarchyStartLine = i + 1;
         break;
       }
     }
     if (viewHierarchyStartLine == -1) {
-      throw new AdbError('dumpsys activity top', 0, 'No view hierarchies exist');
+      throw new AdbError(
+        'dumpsys activity top',
+        0,
+        'No view hierarchies exist'
+      );
     }
     // find the view hierarchy end line
     let viewHierarchyEndLine = this.info.length;
     const viewHierarchyLinePrefix = '    ';
-    for (let i = viewHierarchyStartLine; i < this.info.length; i ++) {
+    for (let i = viewHierarchyStartLine; i < this.info.length; i++) {
       if (!this.info[i].startsWith(viewHierarchyLinePrefix)) {
         viewHierarchyEndLine = i;
         break;
@@ -139,10 +136,12 @@ class DumpSysActivityInfo {
       // find and drop navigation and status bar
       let statusBarStartLine = -1;
       let navBarStartLine = -1;
-      for (let i = viewHierarchyStartLine; i < viewHierarchyEndLine; i ++) {
+      for (let i = viewHierarchyStartLine; i < viewHierarchyEndLine; i++) {
         if (this.info[i].indexOf('android:id/navigationBarBackground') != -1) {
           navBarStartLine = i;
-        } else if (this.info[i].indexOf('android:id/statusBarBackground') != -1) {
+        } else if (
+          this.info[i].indexOf('android:id/statusBarBackground') != -1
+        ) {
           statusBarStartLine = i;
         }
         if (navBarStartLine != -1 && statusBarStartLine != -1) {
@@ -152,14 +151,18 @@ class DumpSysActivityInfo {
       // in case there are children
       if (statusBarStartLine != -1) {
         let statusBarEndLine = statusBarStartLine + 1;
-        const statusBarPrefix = this.info[statusBarStartLine].substring(0, this.info[statusBarStartLine].indexOf('android.view.View')) + '  ';
-        for (let i = statusBarEndLine; i < viewHierarchyEndLine; i ++) {
+        const statusBarPrefix =
+          this.info[statusBarStartLine].substring(
+            0,
+            this.info[statusBarStartLine].indexOf('android.view.View')
+          ) + '  ';
+        for (let i = statusBarEndLine; i < viewHierarchyEndLine; i++) {
           if (!this.info[i].startsWith(statusBarPrefix)) {
             statusBarEndLine = i;
             break;
           }
         }
-        const deleted = (statusBarEndLine - statusBarStartLine);
+        const deleted = statusBarEndLine - statusBarStartLine;
         this.info.splice(statusBarStartLine, deleted);
         viewHierarchyEndLine -= deleted;
         if (navBarStartLine > statusBarStartLine) {
@@ -168,14 +171,18 @@ class DumpSysActivityInfo {
       }
       if (navBarStartLine != -1) {
         let navBarEndLine = navBarStartLine + 1;
-        const navBarPrefix = this.info[navBarStartLine].substring(0, this.info[navBarStartLine].indexOf('android.view.View')) + '  ';
-        for (let i = navBarEndLine; i < viewHierarchyEndLine; i ++) {
+        const navBarPrefix =
+          this.info[navBarStartLine].substring(
+            0,
+            this.info[navBarStartLine].indexOf('android.view.View')
+          ) + '  ';
+        for (let i = navBarEndLine; i < viewHierarchyEndLine; i++) {
           if (!this.info[i].startsWith(navBarPrefix)) {
             navBarEndLine = i;
             break;
           }
         }
-        const deleted = (navBarEndLine - navBarStartLine);
+        const deleted = navBarEndLine - navBarStartLine;
         this.info.splice(navBarStartLine, deleted);
         viewHierarchyEndLine -= deleted;
       }
@@ -184,25 +191,21 @@ class DumpSysActivityInfo {
   }
 }
 
-// FIX: some apps/devices often output non-standard attributes 
+// FIX: some apps/devices often output non-standard attributes
 // for example aid=1073741824 following resource-id
 const PAT_AV_DECOR = /DecorView@[a-fA-F0-9]+\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
 const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)\sdx-im-acc=(?<acc>true|false)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
 
 export class ActivityDumpSysBuilder {
-
   private pfxLen = 0;
   private step = 1;
   private decode = true;
-  private viewHierarchy: string[] = []
+  private viewHierarchy: string[] = [];
   private width = -1;
   private height = -1;
   private cache: DxViewCache | null = null;
 
-  constructor(
-    private readonly app: string,
-    private readonly name: string
-  ) {}
+  constructor(private readonly app: string, private readonly name: string) {}
 
   withWidth(width: number): ActivityDumpSysBuilder {
     this.width = width;
@@ -260,8 +263,8 @@ export class ActivityDumpSysBuilder {
   }
 
   private buildView(
-    line: string, 
-    act: DxActivity, 
+    line: string,
+    act: DxActivity,
     cview: DxView | null,
     cdep: number
   ): [DxView, number] {
@@ -272,16 +275,16 @@ export class ActivityDumpSysBuilder {
         throw new IllegalStateError('Expect DecorView');
       }
 
-      const {
-        bgclass: bgClass,
-        bgcolor: sBgColor
-      } = res.groups;
+      const { bgclass: bgClass, bgcolor: sBgColor } = res.groups;
       if (bgClass == '.') {
-        throw new IllegalStateError('Expect DecorView to have at least a background');
+        throw new IllegalStateError(
+          'Expect DecorView to have at least a background'
+        );
       }
-      
+
       act.installDecor(
-        this.width, this.height,
+        this.width,
+        this.height,
         bgClass,
         sBgColor == '.' ? null : Number(sBgColor)
       );
@@ -296,34 +299,54 @@ export class ActivityDumpSysBuilder {
     }
 
     const {
-      dep: sDep, 
-      cls, flags: sFlags, pflags: sPflags,
-      left: sOffL, top: sOffT, 
-      right: sOffR, bottom: sOffB,
-      rpkg = '', rtype = '', rentry = '',
+      dep: sDep,
+      cls,
+      flags: sFlags,
+      pflags: sPflags,
+      left: sOffL,
+      top: sOffT,
+      right: sOffR,
+      bottom: sOffB,
+      rpkg = '',
+      rtype = '',
+      rentry = '',
       e: sOffE,
-      tx: sTx, ty: sTy, tz: sTz,
-      sx: sSx, sy: sSy,
+      tx: sTx,
+      ty: sTy,
+      tz: sTz,
+      sx: sSx,
+      sy: sSy,
       shown: sShown,
-      desc: sDesc = '', text: sText = '',
-      tag: sTag = '', tip: sTip = '', hint: sHint = '',
-      bgclass: sBgClass, bgcolor: sBgColor, fg: sFg,
+      desc: sDesc = '',
+      text: sText = '',
+      tag: sTag = '',
+      tip: sTip = '',
+      hint: sHint = '',
+      bgclass: sBgClass,
+      bgcolor: sBgColor,
+      fg: sFg,
       acc: sAcc,
-      pcurr: sPcurr, tcurr: sTcurr
+      pcurr: sPcurr,
+      tcurr: sTcurr,
     } = res.groups;
 
     // find parent of current view
     const dep = sDep.length / this.step;
     let parent: DxView;
     let diff = dep - cdep;
-    if (diff == 0) { // sibling of curr
+    if (diff == 0) {
+      // sibling of curr
       parent = cview.parent as DxView;
-    } else if (diff > 0) { // child of curr
+    } else if (diff > 0) {
+      // child of curr
       if (diff != 1) {
-        throw new IllegalStateError(`Expect a direct child, but got an indirect (+${diff}) child`);
+        throw new IllegalStateError(
+          `Expect a direct child, but got an indirect (+${diff}) child`
+        );
       }
       parent = cview;
-    } else { // sibling of an ancestor
+    } else {
+      // sibling of an ancestor
       let ptr = cview;
       while (diff != 0) {
         ptr = ptr.parent!; // eslint-disable-line
@@ -334,11 +357,7 @@ export class ActivityDumpSysBuilder {
 
     // parse and construct the view
     const flags: DxViewFlags = {
-      V: sFlags[0] == 'V' 
-        ? 'V'
-        : sFlags[0] == 'I' 
-          ? 'I'
-          : 'G',
+      V: sFlags[0] == 'V' ? 'V' : sFlags[0] == 'I' ? 'I' : 'G',
       f: sFlags[1] == 'F',
       F: sPflags[1] == 'F',
       E: sFlags[2] == 'E',
@@ -349,7 +368,7 @@ export class ActivityDumpSysBuilder {
       c: sFlags[6] == 'C',
       lc: sFlags[7] == 'L',
       cc: sFlags[8] == 'X',
-      a: sAcc == 'true'
+      a: sAcc == 'true',
     };
 
     // tune visibility according its parent's visibility
@@ -362,13 +381,15 @@ export class ActivityDumpSysBuilder {
     }
 
     // parse background and foreground
-    const bgClass = sBgClass == '.' 
-      ? parent.bgClass      // inherits from its parent
-      : sBgClass;
-    const bgColor = sBgClass == '.'
-      ? parent.bgColor      // inherits from its parent
-      : sBgColor == '.'
-        ? null              // not color, maybe ripple, images
+    const bgClass =
+      sBgClass == '.'
+        ? parent.bgClass // inherits from its parent
+        : sBgClass;
+    const bgColor =
+      sBgClass == '.'
+        ? parent.bgColor // inherits from its parent
+        : sBgColor == '.'
+        ? null // not color, maybe ripple, images
         : Number(sBgColor); // color int value
     // '.' means no foreground
     const fg = sFg == '.' ? null : sFg;
@@ -390,11 +411,11 @@ export class ActivityDumpSysBuilder {
 
     // decode if necessary
     const text: string = this.decode ? base64.decode(sText) : sText;
-    const desc: string = this.decode ? base64.decode(sDesc) : sDesc; 
+    const desc: string = this.decode ? base64.decode(sDesc) : sDesc;
     const tag: string = this.decode ? base64.decode(sTag) : sTag;
-    const tip: string = this.decode ? base64.decode(sTip) : sTip; 
-    const hint: string = this.decode ? base64.decode(sHint) : sTip; 
-    
+    const tip: string = this.decode ? base64.decode(sTip) : sTip;
+    const hint: string = this.decode ? base64.decode(sHint) : sTip;
+
     // create the view
     let view: DxView;
     if (sPcurr) {
@@ -407,13 +428,31 @@ export class ActivityDumpSysBuilder {
 
     // reset common properties
     view.reset(
-      parent.pkg, cls, flags,
-      shown, 
-      bgClass, bgColor, fg,
-      left, top, right, bottom, elevation,
-      tx, ty, tz, sx, sy,
-      rpkg, rtype, rentry,
-      desc, text, tag, tip, hint
+      parent.pkg,
+      cls,
+      flags,
+      shown,
+      bgClass,
+      bgColor,
+      fg,
+      left,
+      top,
+      right,
+      bottom,
+      elevation,
+      tx,
+      ty,
+      tz,
+      sx,
+      sy,
+      rpkg,
+      rtype,
+      rentry,
+      desc,
+      text,
+      tag,
+      tip,
+      hint
     );
     // set properties for specific views
     if (sPcurr && view instanceof DxViewPager) {
@@ -468,16 +507,19 @@ export default class DxAdb {
   }
 
   async clearLogcat(buffers: LogcatBuffer[] = ['all']): Promise<void> {
-    await this.raw.logcat(undefined, { 
-      clear: true, 
-      buffers 
+    await this.raw.logcat(undefined, {
+      clear: true,
+      buffers,
     });
   }
 
-  async setLogcatSize(size: LogcatBufferSize, buffers: LogcatBuffer[] = ['all']): Promise<void> {
+  async setLogcatSize(
+    size: LogcatBufferSize,
+    buffers: LogcatBuffer[] = ['all']
+  ): Promise<void> {
     await this.raw.logcat(undefined, {
       buffers,
-      bufSize: size
+      bufSize: size,
     });
   }
 
@@ -489,7 +531,11 @@ export default class DxAdb {
     return await this.unsafeExecOut(`cmd ${args}`);
   }
 
-  async topActivity(pkg: string, decoding: boolean, dev: DevInfo): Promise<DxActivity> {
+  async topActivity(
+    pkg: string,
+    decoding: boolean,
+    dev: DevInfo
+  ): Promise<DxActivity> {
     const info = await this.dumpTopActivity(pkg);
     const vhIndex = info.viewHierarchy;
     const viewHierarchy = info.get().slice(vhIndex[0], vhIndex[1]);
@@ -498,7 +544,7 @@ export default class DxAdb {
       .withWidth(dev.width)
       .withDecoding(decoding)
       .withPrefixLength(4) // hard code here
-      .withStep(2)         // hard code here
+      .withStep(2) // hard code here
       .withViewHierarchy(viewHierarchy)
       .build();
     act.buildDrawingLevelLists();
@@ -538,7 +584,9 @@ export default class DxAdb {
       await this.getprop('ro.product.brand'),
       await this.getprop('ro.product.device'),
       await this.getprop('ro.product.cpu.abi'),
-      width, height, dpi,
+      width,
+      height,
+      dpi,
       Number.parseInt(await this.getprop('ro.system.build.version.sdk')),
       Number.parseFloat(await this.getprop('ro.system.build.version.release'))
     );
@@ -556,28 +604,37 @@ export default class DxAdb {
       }
     }
     if (taskStartLine == -1) {
-      throw new AdbError('dumpsys activity top', 0, `Cannot find any task for ${pkg}`);
+      throw new AdbError(
+        'dumpsys activity top',
+        0,
+        `Cannot find any task for ${pkg}`
+      );
     }
     // find the activity start line, there is only one
     // ACTIVITY entry and its mResumed=true 'cause we're
     // using the `top` command
     let activityStartLine = -1;
     const activityStartPrefix = '  ACTIVITY ';
-    for (let i = taskStartLine + 1; i < out.length; i ++) {
+    for (let i = taskStartLine + 1; i < out.length; i++) {
       if (out[i].startsWith(taskStartLinePrefix)) {
         break;
-      } if (out[i].startsWith(activityStartPrefix)) {
+      }
+      if (out[i].startsWith(activityStartPrefix)) {
         activityStartLine = i;
         break;
       }
     }
     if (activityStartLine == -1) {
-      throw new AdbError('dumpsys activity top', 0, `Task ${pkg} found, but no activities exist`);
+      throw new AdbError(
+        'dumpsys activity top',
+        0,
+        `Task ${pkg} found, but no activities exist`
+      );
     }
     // find the activity end line
     let activityEndLine = out.length;
     const activityLinePrefix = '    ';
-    for (let i = activityStartLine + 1; i < out.length; i ++) {
+    for (let i = activityStartLine + 1; i < out.length; i++) {
       if (!out[i].startsWith(activityLinePrefix)) {
         activityEndLine = i;
         break;
@@ -585,7 +642,7 @@ export default class DxAdb {
     }
     // return the activity entry
     const info = [];
-    for (let i = activityStartLine; i < activityEndLine; i ++) {
+    for (let i = activityStartLine; i < activityEndLine; i++) {
       info.push(out[i].substring(2));
     }
     return new DumpSysActivityInfo(pkg, info);

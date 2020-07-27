@@ -1,7 +1,4 @@
-import DxAdb, { 
-  AdbResult, 
-  AdbError
-} from './dxadb.ts';
+import DxAdb, { AdbResult, AdbError } from './dxadb.ts';
 import DxView, { DxActivity, DxViewFactory, DxViewType } from './dxview.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
@@ -11,20 +8,16 @@ function q(s: string | number): string {
   return `\\"${s}\\"`;
 }
 
-export type InputType = 
-  | 'tap' 
-  | 'longtap' 
-  | 'doubletap'
-  | 'swipe' 
-  | 'key' 
-  | 'text'
-  | 'view';
-
-export type ViewInputType = 
+export type InputType =
   | 'tap'
   | 'longtap'
   | 'doubletap'
-  | 'swipe';
+  | 'swipe'
+  | 'key'
+  | 'text'
+  | 'view';
+
+export type ViewInputType = 'tap' | 'longtap' | 'doubletap' | 'swipe';
 
 export interface ViewOptions {
   cls?: string;
@@ -126,37 +119,38 @@ function makeSelectOpts(opt: SelectOptions): string {
 
 // Dumped view map properties
 interface DumpViewProps {
-  'index': number;
-  'package': string;
-  'class': string;
+  index: number;
+  package: string;
+  class: string;
   'resource-id': string;
-  'visible': boolean;
-  'text': string;
+  visible: boolean;
+  text: string;
   'content-desc': string;
-  'clickable': boolean;
+  clickable: boolean;
   'context-clickable': boolean;
   'long-clickable': boolean;
-  'scrollable': boolean;
-  'checkable': boolean;
-  'checked': boolean;
-  'focusable': boolean;
-  'focused': boolean;
-  'selected': boolean;
-  'password': boolean;
-  'enabled': boolean;
-  'important': boolean;
-  'background'?: number;
-  'bounds': { // the visible and drawing bounds
-    'left': number;
-    'right': number;
-    'top': number;
-    'bottom': number;
-  }
+  scrollable: boolean;
+  checkable: boolean;
+  checked: boolean;
+  focusable: boolean;
+  focused: boolean;
+  selected: boolean;
+  password: boolean;
+  enabled: boolean;
+  important: boolean;
+  background?: number;
+  bounds: {
+    // the visible and drawing bounds
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  };
 }
 
 // Dumped view hierarchy properties
 interface DumpViewHierarchyProps extends DumpViewProps {
-  'children': DumpViewHierarchyProps[]
+  children: DumpViewHierarchyProps[];
 }
 
 // Computed view map properties
@@ -169,7 +163,7 @@ interface CompViewProps {
 /** Exported ViewMap includes all properties from
  * dumped and computed
  */
-export type ViewMap = (DumpViewProps & CompViewProps);
+export type ViewMap = DumpViewProps & CompViewProps;
 
 function splitResourceId(resId: string): [string, string, string] {
   if (resId.length == 0) return ['', '', ''];
@@ -188,11 +182,7 @@ function splitResourceId(resId: string): [string, string, string] {
 export class ActivityYotaBuilder {
   private width = -1;
   private height = -1;
-  constructor(
-    public app: string,
-    public name: string,
-    public dump: string
-  ) {}
+  constructor(public app: string, public name: string, public dump: string) {}
 
   withWidth(width: number): ActivityYotaBuilder {
     this.width = width;
@@ -217,11 +207,18 @@ export class ActivityYotaBuilder {
     if (a.decorView == null) {
       const decor = vhp;
       if (decor.bounds.left != 0 || decor.bounds.top != 0) {
-        throw new IllegalStateError(`Expect the decor at (0, 0), but at (${decor.bounds.left}, ${decor.bounds.top})`);
+        throw new IllegalStateError(
+          `Expect the decor at (0, 0), but at (${decor.bounds.left}, ${decor.bounds.top})`
+        );
       }
-      a.installDecor(decor.bounds.right, decor.bounds.bottom, 'ColorDrawable', decor.background!); // eslint-disable-line
+      a.installDecor(
+        decor.bounds.right,
+        decor.bounds.bottom,
+        'ColorDrawable',
+        decor.background!
+      ); // eslint-disable-line
       if (a.decorView == null) {
-        throw new IllegalStateError('Install decor failed');  
+        throw new IllegalStateError('Install decor failed');
       }
       v = a.decorView;
     } else {
@@ -242,7 +239,7 @@ export class ActivityYotaBuilder {
           c: vhp.clickable,
           lc: vhp['long-clickable'],
           cc: vhp['context-clickable'],
-          a: vhp['important']
+          a: vhp['important'],
         },
         vhp.visible,
         'ColorDrawable',
@@ -253,8 +250,14 @@ export class ActivityYotaBuilder {
         vhp.bounds.right,
         vhp.bounds.bottom,
         0,
-        0, 0, 0, 0, 0,
-        resPkg, resType, resEntry,
+        0,
+        0,
+        0,
+        0,
+        0,
+        resPkg,
+        resType,
+        resEntry,
         vhp['content-desc'],
         vhp.text
       );
@@ -284,17 +287,17 @@ export class YotaNoSuchViewError extends AdbError {
 }
 
 export default class DxYota {
-  public static readonly BIN = '/data/local/tmp/yota'
-  constructor(
-    public readonly adb: DxAdb
-  ) {}
+  public static readonly BIN = '/data/local/tmp/yota';
+  constructor(public readonly adb: DxAdb) {}
 
-  async tap(x: number, y: number): Promise<void> { 
+  async tap(x: number, y: number): Promise<void> {
     await this.adb.unsafeShell(`${DxYota.BIN} input tap -x ${q(x)} -y ${q(y)}`);
   }
 
   async longTap(x: number, y: number): Promise<void> {
-    await this.adb.unsafeShell(`${DxYota.BIN} input longtap -x ${q(x)} -y ${q(y)}`);
+    await this.adb.unsafeShell(
+      `${DxYota.BIN} input longtap -x ${q(x)} -y ${q(y)}`
+    );
   }
 
   // eslint-disable-next-line
@@ -307,7 +310,9 @@ export default class DxYota {
     const toX = x + dx;
     const toY = y + dy;
     await this.adb.unsafeShell(
-      `${DxYota.BIN} input swipe --from-x ${q(x)} --from-y ${q(y)} --to-x ${q(toX)} --to-y ${q(toY)} --steps ${q(steps)}`,
+      `${DxYota.BIN} input swipe --from-x ${q(x)} --from-y ${q(y)} --to-x ${q(
+        toX
+      )} --to-y ${q(toY)} --steps ${q(steps)}`
     );
   }
 
@@ -321,7 +326,8 @@ export default class DxYota {
 
   async view(type: ViewInputType, opt: ViewInputOptions = {}): Promise<void> {
     const args = makeViewInputOpts(type, opt);
-    let retry = 3, status: AdbResult;
+    let retry = 3,
+      status: AdbResult;
     do {
       retry -= 1; // code == 6 means root is null, retry
       status = await this.adb.raw.shell(`${DxYota.BIN} input view ${args}`);
@@ -335,7 +341,8 @@ export default class DxYota {
 
   async select(opt: ViewOptions): Promise<ViewMap[]> {
     const args = makeSelectOpts(opt);
-    let retry = 3, status: AdbResult;
+    let retry = 3,
+      status: AdbResult;
     do {
       retry -= 1; // code == 2 means root is null, retry
       status = await this.adb.raw.shell(`${DxYota.BIN} select ${args}`);
@@ -344,13 +351,13 @@ export default class DxYota {
       throw new AdbError('yota select', status.code, status.out);
     }
     const dvps = JSON.parse(status.out) as DumpViewProps[];
-    return dvps.map(dvp => {
+    return dvps.map((dvp) => {
       const [resPkg, resType, resEntry] = splitResourceId(dvp['resource-id']);
       const cvp: CompViewProps = {
         'resource-pkg': resPkg,
         'resource-type': resType,
-        'resource-entry': resEntry
-      }
+        'resource-entry': resEntry,
+      };
       return { ...dvp, ...cvp };
     });
   }
@@ -361,7 +368,9 @@ export default class DxYota {
   }
 
   async dump(compressed = true): Promise<string> {
-    return await this.adb.unsafeExecOut(`${DxYota.BIN} dump ${compressed ? '-c' : ''} -b -o stdout`);
+    return await this.adb.unsafeExecOut(
+      `${DxYota.BIN} dump ${compressed ? '-c' : ''} -b -o stdout`
+    );
   }
 
   async topActivity(pkg: string, dev: DevInfo): Promise<DxActivity> {

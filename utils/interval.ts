@@ -1,10 +1,12 @@
-
 export class IntervalError extends Error {}
 
 /** An Interval is a mutable interval [l, h], both included */
 export default class Interval {
   /** INFINITY interval */
-  public static INF = Interval.of(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY);
+  public static INF = Interval.of(
+    Number.NEGATIVE_INFINITY,
+    Number.POSITIVE_INFINITY
+  );
 
   /** Create an Interval */
   static of(low: number, high: number): Interval {
@@ -113,18 +115,17 @@ export default class Interval {
     return `[${this.low},${this.high}]`;
   }
 
-  private constructor(
-    private low_: number,
-    private high_: number
-  ) {
+  private constructor(private low_: number, private high_: number) {
     if (low_ > high_) {
-      throw new IntervalError(`low (${low_}) must be less or equal to high(${high_})`);
+      throw new IntervalError(
+        `low (${low_}) must be less or equal to high(${high_})`
+      );
     }
   }
 }
 
 /** Intervals is initialized by from an Interval, and can be updated
- * by removing one by one Interval, using Intervals#remove(); and one 
+ * by removing one by one Interval, using Intervals#remove(); and one
  * can see all the rest intervals by iterating the Interval
  */
 export class Intervals {
@@ -144,21 +145,21 @@ export class Intervals {
         this.intervals.push(...this.split(inv, removed));
       } else if (Interval.cover(removed, inv) >= 0) {
         switch (Interval.cover(removed, inv)) {
-        case 2:
-          throw new IntervalError('Cannot reach here');
-        case 1:
-          // covered, update inv low
-          inv.set(0, removed.high);
-          this.intervals.push(inv);
-          break;
-        case 0:
-          // covered, update inv high
-          inv.set(1, removed.low);
-          this.intervals.push(inv);
-          break;
-        case 3:
-          // strict covered, remove inv
-          continue;
+          case 2:
+            throw new IntervalError('Cannot reach here');
+          case 1:
+            // covered, update inv low
+            inv.set(0, removed.high);
+            this.intervals.push(inv);
+            break;
+          case 0:
+            // covered, update inv high
+            inv.set(1, removed.low);
+            this.intervals.push(inv);
+            break;
+          case 3:
+            // strict covered, remove inv
+            continue;
         }
       } else {
         // cross or no overlapping
@@ -179,10 +180,7 @@ export class Intervals {
   }
 
   /** cover is required, or unknown happened */
-  private split(
-    x: Interval,
-    at: Interval,
-  ): [Interval, Interval] | [Interval] {
+  private split(x: Interval, at: Interval): [Interval, Interval] | [Interval] {
     // when at is the border of x, don't split
     if (at.low == at.high && (at.low == x.low || at.low == x.high)) {
       return [x]; // don't split
@@ -194,8 +192,12 @@ export class Intervals {
 
 export class XYInterval {
   /** INFINITY interval */
-  static INF = XYInterval.of(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, 
-    Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY);
+  static INF = XYInterval.of(
+    Number.NEGATIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    Number.POSITIVE_INFINITY
+  );
 
   /** Create a new interval */
   static of(x0: number, x1: number, y0: number, y1: number): XYInterval {
@@ -226,12 +228,7 @@ export class XYInterval {
 
   public x: Interval;
   public y: Interval;
-  private constructor(
-    x0: number,
-    x1: number,
-    y0: number,
-    y1: number,
-  ) {
+  private constructor(x0: number, x1: number, y0: number, y1: number) {
     this.x = Interval.of(x0, x1);
     this.y = Interval.of(y0, y1);
   }
@@ -266,10 +263,7 @@ if (import.meta.main) {
   inv.remove(Interval.of(100, 120));
   inv.remove(Interval.of(90, 130));
   inv.remove(Interval.of(30, 140));
-  const rest: Interval[] = [
-    Interval.of(0, 30),
-    Interval.of(140, 1080),
-  ];
+  const rest: Interval[] = [Interval.of(0, 30), Interval.of(140, 1080)];
   let i = 0;
   for (const subInv of inv) {
     if (rest[i].low != subInv.low || rest[i].high != subInv.high) {

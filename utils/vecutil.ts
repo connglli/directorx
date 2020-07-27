@@ -7,43 +7,37 @@ export function sum(a: Vector): number {
 }
 
 export function dot(a: Vector, b: Vector): number {
-  return a.reduce((sum, x, i) => sum + x*b[i], 0);
+  return a.reduce((sum, x, i) => sum + x * b[i], 0);
 }
 
 export function norm(a: Vector, n = 2): number {
   switch (n) {
-  case 0:
-    return a.filter(x => x != 0).length;
-  case 1:
-    return sum(a.map(Math.abs));
-  case 2:
-    return Math.sqrt(sum(a.map(x => x * x)));
-  case 3:
-    return Math.cbrt(sum(a.map(x => x * x * x)));
-  default:
-    return Math.pow(
-      sum(a.map(x => Math.pow(x, n))),
-      1 / n
-    );
+    case 0:
+      return a.filter((x) => x != 0).length;
+    case 1:
+      return sum(a.map(Math.abs));
+    case 2:
+      return Math.sqrt(sum(a.map((x) => x * x)));
+    case 3:
+      return Math.cbrt(sum(a.map((x) => x * x * x)));
+    default:
+      return Math.pow(sum(a.map((x) => Math.pow(x, n))), 1 / n);
   }
 }
 
 export type WordFreq = {
   [word: string]: number;
-}
+};
 
 export type WordVec = {
   words: string[];
   vector: Vector;
 };
 
-export function freq2vec(
-  freq: WordFreq, 
-  words = Object.keys(freq)
-): WordVec {
+export function freq2vec(freq: WordFreq, words = Object.keys(freq)): WordVec {
   return {
     words: words.slice(),
-    vector: words.map(w => freq[w] ?? 0)
+    vector: words.map((w) => freq[w] ?? 0),
   };
 }
 
@@ -56,10 +50,7 @@ export function tf(doc: WordFreq): WordFreq {
   return tf;
 }
 
-export function idf(
-  doc: WordFreq, 
-  docs: WordFreq[]
-): WordFreq {
+export function idf(doc: WordFreq, docs: WordFreq[]): WordFreq {
   const numOfDocs = docs.length;
   const cache = new Map<string, number>();
   const idf: WordFreq = {};
@@ -68,7 +59,9 @@ export function idf(
     if (cache.has(w)) {
       numOfDocsContainingW = cache.get(w)!;
     } else {
-      numOfDocsContainingW = docs.filter(d => d[w] !== undefined && d[w] !== 0).length;
+      numOfDocsContainingW = docs.filter(
+        (d) => d[w] !== undefined && d[w] !== 0
+      ).length;
       cache.set(w, numOfDocsContainingW);
     }
     idf[w] = Math.log(numOfDocs / (1 + numOfDocsContainingW));
@@ -77,7 +70,7 @@ export function idf(
 }
 
 export function tfidf(docs: WordFreq[]): WordFreq[] {
-  return docs.map(d => {
+  return docs.map((d) => {
     const tfidf: WordFreq = {};
     const tfTerm = tf(d);
     const idfTerm = idf(d, docs);
@@ -100,8 +93,8 @@ export const similarity = {
 export const distance = {
   cosine(a: Vector, b: Vector): number {
     return 1 - similarity.cosine(a, b);
-  }
-}
+  },
+};
 
 if (import.meta.main) {
   assertEquals(sum([1, -1, 0, 3, 5, 7]), 15);

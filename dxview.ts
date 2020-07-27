@@ -7,18 +7,18 @@ type N<T> = T | null;
 
 export type DxViewFlags = {
   V: 'V' | 'G' | 'I'; // visibility
-  f: boolean;         // focusable
-  F: boolean;         // focused
-  S: boolean;         // selected
-  E: boolean;         // enabled
-  d: boolean;         // will draw?
-  hs: boolean;        // horizontal scrollable
-  vs: boolean;        // vertical scrollable
-  c: boolean;         // clickable
-  lc: boolean;        // long clickable
-  cc: boolean;        // context clickable
-  a: boolean;         // important for accessibility
-}
+  f: boolean; // focusable
+  F: boolean; // focused
+  S: boolean; // selected
+  E: boolean; // enabled
+  d: boolean; // will draw?
+  hs: boolean; // horizontal scrollable
+  vs: boolean; // vertical scrollable
+  c: boolean; // clickable
+  lc: boolean; // long clickable
+  cc: boolean; // context clickable
+  a: boolean; // important for accessibility
+};
 
 export const DefaultFlags: DxViewFlags = {
   V: 'V',
@@ -43,9 +43,9 @@ export enum DxViewType {
 }
 
 /** DxView represents a View or a ViewGroup on Android.
- * 
+ *
  * The drawing of an view is sequencialized to three steps:
- * 1. layout: which calculate the left/top/right/bottom of 
+ * 1. layout: which calculate the left/top/right/bottom of
  *    the view
  * 2. translation: translate the view on the canvas (children
  *    is at the same time translated)
@@ -54,33 +54,33 @@ export enum DxViewType {
  * So, the actual drawing coordinate of a view is actually
  * calculated by `left + translationX - scrollX`, so as the
  * y axis
- * 
- * The DxView#{left,right,top,bottom,elevation}() returns the 
- * absolute boundary coordinate after layout in pixel of the 
- * view. The DxView#my{left,right,top,bottom,elevation}() 
+ *
+ * The DxView#{left,right,top,bottom,elevation}() returns the
+ * absolute boundary coordinate after layout in pixel of the
+ * view. The DxView#my{left,right,top,bottom,elevation}()
  * returns the relative ones
- * 
- * The DxView#translation{X,Y,Z}() returns the absolute 
+ *
+ * The DxView#translation{X,Y,Z}() returns the absolute
  * translation (recursively including its parent's translation)
- * in pixel of the view. The DxView#myTranslation{X,Y,Z}() 
+ * in pixel of the view. The DxView#myTranslation{X,Y,Z}()
  * returns the relative ones
- * 
+ *
  * The DxView#scroll{X, Y}() returns the the scroll x and y
- * of the view itself to its children (recursively including 
- * its ancestor's scroll). DxView#myScroll{X,Y,Z}() returns 
+ * of the view itself to its children (recursively including
+ * its ancestor's scroll). DxView#myScroll{X,Y,Z}() returns
  * the relative ones
- * 
- * The DxView#{X,Y,Z}() returns the absolute coordinate 
+ *
+ * The DxView#{X,Y,Z}() returns the absolute coordinate
  * of the view after translation
  *
- * The DxView#drawing{X,Y,Z}() returns the absolute coordinate 
+ * The DxView#drawing{X,Y,Z}() returns the absolute coordinate
  * of the view after scrolling
  */
 export default class DxView {
   // The drawing level is different from the z index of
   // each view. Views at each level are not overlapped, but
   // views at adjacent levels are overlapped at least at one
-  // view. To construct the drawing level, invoke method 
+  // view. To construct the drawing level, invoke method
   // DxActivity#buildDrawingLevel()
   public drawingLevel: number = -1;
   constructor(
@@ -156,15 +156,15 @@ export default class DxView {
   get left(): number {
     return this.left_;
   }
-  
+
   get right(): number {
     return this.right_;
   }
-  
+
   get top(): number {
     return this.top_;
   }
-  
+
   get bottom(): number {
     return this.bottom_;
   }
@@ -306,7 +306,7 @@ export default class DxView {
   }
 
   get siblings(): DxView[] {
-    return (this.parent?.children ?? []).filter(v => v != this);
+    return (this.parent?.children ?? []).filter((v) => v != this);
   }
 
   /** Add view v as a child */
@@ -324,7 +324,7 @@ export default class DxView {
     v.parent_ = null;
     this.children_ = [
       ...this.children_.slice(0, ind),
-      ...this.children_.slice(ind+1)
+      ...this.children_.slice(ind + 1),
     ];
   }
 
@@ -364,7 +364,7 @@ export default class DxView {
     text = '',
     tag = '',
     tip = '',
-    hint= '',
+    hint = '',
     parent: N<DxView> = null,
     children: DxView[] = []
   ): void {
@@ -398,10 +398,7 @@ export default class DxView {
   }
 
   /** Return a new DxView that are copied from this */
-  copy(
-    parent: N<DxView> = null, 
-    children: DxView[] = []
-  ): DxView {
+  copy(parent: N<DxView> = null, children: DxView[] = []): DxView {
     return new DxView(
       this.pkg_,
       this.cls_,
@@ -437,8 +434,8 @@ export default class DxView {
 export class DxDecorView extends DxView {
   public static readonly NAME = 'com.android.internal.policy.DecorView';
   constructor(
-    pkg: string, 
-    width: number, 
+    pkg: string,
+    width: number,
     height: number,
     bgClass: string,
     bgColor: number | null
@@ -448,8 +445,14 @@ export class DxDecorView extends DxView {
       DxDecorView.NAME,
       DefaultFlags,
       true,
-      bgClass, bgColor, null,
-      0, 0, width, height, 0
+      bgClass,
+      bgColor,
+      null,
+      0,
+      0,
+      width,
+      height,
+      0
     );
   }
   copy(): DxDecorView {
@@ -474,10 +477,7 @@ export class DxViewPager extends DxView {
     this.currItem_ = newItem;
   }
 
-  copy(
-    parent: N<DxView> = null, 
-    children: DxView[] = []
-  ): DxView {
+  copy(parent: N<DxView> = null, children: DxView[] = []): DxView {
     const view = new DxViewPager(
       this.pkg_,
       this.cls_,
@@ -523,10 +523,7 @@ export class DxTabHost extends DxView {
     this.currTab_ = newTab;
   }
 
-  copy(
-    parent: N<DxView> = null, 
-    children: DxView[] = []
-  ): DxView {
+  copy(parent: N<DxView> = null, children: DxView[] = []): DxView {
     const view = new DxTabHost(
       this.pkg_,
       this.cls_,
@@ -584,16 +581,18 @@ export class ViewFinder {
   /** Find the first view via dfs that satisfy the predicate */
   static findFirst(v: DxView, pred: (v: DxView) => boolean): N<DxView> {
     let found: N<DxView> = null;
-    ViewFinder.walk(v, w => {
-      if (!found && pred(w)) { found = w; }
+    ViewFinder.walk(v, (w) => {
+      if (!found && pred(w)) {
+        found = w;
+      }
     });
     return found;
   }
 
-  /** Walk the hierarchy up to find a horizontally scrollable parent. 
+  /** Walk the hierarchy up to find a horizontally scrollable parent.
    * A scrollable parent indicates that this node may be in a content
-   * where it is partially visible due to scrolling. its clickable 
-   * center maybe invisible and adjustments should be made to the 
+   * where it is partially visible due to scrolling. its clickable
+   * center maybe invisible and adjustments should be made to the
    * click coordinates.
    */
   static findHScrollableParent(v: DxView): N<DxView> {
@@ -607,13 +606,13 @@ export class ViewFinder {
     return null;
   }
 
-  /** Walk the hierarchy up to find a vertically scrollable parent. 
+  /** Walk the hierarchy up to find a vertically scrollable parent.
    * A scrollable parent indicates that this node may be in a content
-   * where it is partially visible due to scrolling. its clickable 
-   * center maybe invisible and adjustments should be made to the 
+   * where it is partially visible due to scrolling. its clickable
+   * center maybe invisible and adjustments should be made to the
    * click coordinates.
    */
-  static findVScrollableParent(v: DxView, ): N<DxView> {
+  static findVScrollableParent(v: DxView): N<DxView> {
     let p = v.parent;
     while (p != null) {
       if (p.flags.vs) {
@@ -624,19 +623,19 @@ export class ViewFinder {
     return null;
   }
 
-  /** Find a most detailed view by x, y coordinate, set visible to false 
+  /** Find a most detailed view by x, y coordinate, set visible to false
    * if need to find invisible also */
   static findViewByXY(
-    v: DxView, x: number, y: number, 
-    visible = true, 
+    v: DxView,
+    x: number,
+    y: number,
+    visible = true,
     enabled = true
   ): N<DxView> {
     const views = ViewFinder.findViewsByXY(v, x, y, visible, enabled);
     if (views.length > 0) {
       // only those important for accessibility are useful
-      return visible 
-        ? (views.find(v => v.flags.a) ?? null) 
-        : views[0];
+      return visible ? views.find((v) => v.flags.a) ?? null : views[0];
     } else {
       return null;
     }
@@ -644,23 +643,26 @@ export class ViewFinder {
 
   /** Find the first met view with text t */
   static findViewByText(v: DxView, text: string): N<DxView> {
-    return ViewFinder.findFirst(v, w => w.text == text);
+    return ViewFinder.findFirst(v, (w) => w.text == text);
   }
 
   /** Find the first met view with desc t */
   static findViewByDesc(v: DxView, desc: string): N<DxView> {
-    return ViewFinder.findFirst(v, w => w.desc == desc);
+    return ViewFinder.findFirst(v, (w) => w.desc == desc);
   }
 
   /** Find the first met view with resource type and entry */
   static findViewByResource(v: DxView, type: string, entry: string): N<DxView> {
-    return ViewFinder.findFirst(v, w => w.resType == type && w.resEntry == entry);
+    return ViewFinder.findFirst(
+      v,
+      (w) => w.resType == type && w.resEntry == entry
+    );
   }
 
   /** Find the view by children indices */
   static findViewByIndices(v: DxView, indices: number[]): N<DxView> {
     let p: DxView = v;
-    for (let i = 0; i < indices.length; i ++) {
+    for (let i = 0; i < indices.length; i++) {
       const ind = indices[i];
       if (ind < 0 || ind >= p.children.length) {
         return null;
@@ -670,31 +672,41 @@ export class ViewFinder {
     return p;
   }
 
-  /** Find all views by x, y coordinate, set visible to false 
+  /** Find all views by x, y coordinate, set visible to false
    * if need to find invisible ones also */
   static findViewsByXY(
-    v: DxView, x: number, y: number,
-    visible = true, enabled = true
+    v: DxView,
+    x: number,
+    y: number,
+    visible = true,
+    enabled = true
   ): DxView[] {
     let found: DxView[] = [];
     if (ViewFinder.isInView(v, x, y, visible, enabled)) {
       found.push(v);
     }
     for (const c of v.children) {
-      found = [...ViewFinder.findViewsByXY(c, x, y, visible, enabled), ...found];
+      found = [
+        ...ViewFinder.findViewsByXY(c, x, y, visible, enabled),
+        ...found,
+      ];
     }
     return found;
   }
 
   /** Check whether a point hits self or not */
   static isInView(
-    v: DxView, x: number, y: number, 
-    visible = true, enabled = true
+    v: DxView,
+    x: number,
+    y: number,
+    visible = true,
+    enabled = true
   ): boolean {
-    let hit = (
-      Views.x0(v) <= x && x <= Views.x1(v) &&
-      Views.y0(v) <= y && y <= Views.y1(v)
-    );
+    let hit =
+      Views.x0(v) <= x &&
+      x <= Views.x1(v) &&
+      Views.y0(v) <= y &&
+      y <= Views.y1(v);
     if (visible) {
       hit = hit && v.shown;
     }
@@ -721,7 +733,7 @@ export class Views {
 
   static isViewHierarchyImportantForA11n(v: DxView): boolean {
     if (Views.isViewImportantForA11n(v)) {
-        return true;
+      return true;
     }
     for (const cv of v.children) {
       if (Views.isViewHierarchyImportantForA11n(cv)) {
@@ -753,7 +765,7 @@ export class Views {
       }
     }
     return summary;
-  } 
+  }
 
   static drawingLevelRangeOf(v: DxView): [number, number] {
     let max = v.drawingLevel;
@@ -771,7 +783,7 @@ export class Views {
   }
 
   static isValid(v: DxView): boolean {
-    return v.width>= 5 && v.height >= 5;
+    return v.width >= 5 && v.height >= 5;
   }
 
   static isVisibleToUser(v: DxView, d: DevInfo): boolean {
@@ -779,14 +791,14 @@ export class Views {
       return false;
     }
     const { width, height } = d;
-    return XYInterval.overlap(
-      XYInterval.of(0, width, 0, height), 
-      Views.bounds(v)
-    ) != null;
+    return (
+      XYInterval.overlap(XYInterval.of(0, width, 0, height), Views.bounds(v)) !=
+      null
+    );
   }
 
   static hasValidChild(v: DxView): boolean {
-    return v.children.some(c => this.isValid(c));
+    return v.children.some((c) => this.isValid(c));
   }
 
   static indexOf(v: DxView): number {
@@ -837,8 +849,8 @@ export class DxActivity {
   private decor: DxDecorView | null = null;
 
   constructor(
-    public readonly app: string,  // app package name
-    public readonly name: string  // activity name
+    public readonly app: string, // app package name
+    public readonly name: string // activity name
   ) {}
 
   get decorView(): DxDecorView | null {
@@ -846,8 +858,10 @@ export class DxActivity {
   }
 
   installDecor(
-    width: number, height: number, 
-    bgClass: string, bgColor: number | null
+    width: number,
+    height: number,
+    bgClass: string,
+    bgColor: number | null
   ): void {
     this.decor = new DxDecorView(this.app, width, height, bgClass, bgColor);
   }
@@ -863,15 +877,11 @@ export class DxActivity {
   }
 
   findViewByText(text: string): N<DxView> {
-    return this.decor
-      ? ViewFinder.findViewByText(this.decor, text)
-      : null;
+    return this.decor ? ViewFinder.findViewByText(this.decor, text) : null;
   }
 
   findViewByDesc(desc: string): N<DxView> {
-    return this.decor
-      ? ViewFinder.findViewByDesc(this.decor, desc)
-      : null;
+    return this.decor ? ViewFinder.findViewByDesc(this.decor, desc) : null;
   }
 
   findViewByResource(type: string, entry: string): N<DxView> {
@@ -880,9 +890,9 @@ export class DxActivity {
       : null;
   }
 
-  /** Build the drawing level top-down. Views at each level are 
-   * not overlapped, but views at adjacent levels are overlapped 
-   * at least at one view. See more in source code of 
+  /** Build the drawing level top-down. Views at each level are
+   * not overlapped, but views at adjacent levels are overlapped
+   * at least at one view. See more in source code of
    * Android Studio Dynamic Layout Inspector:
    * https://android.googlesource.com/platform/tools/adt/idea/+/refs/heads/studio-master-dev/layout-inspector/src/com/android/tools/idea/layoutinspector/ui/DeviceViewPanelModel.kt#175 */
   buildDrawingLevelLists(): DxView[][] {
@@ -892,15 +902,20 @@ export class DxActivity {
       let viewLevel = level;
       const viewBounds = Views.bounds(view);
       if (view.shown) {
-        // Find how many levels we can step up from our base level 
-        // (level), the levels we can step up are those where there 
+        // Find how many levels we can step up from our base level
+        // (level), the levels we can step up are those where there
         // are views inside overlapping with us. And the level where
         // no views inside are overlapped with us is our level
         const levelUp = levelLists
           .slice(level, levelLists.length)
-          .findIndex(l => l.filter(node => XYInterval.overlap(Views.bounds(node), viewBounds)).length == 0);
-        if (levelUp == -1) { 
-          // as long as we are overlapped with all preceding 
+          .findIndex(
+            (l) =>
+              l.filter((node) =>
+                XYInterval.overlap(Views.bounds(node), viewBounds)
+              ).length == 0
+          );
+        if (levelUp == -1) {
+          // as long as we are overlapped with all preceding
           // levels, let's create a new level
           viewLevel = levelLists.length;
           levelLists.push([] as DxView[]);
@@ -912,29 +927,68 @@ export class DxActivity {
         view.drawingLevel = viewLevel;
         levelLists[viewLevel].push(view);
       }
-      view.children.forEach(v => doBuildForView(v, viewLevel));
+      view.children.forEach((v) => doBuildForView(v, viewLevel));
     }
 
     const decor = this.decorView!;
-    decor.children.forEach(v => doBuildForView(v, levelLists.length));
+    decor.children.forEach((v) => doBuildForView(v, levelLists.length));
 
     return levelLists;
   }
 }
 
-export class DxViewFactory { 
+export class DxViewFactory {
   public static create(type: DxViewType): DxView {
     switch (type) {
-    case DxViewType.DECOR:
-      return new DxDecorView('', -1, -1, '', null);
-    case DxViewType.VIEW_PAGER:
-      return new DxViewPager('', '', DefaultFlags, true, '', null, null, -1, -1, -1, -1, -1);
-    case DxViewType.TAB_HOST:
-      return new DxTabHost('', '', DefaultFlags, true, '', null, null, -1, -1, -1, -1, -1);
-    case DxViewType.OTHERS:
-      return new DxView('', '', DefaultFlags, true, '', null, null, -1, -1, -1, -1, -1);
-    default:
-      throw new CannotReachHereError();
+      case DxViewType.DECOR:
+        return new DxDecorView('', -1, -1, '', null);
+      case DxViewType.VIEW_PAGER:
+        return new DxViewPager(
+          '',
+          '',
+          DefaultFlags,
+          true,
+          '',
+          null,
+          null,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1
+        );
+      case DxViewType.TAB_HOST:
+        return new DxTabHost(
+          '',
+          '',
+          DefaultFlags,
+          true,
+          '',
+          null,
+          null,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1
+        );
+      case DxViewType.OTHERS:
+        return new DxView(
+          '',
+          '',
+          DefaultFlags,
+          true,
+          '',
+          null,
+          null,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1
+        );
+      default:
+        throw new CannotReachHereError();
     }
   }
 
@@ -960,20 +1014,20 @@ export class DxViewCache {
   get(type: DxViewType): DxView {
     let cache: LinkedList<DxView>;
     switch (type) {
-    case DxViewType.DECOR:
-      cache = this.decorCache;
-      break;
-    case DxViewType.VIEW_PAGER:
-      cache = this.pagerCache;
-      break;
-    case DxViewType.TAB_HOST:
-      cache = this.tabCache;
-      break;
-    case DxViewType.OTHERS:
-      cache = this.otherCache;
-      break;
-    default:
-      throw new CannotReachHereError();
+      case DxViewType.DECOR:
+        cache = this.decorCache;
+        break;
+      case DxViewType.VIEW_PAGER:
+        cache = this.pagerCache;
+        break;
+      case DxViewType.TAB_HOST:
+        cache = this.tabCache;
+        break;
+      case DxViewType.OTHERS:
+        cache = this.otherCache;
+        break;
+      default:
+        throw new CannotReachHereError();
     }
     if (cache.isEmpty()) {
       return DxViewFactory.create(type);
@@ -984,16 +1038,16 @@ export class DxViewCache {
 
   put(v: DxView): void {
     switch (DxViewFactory.typeOf(v)) {
-    case DxViewType.DECOR:
-      return this.decorCache.pushFront(v as DxDecorView);
-    case DxViewType.VIEW_PAGER:
-      return this.pagerCache.pushFront(v as DxViewPager);
-    case DxViewType.TAB_HOST:
-      return this.tabCache.pushFront(v as DxTabHost);
-    case DxViewType.OTHERS:
-      return this.otherCache.pushFront(v);
-    default:
-      throw new CannotReachHereError();
+      case DxViewType.DECOR:
+        return this.decorCache.pushFront(v as DxDecorView);
+      case DxViewType.VIEW_PAGER:
+        return this.pagerCache.pushFront(v as DxViewPager);
+      case DxViewType.TAB_HOST:
+        return this.tabCache.pushFront(v as DxTabHost);
+      case DxViewType.OTHERS:
+        return this.otherCache.pushFront(v);
+      default:
+        throw new CannotReachHereError();
     }
   }
 }

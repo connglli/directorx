@@ -1,4 +1,7 @@
-import { assert, assertEquals } from 'https://deno.land/std@0.60.0/testing/asserts.ts';
+import {
+  assert,
+  assertEquals,
+} from 'https://deno.land/std@0.60.0/testing/asserts.ts';
 
 export class StackError extends Error {}
 
@@ -20,14 +23,14 @@ export default class Stack<T> {
     if (this.items.length == 0) {
       return null;
     }
-    return this.items[this.items.length-1];
+    return this.items[this.items.length - 1];
   }
 
   topN(n: number): T[] {
     if (n > this.items.length) {
       n = this.items.length;
     }
-    return this.items.slice(this.items.length-n).reverse();
+    return this.items.slice(this.items.length - n).reverse();
   }
 
   pop(): T {
@@ -39,7 +42,7 @@ export default class Stack<T> {
 
   popN(n: number): T[] {
     const arr = [];
-    for (let i = 0; i < n; i ++) {
+    for (let i = 0; i < n; i++) {
       arr.push(this.pop());
     }
     return arr;

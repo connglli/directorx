@@ -3,10 +3,10 @@ export class BiGraphError extends Error {}
 /** BiGraph is a weight and directed bi-part graph, composing
  * of a left subgraph, a right subgraph, and their full connected
  * edges (along with a weight)
- * 
+ *
  * The #match() method matches the BiGraph with KM algorithm. One
  * can then fetch the matches using the #getMatch() method
- * 
+ *
  * The `weights` is expected to be an integer, or the algorithm may
  * never stop due to floating point arithmetic
  */
@@ -34,7 +34,7 @@ export class BiGraph {
 
   /** Get match of a node, `wIsLeft` denotes `w` is a left or right node,
    * and return its right match if w is a left node, and vice verser
-    */
+   */
   getMatch(w: number, wIsLeft = true): number {
     if (wIsLeft) {
       return this.lmatch[w];
@@ -52,22 +52,25 @@ export class BiGraph {
     this.lmatch.fill(-1);
     this.rmatch.fill(-1);
     this.rval.fill(0);
-    for (let v = 0; v < this.size; v ++) {
+    for (let v = 0; v < this.size; v++) {
       this.lval[v] = Math.max(...this.weights[v]);
     }
-    for (let v = 0; v < this.size; v ++) {
+    for (let v = 0; v < this.size; v++) {
       this.rslack.fill(Number.POSITIVE_INFINITY);
-      while (true) { // eslint-disable-line
+      while (true) {
+        // eslint-disable-line
         this.lvis.fill(false);
         this.rvis.fill(false);
-        if (this.tryDfsAndFound(v)) { break; }
+        if (this.tryDfsAndFound(v)) {
+          break;
+        }
         let d = Number.POSITIVE_INFINITY;
-        for (let w = 0; w < this.size; w ++) {
+        for (let w = 0; w < this.size; w++) {
           if (!this.rvis[w]) {
             d = Math.min(this.rslack[w], d);
           }
         }
-        for (let x = 0; x < this.size; x ++) {
+        for (let x = 0; x < this.size; x++) {
           if (this.lvis[x]) {
             this.lval[x] -= d;
           }
@@ -84,7 +87,7 @@ export class BiGraph {
 
   private tryDfsAndFound(v: number) {
     this.lvis[v] = true;
-    for (let w = 0; w < this.size; w ++) {
+    for (let w = 0; w < this.size; w++) {
       if (this.rvis[w]) {
         continue;
       }
@@ -110,11 +113,13 @@ if (import.meta.main) {
   const weight = [
     [15, 12, 8],
     [14, 6, 8],
-    [13, 12, 10]
+    [13, 12, 10],
   ];
   const g = new BiGraph(weight);
   console.log(g.match());
-  for (let w = 0; w < 3; w ++) {
-    console.log(`${left[g.getMatch(w)]} -> ${right[w]}: ${weight[g.getMatch(w)][w]}`);
+  for (let w = 0; w < 3; w++) {
+    console.log(
+      `${left[g.getMatch(w)]} -> ${right[w]}: ${weight[g.getMatch(w)][w]}`
+    );
   }
 }

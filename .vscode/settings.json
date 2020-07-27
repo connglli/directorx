@@ -1,0 +1,38 @@
+{
+  "cSpell.words": [
+    "activity",
+    "activity yota builder",
+    "builder",
+    "directorx",
+    "dumpsys",
+    "dxadb",
+    "dxevent",
+    "dxlog",
+    "dxpack",
+    "dxpk",
+    "dxrec",
+    "dxview",
+    "event",
+    "fire",
+    "fire synt event",
+    "getprop",
+    "knary",
+    "knary tree node",
+    "node",
+    "playee",
+    "prio",
+    "segs",
+    "succ",
+    "synt",
+    "tree",
+    "xxyy",
+    "yota"
+  ],
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnPaste": true,
+  "editor.formatOnSave": true,
+  "prettier.packageManager": "npm",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  }
+}

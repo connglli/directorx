@@ -1,4 +1,10 @@
-import DxView, { DxTabHost, DxViewPager, DxActivity, Views, ViewFinder } from '../dxview.ts';
+import DxView, {
+  DxTabHost,
+  DxViewPager,
+  DxActivity,
+  Views,
+  ViewFinder,
+} from '../dxview.ts';
 import { DxSegment } from './ui_seg.ts';
 import DxEvent, { DxTapEvent } from '../dxevent.ts';
 import { DevInfo } from '../dxdroid.ts';
@@ -8,17 +14,13 @@ type N<T> = T | null;
 
 /** Synthetic event returned by applying each pattern */
 export class SyntEvent {
-  constructor(
-    public readonly e: DxEvent
-  ) {}
+  constructor(public readonly e: DxEvent) {}
 }
 
 export interface PatRecArgs {}
 
 export abstract class DxPat {
-  constructor(
-    protected readonly args: PatRecArgs
-  ) {}
+  constructor(protected readonly args: PatRecArgs) {}
   abstract match(): boolean;
   abstract apply(): SyntEvent;
 }
@@ -34,16 +36,12 @@ export interface InvisiblePatRecArgs extends PatRecArgs {
 /** Invisible pattern is used for those invisible views */
 export class Invisible extends DxPat {
   private vParent: N<DxView> = null;
-  constructor(
-    protected args: InvisiblePatRecArgs
-  ) {
+  constructor(protected args: InvisiblePatRecArgs) {
     super(args);
   }
 
   match(): boolean {
-    const { 
-      v: view, a: act, d: dev 
-    } = this.args;
+    const { v: view, a: act, d: dev } = this.args;
     let p = view.parent;
     while (p) {
       if (Views.isViewImportantForA11n(p) && Views.isVisibleToUser(p, dev)) {
@@ -59,12 +57,14 @@ export class Invisible extends DxPat {
     if (this.vParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    return new SyntEvent(new DxTapEvent(
-      this.args.a,
-      this.vParent.drawingX + 1,
-      this.vParent.drawingY + 1,
-      -1
-    ));
+    return new SyntEvent(
+      new DxTapEvent(
+        this.args.a,
+        this.vParent.drawingX + 1,
+        this.vParent.drawingY + 1,
+        -1
+      )
+    );
   }
 }
 
@@ -83,14 +83,12 @@ export interface BpPatRecArgs extends PatRecArgs {
   };
 }
 
-/** Bottom-up patterns that our pattern recognition 
+/** Bottom-up patterns that our pattern recognition
  * algorithm used. The level denotes the level the
- * pattern resides. To implements 
+ * pattern resides. To implements
  */
 export abstract class DxBpPat extends DxPat {
-  constructor(
-    protected args: BpPatRecArgs
-  ) {
+  constructor(protected args: BpPatRecArgs) {
     super(args);
   }
 
@@ -98,11 +96,13 @@ export abstract class DxBpPat extends DxPat {
 }
 
 class Expand extends DxBpPat {
-  level() { return 'expand'; }
+  level() {
+    return 'expand';
+  }
 
   match(): boolean {
     return (
-      !!ViewFinder.findVScrollableParent(this.args.v) || 
+      !!ViewFinder.findVScrollableParent(this.args.v) ||
       !!ViewFinder.findHScrollableParent(this.args.v)
     );
   }
@@ -113,7 +113,9 @@ class Expand extends DxBpPat {
 }
 
 abstract class Reveal extends DxBpPat {
-  level() { return 'reveal'; }
+  level() {
+    return 'reveal';
+  }
 }
 
 class MoreOptions extends Reveal {
@@ -125,7 +127,7 @@ class MoreOptions extends Reveal {
     // check if there are MoreOptions button
     // buttons in the playee segment
     for (const r of this.args.p.s.roots) {
-      const mo = ViewFinder.findViewByDesc(r, MoreOptions.DESC)
+      const mo = ViewFinder.findViewByDesc(r, MoreOptions.DESC);
       if (mo != null) {
         this.vMoreOptions = mo;
         return true;
@@ -136,7 +138,7 @@ class MoreOptions extends Reveal {
 
   apply(): SyntEvent {
     if (this.vMoreOptions == null) {
-      throw new IllegalStateError('Pattern is not satisfied, don\'t apply');
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
     // synthesize a tap event on the
     // more options button
@@ -174,7 +176,7 @@ class TabHost extends Reveal {
   apply(): SyntEvent {
     // find all tabs in recordee
     if (this.vPath.length == 0) {
-      throw new IllegalStateError('Pattern is not satisfied, don\'t apply');
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
     // TODO v is not strictly a Tab name, then how to
     // resolve the tab name where v resides? Maybe we
@@ -183,26 +185,32 @@ class TabHost extends Reveal {
     // find the tab's direct parent, 'cause
     // sometimes the TabHost does not directly
     // host the tabs, but its children
-    while (this.vPath.length > 0 && this.goodChildren(this.vPath[0]).length == 1) {
+    while (
+      this.vPath.length > 0 &&
+      this.goodChildren(this.vPath[0]).length == 1
+    ) {
       this.vPath.shift();
     }
     const parent = this.vPath.shift();
     if (!parent) {
-      throw new IllegalStateError('Pattern apply failed, cannot find the direct parent of the tab');
+      throw new IllegalStateError(
+        'Pattern apply failed, cannot find the direct parent of the tab'
+      );
     }
     // now vPath[0] is the direct parent of all tabs;
-    // extract their indices first, and change the 
+    // extract their indices first, and change the
     // indices to make the path points to next tab
-    const indices = this.vPath.map(v => Views.indexOf(v));
+    const indices = this.vPath.map((v) => Views.indexOf(v));
     const currTab = indices[0];
     const sibTabs: DxView[] = [];
     for (let i = 0; i < parent.children.length; i++) {
       if (i == currTab) {
         continue;
       }
-      const tab = ViewFinder.findViewByIndices(
-        parent, [i, ...indices.slice(1)]
-      );
+      const tab = ViewFinder.findViewByIndices(parent, [
+        i,
+        ...indices.slice(1),
+      ]);
       if (tab) {
         sibTabs.push(tab);
       }
@@ -248,7 +256,9 @@ class TabHost extends Reveal {
   }
 
   private goodChildren(v: DxView): DxView[] {
-    return v.children.filter(c => Views.isValid(c) && Views.isViewHierarchyImportantForA11n(c));
+    return v.children.filter(
+      (c) => Views.isValid(c) && Views.isViewHierarchyImportantForA11n(c)
+    );
   }
 }
 
@@ -276,13 +286,13 @@ const patterns = [
   // Reveal
   MoreOptions,
   TabHost,
-  ViewPager
+  ViewPager,
 ];
 
-/** Recognize the pattern bottom-up from None to 
+/** Recognize the pattern bottom-up from None to
  * Transform. This is an assume and check process, i.e.,
  * assume a pattern, and test the pattern condition.
- * Confirm the pattern and return if and only if the 
+ * Confirm the pattern and return if and only if the
  * condition passes, or test next pattern
  */
 export default function regBpPat(args: BpPatRecArgs): N<DxBpPat> {

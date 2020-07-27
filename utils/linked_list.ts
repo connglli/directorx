@@ -1,15 +1,15 @@
 import { assertEquals } from 'https://deno.land/std@0.60.0/testing/asserts.ts';
 
-type LinkedListNode<T> = { 
+type LinkedListNode<T> = {
   value: T;
-  next: LinkedListNode<T> | null; 
+  next: LinkedListNode<T> | null;
 };
 
 export default class LinkedList<T> {
   private _size = 0;
   private _head: LinkedListNode<T> | null = null;
   private _tail: LinkedListNode<T> | null = null;
-  
+
   get size(): number {
     return this._size;
   }
@@ -57,7 +57,7 @@ export default class LinkedList<T> {
       this._tail = this._head;
     } else {
       /* eslint-disable */
-      this._tail!.next = { value: x, next: null};
+      this._tail!.next = { value: x, next: null };
       this._tail = this._tail!.next;
     }
     this._size += 1;

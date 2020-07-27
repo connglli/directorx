@@ -1,30 +1,30 @@
-import DxEvent, { 
+import DxEvent, {
   DxXYEvent,
-  DxKeyEvent, 
-  DxLongTapEvent, 
-  DxDoubleTapEvent, 
-  DxSwipeEvent, 
-  DxTapEvent, 
+  DxKeyEvent,
+  DxLongTapEvent,
+  DxDoubleTapEvent,
+  DxSwipeEvent,
+  DxTapEvent,
   isXYEvent,
-  DxEvSeq
+  DxEvSeq,
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
 import DxView, { DxActivity, Views } from './dxview.ts';
 import DxDroid, {
   DevInfo,
-  ViewInputOptions, 
+  ViewInputOptions,
   SelectOptions,
-  ViewMap
+  ViewMap,
 } from './dxdroid.ts';
 import segUi, { DxSegment } from './algo/ui_seg.ts';
 import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';
 import regBpPat, { Invisible, SyntEvent } from './algo/pat_syn.ts';
 import * as time from './utils/time.ts';
-import { 
-  IllegalStateError, 
-  NotImplementedError, 
-  CannotReachHereError 
+import {
+  IllegalStateError,
+  NotImplementedError,
+  CannotReachHereError,
 } from './utils/error.ts';
 
 type N<T> = T | null;
@@ -33,7 +33,7 @@ abstract class DxPlayer {
   public readonly timeSensitive = true;
   private seq_: N<DxEvSeq> = null;
   constructor(
-    public readonly app: string,   // app to play
+    public readonly app: string // app to play
   ) {}
 
   get seq(): DxEvSeq {
@@ -62,7 +62,7 @@ abstract class DxPlayer {
     }
   }
 
-  protected abstract async playEvent(e: DxEvent, rDev: DevInfo): Promise<void>
+  protected abstract async playEvent(e: DxEvent, rDev: DevInfo): Promise<void>;
 }
 
 /** PxPlayer plays each event pixel by pixel */
@@ -70,26 +70,29 @@ class PxPlayer extends DxPlayer {
   async playEvent(e: DxEvent): Promise<void> {
     const input = DxDroid.get().input;
     switch (e.ty) {
-    case 'tap':
-      await input.tap((e as DxTapEvent).x, (e as DxTapEvent).y);
-      break;
-    case 'long-tap':
-      await input.longTap((e as DxLongTapEvent).x, (e as DxLongTapEvent).y);
-      break;
-    case 'double-tap':
-      await input.doubleTap((e as DxDoubleTapEvent).x, (e as DxDoubleTapEvent).y);
-      break;
-    case 'swipe':
-      await input.swipe(
-        (e as DxSwipeEvent).x, 
-        (e as DxSwipeEvent).y, 
-        (e as DxSwipeEvent).dx, 
-        (e as DxSwipeEvent).dy
-      );
-      break;
-    case 'key':
-      await input.key((e as DxKeyEvent).k);
-      break;
+      case 'tap':
+        await input.tap((e as DxTapEvent).x, (e as DxTapEvent).y);
+        break;
+      case 'long-tap':
+        await input.longTap((e as DxLongTapEvent).x, (e as DxLongTapEvent).y);
+        break;
+      case 'double-tap':
+        await input.doubleTap(
+          (e as DxDoubleTapEvent).x,
+          (e as DxDoubleTapEvent).y
+        );
+        break;
+      case 'swipe':
+        await input.swipe(
+          (e as DxSwipeEvent).x,
+          (e as DxSwipeEvent).y,
+          (e as DxSwipeEvent).dx,
+          (e as DxSwipeEvent).dy
+        );
+        break;
+      case 'key':
+        await input.key((e as DxKeyEvent).k);
+        break;
     }
   }
 }
@@ -100,27 +103,25 @@ class PtPlayer extends DxPlayer {
     const input = DxDroid.get().input;
     const dev = DxDroid.get().dev;
     if (e.ty == 'tap') {
-      const {x, y} = (e as DxTapEvent);      
+      const { x, y } = e as DxTapEvent;
       await input.tap(
         this.rec2play(x, dev, rDev, false),
         this.rec2play(y, dev, rDev, true)
       );
     } else if (e.ty == 'long-tap') {
-      const {x, y} = (e as DxLongTapEvent);      
+      const { x, y } = e as DxLongTapEvent;
       await input.longTap(
         this.rec2play(x, dev, rDev, false),
         this.rec2play(y, dev, rDev, true)
       );
     } else if (e.ty == 'double-tap') {
-      const {x, y} = (e as DxDoubleTapEvent);      
+      const { x, y } = e as DxDoubleTapEvent;
       await input.doubleTap(
         this.rec2play(x, dev, rDev, false),
         this.rec2play(y, dev, rDev, true)
       );
     } else if (e.ty == 'swipe') {
-      const {
-        x, y, dx, dy
-      } = (e as DxSwipeEvent);
+      const { x, y, dx, dy } = e as DxSwipeEvent;
       await input.swipe(
         this.rec2play(x, dev, rDev, false),
         this.rec2play(y, dev, rDev, true),
@@ -133,15 +134,15 @@ class PtPlayer extends DxPlayer {
   }
 
   private rec2play(
-    x: number, 
-    pDev: DevInfo, 
-    rDev: DevInfo, 
+    x: number,
+    pDev: DevInfo,
+    rDev: DevInfo,
     height = false
   ): number {
     if (height) {
-      return x / rDev.height * pDev.height;
+      return (x / rDev.height) * pDev.height;
     } else {
-      return x / rDev.width * pDev.width;
+      return (x / rDev.width) * pDev.width;
     }
   }
 }
@@ -158,20 +159,20 @@ class WdgPlayer extends DxPlayer {
     const input = DxDroid.get().input;
     const dev = DxDroid.get().dev;
     if (e.ty == 'tap') {
-      const {x, y} = (e as DxTapEvent);
+      const { x, y } = e as DxTapEvent;
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
       await input.view('tap', opt);
     } else if (e.ty == 'long-tap') {
-      const {x, y} = (e as DxLongTapEvent);
+      const { x, y } = e as DxLongTapEvent;
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
       await input.view('longtap', opt);
     } else if (e.ty == 'double-tap') {
-      const {x, y} = (e as DxDoubleTapEvent);
+      const { x, y } = e as DxDoubleTapEvent;
       const [opt] = this.makeViewOptOrThrow(e.a, x, y);
       await input.view('doubletap', opt);
     } else if (e.ty == 'swipe') {
-      const { x, y } = (e as DxSwipeEvent);
-      let  { dx, dy } = (e as DxSwipeEvent);
+      const { x, y } = e as DxSwipeEvent;
+      let { dx, dy } = e as DxSwipeEvent;
       const [opt, v] = this.makeViewOptOrThrow(e.a, x, y);
       // adjust so that does not swipe out of screen
       const hCenter = (v.left + v.right) / 2;
@@ -186,7 +187,8 @@ class WdgPlayer extends DxPlayer {
       } else if (dy > 0 && vCenter + dy > dev.height) {
         dy = dev.height - vCenter;
       }
-      opt.dx = dx; opt.dy = dy;
+      opt.dx = dx;
+      opt.dy = dy;
       await input.view('swipe', opt);
     } else if (e.ty == 'key') {
       await input.key((e as DxKeyEvent).k);
@@ -194,13 +196,15 @@ class WdgPlayer extends DxPlayer {
   }
 
   private makeViewOptOrThrow(
-    a: DxActivity, 
-    x: number, 
+    a: DxActivity,
+    x: number,
     y: number
   ): [ViewInputOptions, DxView] {
     const v = a.findViewByXY(x, y);
     if (v == null) {
-      throw new IllegalStateError(`No visible view found at (${x}, ${y}) on rec tree`);
+      throw new IllegalStateError(
+        `No visible view found at (${x}, ${y}) on rec tree`
+      );
     }
     const opt: ViewInputOptions = {};
     if (v.resId.length != 0) {
@@ -264,7 +268,9 @@ class ResPlayer extends DxPlayer {
         throw new IllegalStateError('Cannot find view on playee tree');
       }
       const pat = new Invisible({
-        v, a: pAct, d: droid.dev,
+        v,
+        a: pAct,
+        d: droid.dev,
       });
       if (!pat.match()) {
         throw new NotImplementedError('Pattern is not invisible');
@@ -281,22 +287,27 @@ class ResPlayer extends DxPlayer {
     const nextK = this.seq!.topN(this.K); // eslint-disable-line
     for (const i in nextK) {
       const ne = nextK[i];
-      if (!isXYEvent(ne)) { continue; }
+      if (!isXYEvent(ne)) {
+        continue;
+      }
       vm = await this.find(ne);
-      if (vm != null) { // find one, directly skip all previously
+      if (vm != null) {
+        // find one, directly skip all previously
         this.seq!.popN(Number(i) + 1); // eslint-disable-line
         DxLog.info(`/* skip ${e.toString()} */`);
         return await this.fireOnViewMap(ne, vm);
       }
     }
 
-    // when lookahead fails, segment the ui, 
+    // when lookahead fails, segment the ui,
     // and find the matched segment, and synthesize
     // the equivalent event sequence
     const rAct = e.a;
     const v = rAct.findViewByXY(e.x, e.y);
     if (v == null) {
-      throw new IllegalStateError(`No visible view found on rec tree at (${e.x}, ${e.y})`);
+      throw new IllegalStateError(
+        `No visible view found on rec tree at (${e.x}, ${e.y})`
+      );
     }
 
     // segment the ui
@@ -312,20 +323,24 @@ class ResPlayer extends DxPlayer {
     const rSeg = this.findSegByView(v, rSegs);
     const pSeg = match.getMatch(rSeg);
     if (!pSeg) {
-      throw new IllegalStateError('Does not found any matched segment, event NO_MATCH');
+      throw new IllegalStateError(
+        'Does not found any matched segment, event NO_MATCH'
+      );
     } else if (pSeg == NO_MATCH) {
       throw new NotImplementedError('Matched segment is NO_MATCH');
     }
 
     // recognize the pattern
     const bpArgs = {
-      v, r: { a: rAct, s: rSeg }, p: { a: pAct, s: pSeg }
+      v,
+      r: { a: rAct, s: rSeg },
+      p: { a: pAct, s: pSeg },
     };
     const pat = regBpPat(bpArgs);
     if (pat == null) {
       throw new NotImplementedError('No pattern is recognized');
     } else {
-      DxLog.info(`pattern ${pat.level()}`)
+      DxLog.info(`pattern ${pat.level()}`);
     }
     // apply the rules to get the synthesized event
     const ne = pat.apply();
@@ -353,10 +368,12 @@ class ResPlayer extends DxPlayer {
     // retrieve the view on recordee
     const v = a.findViewByXY(x, y);
     if (v == null) {
-      throw new IllegalStateError(`No visible view found on recordee tree at (${x}, ${y})`);
+      throw new IllegalStateError(
+        `No visible view found on recordee tree at (${x}, ${y})`
+      );
     }
     const opt: SelectOptions = {
-      n: 1
+      n: 1,
     };
     if (v.text.length != 0) {
       opt.textContains = v.text;
@@ -374,20 +391,22 @@ class ResPlayer extends DxPlayer {
   }
 
   private async fireOnViewMap(e: DxEvent, v: ViewMap) {
-    const { bounds: { left, right, top, bottom } } = v;
+    const {
+      bounds: { left, right, top, bottom },
+    } = v;
     const x = (left + right) / 2;
     const y = (top + bottom) / 2;
     switch (e.ty) {
-    case 'tap':
-      return await DxDroid.get().input.tap(x, y);
-    case 'double-tap':
-      return await DxDroid.get().input.doubleTap(x, y);
-    case 'long-tap':
-      return await DxDroid.get().input.longTap(x, y);
-    case 'swipe':
-      throw new NotImplementedError();
-    default:
-      throw new CannotReachHereError();
+      case 'tap':
+        return await DxDroid.get().input.tap(x, y);
+      case 'double-tap':
+        return await DxDroid.get().input.doubleTap(x, y);
+      case 'long-tap':
+        return await DxDroid.get().input.longTap(x, y);
+      case 'swipe':
+        throw new NotImplementedError();
+      default:
+        throw new CannotReachHereError();
     }
   }
 
@@ -400,25 +419,19 @@ class ResPlayer extends DxPlayer {
   }
 }
 
-export type DxPlayerType = 
-  | 'px' 
-  | 'pt' 
-  | 'wdg'
-  | 'res'; 
+export type DxPlayerType = 'px' | 'pt' | 'wdg' | 'res';
 
 export type DxPlayOptions = {
-  serial?: string;       // phone serial no
-  pty:     DxPlayerType; // player type
-  dxpk:    string;       // path to dxpk
-  K?:      number;       // look ahead, if use res
-  decode:  boolean;      // decode or not
-  verbose?: boolean;     // verbose mode
+  serial?: string; // phone serial no
+  pty: DxPlayerType; // player type
+  dxpk: string; // path to dxpk
+  K?: number; // look ahead, if use res
+  decode: boolean; // decode or not
+  verbose?: boolean; // verbose mode
 };
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
-  const {
-    serial, pty, dxpk, verbose = false
-  } = opt;
+  const { serial, pty, dxpk, verbose = false } = opt;
 
   if (verbose) {
     DxLog.setLevel('DEBUG');
@@ -426,38 +439,42 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
 
   // connect to droid
   await DxDroid.connect(serial);
-  
+
   const pkr = await DxPacker.load(dxpk);
   const dev = DxDroid.get().dev;
-  const seq = new DxEvSeq(pkr.eventSeq.map(e => pkr.unpack(e)));
+  const seq = new DxEvSeq(pkr.eventSeq.map((e) => pkr.unpack(e)));
 
   let player: DxPlayer;
   switch (pty) {
-  case 'px':
-    if (
-      dev.width != pkr.dev.width || 
-      dev.height != pkr.dev.height || 
-      dev.dpi != pkr.dev.dpi
-    ) {
-      DxLog.warning('Screen setting is different, you\'d better use a more advanced player');
-    }
-    player = new PxPlayer(pkr.app);
-    break;
-  case 'pt':
-    player = new PtPlayer(pkr.app);
-    break;
-  case 'wdg':
-    player = new WdgPlayer(pkr.app);
-    break;
-  case 'res':
-    if (!opt.K) {
-      DxLog.critical('Lookahead K is not specified, use -K or --lookahead to specify it');
-      Deno.exit(1);
-    }
-    player = new ResPlayer(pkr.app, opt.decode, opt.K);
-    break;
-  default:
-    throw new CannotReachHereError();
+    case 'px':
+      if (
+        dev.width != pkr.dev.width ||
+        dev.height != pkr.dev.height ||
+        dev.dpi != pkr.dev.dpi
+      ) {
+        DxLog.warning(
+          "Screen setting is different, you'd better use a more advanced player"
+        );
+      }
+      player = new PxPlayer(pkr.app);
+      break;
+    case 'pt':
+      player = new PtPlayer(pkr.app);
+      break;
+    case 'wdg':
+      player = new WdgPlayer(pkr.app);
+      break;
+    case 'res':
+      if (!opt.K) {
+        DxLog.critical(
+          'Lookahead K is not specified, use -K or --lookahead to specify it'
+        );
+        Deno.exit(1);
+      }
+      player = new ResPlayer(pkr.app, opt.decode, opt.K);
+      break;
+    default:
+      throw new CannotReachHereError();
   }
 
   await player.play(seq, pkr.dev);

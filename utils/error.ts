@@ -23,3 +23,9 @@ export class IllegalStateError extends Error {
     super(`IllegalStateError: ${msg}`);
   }
 }
+
+export class TypeCastError extends Error {
+  constructor(from: string, to: string) {
+    super(`TypeCastError: cannot cast type ${from} to type ${to}`);
+  }
+}

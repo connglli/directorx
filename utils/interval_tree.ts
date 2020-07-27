@@ -37,7 +37,7 @@ class IntervalWrapper<T> {
   }
 }
 
-/** A Node is a tree node, which includes a left 
+/** A Node is a tree node, which includes a left
  * child, a right child, and its corresponding
  * left and right intervals
  */
@@ -46,14 +46,14 @@ class IntervalTreeNode<T> {
   public left: N<IntervalTreeNode<T>> = null;
   public right: N<IntervalTreeNode<T>> = null;
   public readonly inv: {
-    left: IntervalWrapper<T>; 
-    right: IntervalWrapper<T>
+    left: IntervalWrapper<T>;
+    right: IntervalWrapper<T>;
   };
 
   constructor(center: number, low: number, high: number) {
     this.inv = {
-      left: new IntervalWrapper<T>(low, center), 
-      right: new IntervalWrapper<T>(center, high)
+      left: new IntervalWrapper<T>(low, center),
+      right: new IntervalWrapper<T>(center, high),
     };
     this.inv.left.next = this.inv.right;
     this.inv.right.prev = this.inv.left;
@@ -108,7 +108,11 @@ export default class IntervalTree<T> {
       }
     } else {
       const rmi = this.findInterval(this.root, inv.high);
-      for (let i: N<IntervalWrapper<T>> = lmi; i && i.next != rmi.next; i = i.next) {
+      for (
+        let i: N<IntervalWrapper<T>> = lmi;
+        i && i.next != rmi.next;
+        i = i.next
+      ) {
         for (const data of i.data) {
           set.add(data);
         }
@@ -124,12 +128,16 @@ export default class IntervalTree<T> {
   elements(): ElementIntervalData<T>[] {
     // the element intervals right from the left most node's left interval
     const result: ElementIntervalData<T>[] = [];
-    for (let inv: N<IntervalWrapper<T>> = this.head.next; inv && inv.next; inv = inv.next) {
+    for (
+      let inv: N<IntervalWrapper<T>> = this.head.next;
+      inv && inv.next;
+      inv = inv.next
+    ) {
       result.push([inv.inv, inv.data]);
     }
     return result;
   }
-  
+
   /** Insert an interval with data to the tree */
   insert(inv: Interval, data: T): void {
     if (this.dict.has(data)) {
@@ -138,16 +146,24 @@ export default class IntervalTree<T> {
     // insert interval firstly
     const [lmn, rmn] = this.insertInterval(inv);
     // then add data to all overlapped intervals
-    for (let i: N<IntervalWrapper<T>> = lmn.inv.right; i && i != rmn.inv.right; i = i.next) {
+    for (
+      let i: N<IntervalWrapper<T>> = lmn.inv.right;
+      i && i != rmn.inv.right;
+      i = i.next
+    ) {
       i.data.push(data);
     }
     // add data to reverse dict finally
     this.dict.set(data, inv);
   }
 
-  private insertInterval(inv: Interval): [IntervalTreeNode<T>, IntervalTreeNode<T>] {
+  private insertInterval(
+    inv: Interval
+  ): [IntervalTreeNode<T>, IntervalTreeNode<T>] {
     if (Interval.cover(this.inv, inv) < 0) {
-      throw new IntervalTreeError('Interval to insert out of the tree interval');
+      throw new IntervalTreeError(
+        'Interval to insert out of the tree interval'
+      );
     }
     // insert l as a center
     const leftMostNode = this.insertNode(this.root, inv.low);
@@ -156,7 +172,10 @@ export default class IntervalTree<T> {
     return [leftMostNode, rightMostNode];
   }
 
-  private insertNode(node: IntervalTreeNode<T>, center: number): IntervalTreeNode<T> {
+  private insertNode(
+    node: IntervalTreeNode<T>,
+    center: number
+  ): IntervalTreeNode<T> {
     if (center == node.center) {
       return node;
     } else if (center < node.center) {
@@ -178,7 +197,10 @@ export default class IntervalTree<T> {
     }
   }
 
-  private findInterval(node: IntervalTreeNode<T>, x: number): IntervalWrapper<T> {
+  private findInterval(
+    node: IntervalTreeNode<T>,
+    x: number
+  ): IntervalWrapper<T> {
     if (x == node.center) {
       return node.inv.right;
     } else if (x < node.center) {
@@ -196,7 +218,10 @@ export default class IntervalTree<T> {
     }
   }
 
-  private findNode(node: IntervalTreeNode<T>, center: number): N<IntervalTreeNode<T>> {
+  private findNode(
+    node: IntervalTreeNode<T>,
+    center: number
+  ): N<IntervalTreeNode<T>> {
     if (center == node.center) {
       return node;
     } else if (center < node.center) {
@@ -217,8 +242,8 @@ export default class IntervalTree<T> {
   private setLeftChild(node: IntervalTreeNode<T>, left: IntervalTreeNode<T>) {
     node.left = left;
     left.parent = node;
-    // new left child's intervals inherits all 
-    // data from old left interval, thus push 
+    // new left child's intervals inherits all
+    // data from old left interval, thus push
     // them to new left node's intervals
     for (const d of node.inv.left.data) {
       left.inv.left.data.push(d);
@@ -232,7 +257,7 @@ export default class IntervalTree<T> {
     }
     left.inv.right.next = node.inv.right;
     node.inv.right.prev = left.inv.right;
-    // reset current left interval to the new 
+    // reset current left interval to the new
     // left child's right interval
     node.inv.left = left.inv.right;
     // reset left neighbor's right interval
@@ -245,8 +270,8 @@ export default class IntervalTree<T> {
   private setRightChild(node: IntervalTreeNode<T>, right: IntervalTreeNode<T>) {
     node.right = right;
     right.parent = node;
-    // new right child's intervals inherits all 
-    // data from old right interval, thus push 
+    // new right child's intervals inherits all
+    // data from old right interval, thus push
     // them to new right node's intervals
     for (const d of node.inv.right.data) {
       right.inv.left.data.push(d);
@@ -260,7 +285,7 @@ export default class IntervalTree<T> {
     }
     right.inv.left.prev = node.inv.left;
     node.inv.left.next = right.inv.left;
-    // reset current right interval to the new 
+    // reset current right interval to the new
     // right child's left interval
     node.inv.right = right.inv.left;
     // reset left neighbor's right interval
@@ -296,7 +321,7 @@ export class XYIntervalTree<T> {
       const [xinv, d] = x[xi];
       const yi = yd.indexOf(d);
       if (yi != -1) {
-        const [yinv,] = y[yi];
+        const [yinv] = y[yi];
         res.push([XYInterval.of(xinv.low, xinv.high, yinv.low, yinv.high), d]);
       }
     }

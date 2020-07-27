@@ -1,5 +1,9 @@
 import { signal } from './deps.ts';
-import DxAdb, { DevInfo, ProcessError, ActivityDumpSysBuilder } from './dxadb.ts';
+import DxAdb, {
+  DevInfo,
+  ProcessError,
+  ActivityDumpSysBuilder,
+} from './dxadb.ts';
 import DxPacker from './dxpack.ts';
 import DxEvent, {
   DxTapEvent,
@@ -16,7 +20,7 @@ import { IllegalStateError } from './utils/error.ts';
 
 class DxRecParser {
   private static readonly PAT_DROID = /--------- beginning of (?<type>\w+)/;
-  // FIX: some apps/devices often output non-standard attributes 
+  // FIX: some apps/devices often output non-standard attributes
   // for example aid=1073741824 following resource-id
   private static readonly PAT_AV_DECOR = /DecorView@[a-fA-F0-9]+\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
   private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
@@ -48,51 +52,59 @@ class DxRecParser {
 
     // dxrec output
     switch (this.state) {
-    case DxRecParser.STATE_NEV: {
-      if (this.curr.act == null || this.curr.name.length == 0 || this.curr.entries.length == 0) {
-        throw new IllegalStateError('Expect this.curr.name to be non-empty');
+      case DxRecParser.STATE_NEV: {
+        if (
+          this.curr.act == null ||
+          this.curr.name.length == 0 ||
+          this.curr.entries.length == 0
+        ) {
+          throw new IllegalStateError('Expect this.curr.name to be non-empty');
+        }
+        const e = this.parseEvent(line);
+        this.packer.append(e); // pack it
+        this.state = DxRecParser.STATE_NAV;
+        // reset curr activity info
+        this.curr = { name: '', entries: '', act: null };
+        break;
       }
-      const e = this.parseEvent(line);
-      this.packer.append(e); // pack it
-      this.state = DxRecParser.STATE_NAV;
-      // reset curr activity info
-      this.curr = { name: '', entries: '', act: null };
-      break;
-    }
 
-    case DxRecParser.STATE_NAV: {
-      if (this.curr.act || this.curr.name.length != 0 || this.curr.entries.length != 0) {
-        throw new IllegalStateError('Expect this.curr.a to be null');
+      case DxRecParser.STATE_NAV: {
+        if (
+          this.curr.act ||
+          this.curr.name.length != 0 ||
+          this.curr.entries.length != 0
+        ) {
+          throw new IllegalStateError('Expect this.curr.a to be null');
+        }
+        const name = this.parseAvStart(line);
+        this.state = DxRecParser.STATE_IAV;
+        // update activity name, reset entries and act
+        this.curr = { name, entries: '', act: null };
+        break;
       }
-      const name = this.parseAvStart(line);
-      this.state = DxRecParser.STATE_IAV;
-      // update activity name, reset entries and act
-      this.curr = { name, entries: '', act: null };
-      break;
-    }
 
-    case DxRecParser.STATE_IAV: {
-      if (this.curr.name.length == 0) {
-        throw new IllegalStateError('Expect this.curr.a to be non-null');
+      case DxRecParser.STATE_IAV: {
+        if (this.curr.name.length == 0) {
+          throw new IllegalStateError('Expect this.curr.a to be non-null');
+        }
+        // no longer activity entry
+        const act = this.parseAvEnd(line);
+        if (act != null) {
+          this.state = DxRecParser.STATE_NEV;
+          // update curr activity
+          this.curr.act = act;
+        }
+        // parse encoded activity entries
+        else {
+          const nextEntry = this.parseAvEncoded(line);
+          // update curr activity entries
+          this.curr.entries += nextEntry;
+        }
+        break;
       }
-      // no longer activity entry
-      const act = this.parseAvEnd(line);
-      if (act != null) {
-        this.state = DxRecParser.STATE_NEV;
-        // update curr activity
-        this.curr.act = act;
-      } 
-      // parse encoded activity entries
-      else {
-        const nextEntry = this.parseAvEncoded(line);
-        // update curr activity entries
-        this.curr.entries += nextEntry;
-      }
-      break;
-    }
 
-    default:
-      throw new IllegalStateError(`Unexpected state ${this.state}`);
+      default:
+        throw new IllegalStateError(`Unexpected state ${this.state}`);
     }
   }
 
@@ -116,61 +128,61 @@ class DxRecParser {
     }
 
     switch (type) {
-    case 'TAP':
-      // TAP act t x y
-      return new DxTapEvent(
-        this.curr.act!, // eslint-disable-line
-        Number(args[2]),
-        Number(args[3]),
-        Number(args[1]),
-      );
-      break;
+      case 'TAP':
+        // TAP act t x y
+        return new DxTapEvent(
+          this.curr.act!, // eslint-disable-line
+          Number(args[2]),
+          Number(args[3]),
+          Number(args[1])
+        );
+        break;
 
-    case 'LONG_TAP':
-      // LONG_TAP act t x y
-      return new DxLongTapEvent(
-        this.curr.act!, // eslint-disable-line
-        Number(args[2]),
-        Number(args[3]),
-        Number(args[1])
-      );
-      break;
+      case 'LONG_TAP':
+        // LONG_TAP act t x y
+        return new DxLongTapEvent(
+          this.curr.act!, // eslint-disable-line
+          Number(args[2]),
+          Number(args[3]),
+          Number(args[1])
+        );
+        break;
 
-    case 'DOUBLE_TAP':
-      // LONG_TAP act t x y
-      return new DxDoubleTapEvent(
-        this.curr.act!, // eslint-disable-line
-        Number(args[2]),
-        Number(args[3]),
-        Number(args[1])
-      );
-      break;
+      case 'DOUBLE_TAP':
+        // LONG_TAP act t x y
+        return new DxDoubleTapEvent(
+          this.curr.act!, // eslint-disable-line
+          Number(args[2]),
+          Number(args[3]),
+          Number(args[1])
+        );
+        break;
 
-    case 'SWIPE':
-      // SWIPE act t0 x y dx dy t1
-      return new DxSwipeEvent(
-        this.curr.act!, // eslint-disable-line
-        Number(args[2]),
-        Number(args[3]),
-        Number(args[4]),
-        Number(args[5]),
-        Number(args[1]),
-        Number(args[6])
-      );
-      break;
+      case 'SWIPE':
+        // SWIPE act t0 x y dx dy t1
+        return new DxSwipeEvent(
+          this.curr.act!, // eslint-disable-line
+          Number(args[2]),
+          Number(args[3]),
+          Number(args[4]),
+          Number(args[5]),
+          Number(args[1]),
+          Number(args[6])
+        );
+        break;
 
-    case 'KEY':
-      // KEY act t c k
-      return new DxKeyEvent(
-        this.curr.act!, // eslint-disable-line
-        Number(args[2]),
-        args[3],
-        Number(args[1])
-      );
-      break;
+      case 'KEY':
+        // KEY act t c k
+        return new DxKeyEvent(
+          this.curr.act!, // eslint-disable-line
+          Number(args[2]),
+          args[3],
+          Number(args[1])
+        );
+        break;
 
-    default:
-      throw new IllegalStateError(`Unexpected event type ${type}`);
+      default:
+        throw new IllegalStateError(`Unexpected event type ${type}`);
     }
   }
 
@@ -196,7 +208,9 @@ class DxRecParser {
     // build the view tree
     const currName = this.curr.name;
     if (pkg != this.app || act != currName) {
-      throw new IllegalStateError(`Expect ${this.app}/${currName}, got ${pkg}/${act}`);
+      throw new IllegalStateError(
+        `Expect ${this.app}/${currName}, got ${pkg}/${act}`
+      );
     }
 
     // decode the encoded entries and parse line by line
@@ -226,18 +240,16 @@ class DxRecParser {
 // HERE WE GOES
 
 export type DxRecordOptions = {
-  serial?:  string;  // phone serial no
-  tag:      string;  // logcat tag
-  app:      string;  // app package
-  dxpk:     string;  // output dxpk path
-  decode:   boolean; // flag: decode string or not
+  serial?: string; // phone serial no
+  tag: string; // logcat tag
+  app: string; // app package
+  dxpk: string; // output dxpk path
+  decode: boolean; // flag: decode string or not
   verbose?: boolean; // verbose mode
-}
+};
 
 export default async function dxRec(opt: DxRecordOptions): Promise<void> {
-  const {
-    serial, tag, app, dxpk, decode, verbose = false
-  } = opt;
+  const { serial, tag, app, dxpk, decode, verbose = false } = opt;
 
   if (verbose) {
     DxLog.setLevel('DEBUG');
@@ -271,7 +283,7 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
     // disable formatted output
     formats: ['raw'],
     // log only the main and crash buffer
-    buffers: ['main', 'crash']
+    buffers: ['main', 'crash'],
   });
 
   try {
@@ -288,7 +300,9 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
       // many shell follows the convention that using 128+signal_number
       // as an exit number, use `kill -l exit_code` to see which signal
       // exit_code stands for
-      if (e.code == undefined || e.code == 2 || e.code == 130) { return; }
+      if (e.code == undefined || e.code == 2 || e.code == 130) {
+        return;
+      }
     }
     throw e;
   }

@@ -8,36 +8,36 @@ import { CannotReachHereError } from '../utils/error.ts';
 type N<T> = T | null;
 
 const DEFAULTS = {
-  SP_OPTIMAL_COUNT: 5,      // optimal H and V separator count
+  SP_OPTIMAL_COUNT: 5, // optimal H and V separator count
   THRESHOLD: {
-    V_IN_SCR: 0.04,         // size threshold of a view in screen
-    V_IN_SEG: 0.75          // size threshold of a view in segment
+    V_IN_SCR: 0.04, // size threshold of a view in screen
+    V_IN_SEG: 0.75, // size threshold of a view in segment
   },
   // The recommended separator size, by default, this
   // value is set to 30px, and this is the value set
   // default by Bootstrap, see also Bootstrap "Grid options"
   // https://getbootstrap.com/docs/4.0/layout/grid/#grid-options
   SP_SZ_RECOMMENDED: 30,
-  SP_E_RECOMMENDED: 15,     // recommended number of views for a E sep
+  SP_E_RECOMMENDED: 15, // recommended number of views for a E sep
   SP_E_RECOMMENDED_DIFF: 5, // recommended number of different views for a E sep
-  SP_SCORE_BASE: 100,       // base score for a separator
+  SP_SCORE_BASE: 100, // base score for a separator
   SP_SCORE_AWARD: {
-    SZ_BEST: 120,           // best score for separator size
-    NUM: 50,                // different number of views
-    CLS: 10,                // different view classes
-    VS_PARENT: 80,          // same vertical scrollable parent
-    HS_PARENT: 80,          // same horizontal scrollable parent
-    BG: 500,                // different bg classes and colors
-    BG_CLS: 200,            // different bg classes
-    BG_COLOR: 250,          // different bg colors
-    INFO: 50,               // same informative level
-    TEXT: 200,              // one side is text, the other is not
+    SZ_BEST: 120, // best score for separator size
+    NUM: 50, // different number of views
+    CLS: 10, // different view classes
+    VS_PARENT: 80, // same vertical scrollable parent
+    HS_PARENT: 80, // same horizontal scrollable parent
+    BG: 500, // different bg classes and colors
+    BG_CLS: 200, // different bg classes
+    BG_COLOR: 250, // different bg colors
+    INFO: 50, // same informative level
+    TEXT: 200, // one side is text, the other is not
   },
   get SP_SCORE_THRESHOLD(): number {
     let min1Award = Number.MAX_VALUE;
     let min2Award = Number.MAX_VALUE;
     for (const k in this.SP_SCORE_AWARD) {
-      const v = (this.SP_SCORE_AWARD as {[key: string]: number})[k];
+      const v = (this.SP_SCORE_AWARD as { [key: string]: number })[k];
       // only check award (no punishment)
       if (v < min1Award) {
         min2Award = min1Award;
@@ -47,7 +47,7 @@ const DEFAULTS = {
       }
     }
     return this.SP_SCORE_BASE + min1Award + min2Award;
-  }
+  },
 };
 
 export class UiSegError extends Error {
@@ -66,7 +66,7 @@ export type DxSegment = {
   y: number;
   w: number;
   h: number;
-}
+};
 
 /** Segment separator */
 export interface DxSegSep {}
@@ -81,7 +81,7 @@ export class DxHVESegSep implements DxSegSep {
     /** Separator intervals, DON'T use them when dir is 'E' */
     public readonly xinv: Interval, // [x0, x1]
     public readonly yinv: Interval, // [y0, y1]
-    /** Segments both sides, 
+    /** Segments both sides,
      * V: [left, right], or
      * H: [top, bottom]
      */
@@ -91,34 +91,31 @@ export class DxHVESegSep implements DxSegSep {
 
 /** A shrink sep means there are no
  * separators found for a segment,
- * but there are views segmented, 
+ * but there are views segmented,
  * then create a new shrink segment
  * rooted by roots, and segment them
- * further 
+ * further
  */
 class DxShrinkSegSep implements DxSegSep {
   constructor(
-    public readonly before: DxSegment, 
+    public readonly before: DxSegment,
     public readonly after: DxSegment
   ) {}
 }
 
 export class Segments {
-  static create(
-    roots: DxView[],
-    parent: N<DxSegment>
-  ): DxSegment {
+  static create(roots: DxView[], parent: N<DxSegment>): DxSegment {
     if (roots.length == 0) {
       throw new UiSegError('roots is empty');
     }
     let xy = Views.bounds(roots[0]);
-    for (let i = 1; i < roots.length; i ++) {
+    for (let i = 1; i < roots.length; i++) {
       xy = XYInterval.merge(xy, Views.bounds(roots[i]));
     }
     return {
       parent: parent,
       roots: roots,
-      level: Math.max(...roots.map(v => v.drawingLevel)),
+      level: Math.max(...roots.map((v) => v.drawingLevel)),
       x: xy.x.low,
       y: xy.y.low,
       w: xy.x.high - xy.x.low,
@@ -153,8 +150,10 @@ export class Segments {
   }
 
   static cover(a: DxSegment, b: DxSegment): boolean {
-    return Interval.cover(Segments.xx(a), Segments.xx(b)) >= 0 
-      && Interval.cover(Segments.yy(a), Segments.yy(b)) >= 0;
+    return (
+      Interval.cover(Segments.xx(a), Segments.xx(b)) >= 0 &&
+      Interval.cover(Segments.yy(a), Segments.yy(b)) >= 0
+    );
   }
 
   static isImportantForA11n(s: DxSegment): boolean {
@@ -201,71 +200,74 @@ export class Segments {
 
 /** Context for testing a view */
 type RuleContext = {
-  v: DxView;    // the view to be checked
+  v: DxView; // the view to be checked
   s: DxSegment; // the segment v resides
-  p: DxView[];  // the pool including all views that don't divide
-  d: DevInfo;   // the device information
-}
+  p: DxView[]; // the pool including all views that don't divide
+  d: DevInfo; // the device information
+};
 
 /** Each rule is a predicate indicating whether
- * to divide this view ('y'), not to divide ('n'), 
+ * to divide this view ('y'), not to divide ('n'),
  * skip this view ('s'), or don't know ('-', meaning
  * test next rules)
  */
 type Rule = (c: RuleContext) => 'y' | 'n' | 's' | '-';
 
 /** Array of rules used, with index as their priority
- * (the larger the index, the lower the priority). 
- * All rules are ported from the VIPS algorithm, see also 
+ * (the larger the index, the lower the priority).
+ * All rules are ported from the VIPS algorithm, see also
  * `VIPS: a Vision-based Page Segmentation Algorithm`
  */
-const rules: Rule[] = [ // /* eslint-disable */
+const rules: Rule[] = [
+  // /* eslint-disable */
   /** If the view is navigation/status bar, then skip it */
-  ({ v }) => Views.isNavBar(v) || Views.isStatusBar(v) ? 's' : '-',
+  ({ v }) => (Views.isNavBar(v) || Views.isStatusBar(v) ? 's' : '-'),
   /** If the view is invisible skip it */
-  ({ v, d }) => !Views.isVisibleToUser(v, d) ? 's' : '-',
+  ({ v, d }) => (!Views.isVisibleToUser(v, d) ? 's' : '-'),
   /** If the view is invalid, skip it */
-  ({ v }) => !Views.isValid(v) ? 's' : '-',
-  /** If the view has no children, and is not informative 
+  ({ v }) => (!Views.isValid(v) ? 's' : '-'),
+  /** If the view has no children, and is not informative
    * (provides no useful information), and not important for
    * accessibility, skip this view
    */
-  ({ v }) => (
-    v.children.length == 0 && 
+  ({ v }) =>
+    v.children.length == 0 &&
     Views.informativeLevelOf(v) == 0 &&
     !Views.isViewImportantForA11n(v)
-  ) ? 's' : '-',
+      ? 's'
+      : '-',
   /** If the view is very informative (providing sufficient
    * information), then don't divide this view
    */
-  ({ v }) => Views.informativeLevelOf(v) >= 2 ? 'n' : '-',
+  ({ v }) => (Views.informativeLevelOf(v) >= 2 ? 'n' : '-'),
   /** If the view has no children, and important for
    * accessibility or a text view, then don't divide this view
-    */
-  ({ v }) => (
-    v.children.length == 0 && 
+   */
+  ({ v }) =>
+    v.children.length == 0 &&
     (Views.isViewImportantForA11n(v) || Views.isText(v))
-  ) ? 'n' : '-',
+      ? 'n'
+      : '-',
   /** If the view has no children, skip this view */
-  ({ v }) => v.children.length == 0 ? 's' : '-',
+  ({ v }) => (v.children.length == 0 ? 's' : '-'),
   /** If the view is a not text view, and it has no valid
    * child view, then this view cannot be divided and will
    * be cut
    */
-  ({ v }) => (!Views.isText(v) && !Views.hasValidChild(v)) ? 's' : '-',
-  /** If the view has only one valid child and the child is 
+  ({ v }) => (!Views.isText(v) && !Views.hasValidChild(v) ? 's' : '-'),
+  /** If the view has only one valid child and the child is
    * not a text view, then divide this view
    */
   ({ v }) => {
-    const valid = v.children.filter(c => Views.isValid(c));
+    const valid = v.children.filter((c) => Views.isValid(c));
     if (valid.length == 1 && !Views.isText(valid[0])) {
       return 'y';
     }
     return '-';
   },
-  /** If the view has many similar layout children (the layout 
-   * similarity is determined by bfs the view hierarchy class 
-   * and informative level, but consider only 2 further depth), 
+  /** If the view has many similar layout children (the layout
+   * similarity is determined by bfs the view hierarchy class
+   * and informative level, but consider only 2 further depth),
    * don't divide this view */
   ({ v }) => {
     // it's difficult to determine when too less
@@ -279,33 +281,34 @@ const rules: Rule[] = [ // /* eslint-disable */
     // tolerate 1-2 different layout
     const diff = set.size - 1;
     const same = v.children.length - diff;
-    return (same > diff && diff <= 2) ? 'n' : '-';
+    return same > diff && diff <= 2 ? 'n' : '-';
   },
-  /** If the view is the *only* root of a segment, divide 
+  /** If the view is the *only* root of a segment, divide
    * the view
    */
-  ({v, s}) => s.roots.indexOf(v) != -1 && s.roots.length == 1 ? 'y' : '-',
+  ({ v, s }) => (s.roots.indexOf(v) != -1 && s.roots.length == 1 ? 'y' : '-'),
   /** If the view is less than the size threshold,
    * then don't divide this view
    */
-  ({ v, s, d }) => (
+  ({ v, s, d }) =>
     Views.areaOf(v) < d.width * d.height * DEFAULTS.THRESHOLD.V_IN_SCR
-  ) ? 'n' : '-',
-  /** If sum of all the children's size is greater than 
+      ? 'n'
+      : '-',
+  /** If sum of all the children's size is greater than
    * this view's size, then divide this view
    */
   ({ v }) => {
     const sum = v.children.reduce((s, c) => s + Views.areaOf(c), 0);
-    return (sum > Views.areaOf(v)) ? 'y' : '-';
+    return sum > Views.areaOf(v) ? 'y' : '-';
   },
-  /** If background color of this view is different from 
-   * one of its children's, divide this view, and at the 
-   * same time, the child with different background color 
+  /** If background color of this view is different from
+   * one of its children's, divide this view, and at the
+   * same time, the child with different background color
    * will not be divided in this round
    */
   ({ v }) => {
     // TODO iteration
-    const diff = v.children.filter(c => { 
+    const diff = v.children.filter((c) => {
       // ATTENTION: 'cause ripple is often used in animation,
       // we treat ripple as inherited
       if (v.bgClass == 'ColorDrawable' && c.bgClass == 'RippleDrawable') {
@@ -316,29 +319,28 @@ const rules: Rule[] = [ // /* eslint-disable */
     });
     return diff.length > 0 ? 'y' : '-';
   },
-  /** If the view has at least one text child, and the 
-   * view's size is smaller than the threshold, the don't 
+  /** If the view has at least one text child, and the
+   * view's size is smaller than the threshold, the don't
    * divide this view
    */
-  ({v, s}) => {
+  ({ v, s }) => {
     // TODO relative size
-    return (
-      ((Views.areaOf(v) < Segments.areaOf(s) * DEFAULTS.THRESHOLD.V_IN_SEG) &&
-        (v.children.some((c) => Views.isText(c)))) ? 'n' : '-'
-    );
+    return Views.areaOf(v) < Segments.areaOf(s) * DEFAULTS.THRESHOLD.V_IN_SEG &&
+      v.children.some((c) => Views.isText(c))
+      ? 'n'
+      : '-';
   },
   /** If the child with maximum size of the view is smaller than
    * the threshold, don't divide the view
    */
-  ({v, s}) => {
+  ({ v, s }) => {
     const max = v.children.reduce((max, c) => {
       const area = Views.areaOf(c);
       return area > max ? area : max;
     }, -1);
-    return max < Segments.areaOf(s) * DEFAULTS.THRESHOLD.V_IN_SEG
-      ? 'n' : '-';
+    return max < Segments.areaOf(s) * DEFAULTS.THRESHOLD.V_IN_SEG ? 'n' : '-';
   },
-  /** If previous siblings has not been divided, don't divide 
+  /** If previous siblings has not been divided, don't divide
    * this view */
   ({ v, p }) => {
     const siblings = v.parent?.children ?? [];
@@ -356,7 +358,7 @@ const rules: Rule[] = [ // /* eslint-disable */
     return 'n';
   },
   /** Prefer not to divide a node */
-  _ => 'n' // eslint-disable-line
+  (_) => 'n', // eslint-disable-line
 ];
 
 /** Segment a view (of a segment) according to the predefined rules */
@@ -364,53 +366,56 @@ function segView(v: DxView, seg: DxSegment, pool: DxView[], dev: DevInfo) {
   const ctx = { v, s: seg, p: pool, d: dev };
   for (const r of rules) {
     switch (r(ctx)) {
-    case 'y': // divide, recursively to its children
-      for (const c of v.children) {
-        segView(c, seg, pool, dev);
-      }
-      return;
-    case 'n': // don't divide, put to pool, and return
-      pool.push(v);
-      return;
-    case '-':
-      continue;
-    case 's': // directly skip this view
-      return;
+      case 'y': // divide, recursively to its children
+        for (const c of v.children) {
+          segView(c, seg, pool, dev);
+        }
+        return;
+      case 'n': // don't divide, put to pool, and return
+        pool.push(v);
+        return;
+      case '-':
+        continue;
+      case 's': // directly skip this view
+        return;
     }
   }
-  throw new CannotReachHereError('The last rule should be always divide or don\'t');
+  throw new CannotReachHereError(
+    "The last rule should be always divide or don't"
+  );
 }
 
 // [(x0, x1), (y0, y1)]
-type HVSepInterval = [Interval, Interval]; 
-// [a view pool in same drawing level, 
+type HVSepInterval = [Interval, Interval];
+// [a view pool in same drawing level,
 //  a view pool overlapped with the first pool]
 type ESepInterval = [DxView[], DxView[]];
 
 // Find and calculate the separator (elevated, horizontal, vertical) intervals
 // for a segment along with its pool
 function findSepForSeg(
-  seg: DxSegment, 
+  seg: DxSegment,
   pool: DxView[]
 ): [ESepInterval[], HVSepInterval[], HVSepInterval[]] {
-  const segInv = Segments.bounds(seg)
+  const segInv = Segments.bounds(seg);
   const rest = new XYIntervals(segInv);
-  const tree = new XYIntervalTree<DxView|null>();
+  const tree = new XYIntervalTree<DxView | null>();
   tree.insert(segInv, null);
   for (const v of pool) {
     const bounds = Views.bounds(v);
     tree.insert(bounds, v);
     rest.remove(bounds);
   }
-  // eSep are recognized by overlapped regions, 
+  // eSep are recognized by overlapped regions,
   // they must belong to different drawing levels
   const eSep: ESepInterval[] = [];
   for (const v of pool) {
-    const ove = tree.query(Views.bounds(v))
+    const ove = tree
+      .query(Views.bounds(v))
       .map(([, w]) => w)
-      .filter(w => w != null && w != v) as DxView[];
+      .filter((w) => w != null && w != v) as DxView[];
     if (ove.length != 0) {
-      eSep.push([pool.filter(w => w.drawingLevel == v.drawingLevel), ove]);
+      eSep.push([pool.filter((w) => w.drawingLevel == v.drawingLevel), ove]);
     }
   }
   // vSep are rest x intervals after removing
@@ -436,8 +441,8 @@ function findSepForSeg(
 
 // Find both-side neighbor views of a separator
 function findHVSepNeighbors(
-  inv: [Interval, Interval], 
-  dir: 'V' | 'H', 
+  inv: [Interval, Interval],
+  dir: 'V' | 'H',
   pool: DxView[]
 ): [DxView[], DxView[]] {
   const s1: DxView[] = [];
@@ -464,7 +469,9 @@ function findHVSepNeighbors(
     }
   }
   if (s1.length == 0 || s2.length == 0) {
-    throw new UiSegError(`Does not find neighbor views for separator |x:${inv[0]};y:${inv[1]}|`);
+    throw new UiSegError(
+      `Does not find neighbor views for separator |x:${inv[0]};y:${inv[1]}|`
+    );
   }
   return [s1, s2];
 }
@@ -473,8 +480,8 @@ function findHVSepNeighbors(
 // [left, right] for v separator
 // [top, bottom] for h separator
 function findHVBothSides(
-  inv: [Interval, Interval], 
-  dir: 'V' | 'H', 
+  inv: [Interval, Interval],
+  dir: 'V' | 'H',
   pool: DxView[]
 ): [DxView[], DxView[]] {
   const s1: DxView[] = [];
@@ -501,7 +508,9 @@ function findHVBothSides(
     }
   }
   if (s1.length == 0 || s2.length == 0) {
-    throw new UiSegError(`Does not find views for separator |x:${inv[0]};y:${inv[1]}|`);
+    throw new UiSegError(
+      `Does not find views for separator |x:${inv[0]};y:${inv[1]}|`
+    );
   }
   return [s1, s2];
 }
@@ -513,30 +522,32 @@ function findEBothSides(
   seg: DxSegment,
   pool: DxView[]
 ): [DxView[], DxView[]] {
-  // sep[0] are always in the same level, put all 
+  // sep[0] are always in the same level, put all
   // views not in sep[0] to the other side
-  return [sep[0], pool.filter(v => sep[0].indexOf(v) == -1)];
+  return [sep[0], pool.filter((v) => sep[0].indexOf(v) == -1)];
 }
 
 // Score a hv separator
 function scoreHVSep(
-  sep: HVSepInterval, 
+  sep: HVSepInterval,
   dir: 'V' | 'H',
   seg: DxSegment,
-  s1: DxView[], 
+  s1: DxView[],
   s2: DxView[]
 ): number {
-  const {
-    SP_SCORE_BASE,
-    SP_SZ_RECOMMENDED,
-    SP_SCORE_AWARD: AWARD,
-  } = DEFAULTS;
+  const { SP_SCORE_BASE, SP_SZ_RECOMMENDED, SP_SCORE_AWARD: AWARD } = DEFAULTS;
   let score = SP_SCORE_BASE;
   // a better separator is wider
   if (dir == 'V') {
-    score += Math.min((sep[0].high - sep[0].low + 1) / SP_SZ_RECOMMENDED * 100, AWARD.SZ_BEST);
+    score += Math.min(
+      ((sep[0].high - sep[0].low + 1) / SP_SZ_RECOMMENDED) * 100,
+      AWARD.SZ_BEST
+    );
   } else {
-    score += Math.min((sep[1].high - sep[1].low + 1) / SP_SZ_RECOMMENDED * 100, AWARD.SZ_BEST);
+    score += Math.min(
+      ((sep[1].high - sep[1].low + 1) / SP_SZ_RECOMMENDED) * 100,
+      AWARD.SZ_BEST
+    );
   }
   // a better sep can separate more views
   if (s1.length != s2.length) {
@@ -552,11 +563,17 @@ function scoreHVSep(
       // different scrollable parent is better
       {
         let scrollParent = ViewFinder.findVScrollableParent(a);
-        if (scrollParent != null && scrollParent != ViewFinder.findVScrollableParent(b)) {
+        if (
+          scrollParent != null &&
+          scrollParent != ViewFinder.findVScrollableParent(b)
+        ) {
           score += AWARD.VS_PARENT;
         }
         scrollParent = ViewFinder.findHScrollableParent(a);
-        if (scrollParent != null && scrollParent != ViewFinder.findHScrollableParent(b)) {
+        if (
+          scrollParent != null &&
+          scrollParent != ViewFinder.findHScrollableParent(b)
+        ) {
           score += AWARD.HS_PARENT;
         }
       }
@@ -586,12 +603,18 @@ function scoreHVSep(
 
 // Score a e separator
 function scoreESep(
-  sep: ESepInterval, 
+  sep: ESepInterval,
   seg: DxSegment // eslint-disable-line
-): number { 
+): number {
   let score = DEFAULTS.SP_SCORE_BASE;
-  score += Math.min((sep[0].length + sep[1].length) / DEFAULTS.SP_E_RECOMMENDED, 1) * 100;
-  score += Math.min(Math.abs(sep[0].length - sep[1].length) / DEFAULTS.SP_E_RECOMMENDED_DIFF, 1) * 100;
+  score +=
+    Math.min((sep[0].length + sep[1].length) / DEFAULTS.SP_E_RECOMMENDED, 1) *
+    100;
+  score +=
+    Math.min(
+      Math.abs(sep[0].length - sep[1].length) / DEFAULTS.SP_E_RECOMMENDED_DIFF,
+      1
+    ) * 100;
   return score;
 }
 
@@ -611,9 +634,9 @@ function segSeg(seg: DxSegment, dev: DevInfo): N<DxShrinkSegSep | DxHVESegSep> {
     // there are views that are not in root,
     // this means there are views that are segmented,
     // then return a specific shrink separator
-    if (pool.some(v => seg.roots.indexOf(v) == -1)) {
+    if (pool.some((v) => seg.roots.indexOf(v) == -1)) {
       return new DxShrinkSegSep(seg, Segments.create(pool, seg));
-    } 
+    }
     // all views in pool are in roots, meaning this
     // segment is minimum and can no longer segmented
     else {
@@ -633,16 +656,10 @@ function segSeg(seg: DxSegment, dev: DevInfo): N<DxShrinkSegSep | DxHVESegSep> {
       }
     }
     const [s1, s2] = findEBothSides(bestSep!, seg, pool); // eslint-disable-line
-    return new DxHVESegSep(
-      best,
-      'E',
-      Interval.INF,
-      Interval.INF,
-      [
-        Segments.create(s1, seg),
-        Segments.create(s2, seg)
-      ],
-    );
+    return new DxHVESegSep(best, 'E', Interval.INF, Interval.INF, [
+      Segments.create(s1, seg),
+      Segments.create(s2, seg),
+    ]);
   }
 
   // calculate scores for each hsep and rsep
@@ -651,7 +668,12 @@ function segSeg(seg: DxSegment, dev: DevInfo): N<DxShrinkSegSep | DxHVESegSep> {
   let bestSepDir: 'H' | 'V' = 'H';
 
   for (const sep of vSep) {
-    const score = scoreHVSep(sep, 'V', seg, ...findHVSepNeighbors(sep, 'V', pool));
+    const score = scoreHVSep(
+      sep,
+      'V',
+      seg,
+      ...findHVSepNeighbors(sep, 'V', pool)
+    );
     // for same score, we always select the first one
     if (score > best) {
       best = score;
@@ -660,7 +682,12 @@ function segSeg(seg: DxSegment, dev: DevInfo): N<DxShrinkSegSep | DxHVESegSep> {
     }
   }
   for (const sep of hSep) {
-    const score = scoreHVSep(sep, 'H', seg,...findHVSepNeighbors(sep, 'H', pool));
+    const score = scoreHVSep(
+      sep,
+      'H',
+      seg,
+      ...findHVSepNeighbors(sep, 'H', pool)
+    );
     // for same score, we always select the first one
     if (score > best) {
       best = score;
@@ -676,19 +703,19 @@ function segSeg(seg: DxSegment, dev: DevInfo): N<DxShrinkSegSep | DxHVESegSep> {
     best,
     bestSepDir,
     bestSep![0],
-    bestSep![1], 
-    [
-      Segments.create(s1, seg), 
-      Segments.create(s2, seg)
-    ]
+    bestSep![1],
+    [Segments.create(s1, seg), Segments.create(s2, seg)]
   );
 }
 
 /** Segment the Ui and return the segments and separators */
-export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegSep[]] {
+export default function segUi(
+  a: DxActivity,
+  dev: DevInfo
+): [DxSegment[], DxSegSep[]] {
   // firstly, we segment the ui but reserve the low-level
-  // overlapped segments, 'cause it is often difficult and 
-  // time-consuming to fully delete them safely 
+  // overlapped segments, 'cause it is often difficult and
+  // time-consuming to fully delete them safely
   const decor = a.decorView!; // eslint-disable-line
   let segments: DxSegment[] = [];
   const separators: DxSegSep[] = [];
@@ -700,20 +727,23 @@ export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegS
     const sep = segSeg(seg, dev);
     // for shrink separator, create new segment and segment further,
     // for elevated separator, directly recognize it as a valid separator,
-    // for horizontal/vertical separators, recognize them if and only if 
+    // for horizontal/vertical separators, recognize them if and only if
     // their scores are larger than the predefined threshold, or stop
     // segment this segment further
-    if (sep instanceof DxShrinkSegSep) { // shrink and push to queue head
+    if (sep instanceof DxShrinkSegSep) {
+      // shrink and push to queue head
       queue.unshift(sep.after);
       separators.push(sep);
       DxLog.debug(`++ accept S xxyy=${Segments.xxyy(seg)} level=${seg.level}`);
     } else if (
-      (sep == null) || // cannot segment further
+      sep == null || // cannot segment further
       (sep.dir != 'E' && sep.score < DEFAULTS.SP_SCORE_THRESHOLD) || // 'H' or 'V', but score is too low
       (sep.dir != 'E' && hvSepCount >= DEFAULTS.SP_OPTIMAL_COUNT) // 'H' or 'V', but count is already optimal
-    ) { 
+    ) {
       if (sep != null) {
-        DxLog.debug(`-- decline ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`);
+        DxLog.debug(
+          `-- decline ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`
+        );
       }
       segments.push(seg);
     } else {
@@ -722,16 +752,18 @@ export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegS
       if (sep.dir != 'E') {
         hvSepCount += 1;
       }
-      DxLog.debug(`++ accept ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`);
+      DxLog.debug(
+        `++ accept ${sep.dir} ${sep.score} xxyy=[${sep.xinv.low};${sep.xinv.high};${sep.yinv.low};${sep.yinv.high}]`
+      );
     }
   }
   // secondly, we delete the low-level and overlapped
-  // segments by their important for accessibility, 
+  // segments by their important for accessibility,
   // 'cause low-level and overlapped segments are often
   // not important for accessibility (a better method
   // deletes the low-level overlapped segments by the
   // drawing level, however, the drawing level algorithm
-  // of Android Studio Dynamic Layout Inspector is 
+  // of Android Studio Dynamic Layout Inspector is
   // different from that of the drawing mechanism of
   // android itself, 'cause the actually drawing is
   // sometimes defined and controlled by the developers)
@@ -740,17 +772,18 @@ export default function segUi(a: DxActivity, dev: DevInfo): [DxSegment[], DxSegS
     // secondly, we delete the low-level and overlapped
     // segments by their drawing levels
     const tree = new XYIntervalTree<DxSegment>();
-    segments.forEach(s => tree.insert(Segments.bounds(s), s));
-    segments = segments.filter(s => {
-      const ove = tree.query(Segments.bounds(s))
+    segments.forEach((s) => tree.insert(Segments.bounds(s), s));
+    segments = segments.filter((s) => {
+      const ove = tree
+        .query(Segments.bounds(s))
         .map(([, o]) => o)
-        .filter(o => o != s);
+        .filter((o) => o != s);
       // no overlapping
       if (ove.length != 0) {
         return true;
       }
-      const min = Math.min(...[s.level, ...ove.map(o => o.level)]);
-      const max = Math.max(...[s.level, ...ove.map(o => o.level)]);
+      const min = Math.min(...[s.level, ...ove.map((o) => o.level)]);
+      const max = Math.max(...[s.level, ...ove.map((o) => o.level)]);
       // v is not the low-level or is the max level
       if (min != s.level || max == s.level) {
         return true;

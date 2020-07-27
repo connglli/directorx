@@ -1,6 +1,6 @@
 export default class KnaryTree<T> {
   // children count
-  private _nc = 0; 
+  private _nc = 0;
   // sibling count
   private _ns = 0;
   // parent

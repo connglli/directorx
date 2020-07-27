@@ -1,12 +1,7 @@
 import { DxActivity } from './dxview.ts';
 import Stack from './utils/stack.ts';
 
-export type DxEventType = 
-  | 'tap'
-  | 'long-tap'
-  | 'double-tap'
-  | 'swipe'
-  | 'key';
+export type DxEventType = 'tap' | 'long-tap' | 'double-tap' | 'swipe' | 'key';
 
 export default DxEvent;
 interface DxEvent {
@@ -34,9 +29,7 @@ export class DxTapEvent implements DxXYEvent {
     public readonly t: number
   ) {}
   copy(a: DxActivity = this.a): DxEvent {
-    return new DxTapEvent(
-      a, this.x, this.y, this.t
-    );
+    return new DxTapEvent(a, this.x, this.y, this.t);
   }
   toString(): string {
     return `tap (${this.x}, ${this.y})`;
@@ -49,12 +42,10 @@ export class DxLongTapEvent implements DxXYEvent {
     public readonly a: DxActivity,
     public readonly x: number,
     public readonly y: number,
-    public readonly t: number,
+    public readonly t: number
   ) {}
   copy(a: DxActivity = this.a): DxEvent {
-    return new DxLongTapEvent(
-      a, this.x, this.y, this.t
-    );
+    return new DxLongTapEvent(a, this.x, this.y, this.t);
   }
   toString(): string {
     return `long-tap (${this.x}, ${this.y})`;
@@ -67,12 +58,10 @@ export class DxDoubleTapEvent implements DxXYEvent {
     public readonly a: DxActivity,
     public readonly x: number,
     public readonly y: number,
-    public readonly t: number,
+    public readonly t: number
   ) {}
   copy(a: DxActivity = this.a): DxEvent {
-    return new DxDoubleTapEvent(
-      a, this.x, this.y, this.t
-    );
+    return new DxDoubleTapEvent(a, this.x, this.y, this.t);
   }
   toString(): string {
     return `double-tap (${this.x}, ${this.y})`;
@@ -89,16 +78,19 @@ export class DxSwipeEvent implements DxXYEvent {
     public readonly dx: number,
     public readonly dy: number,
     public readonly t0: number,
-    public readonly t1: number,
+    public readonly t1: number
   ) {
     this.t = t0;
   }
   copy(a: DxActivity = this.a): DxEvent {
     return new DxSwipeEvent(
-      a, 
-      this.x, this.y, 
-      this.dx, this.dy,
-      this.t0, this.t1
+      a,
+      this.x,
+      this.y,
+      this.dx,
+      this.dy,
+      this.t0,
+      this.t1
     );
   }
   toString(): string {
@@ -112,12 +104,10 @@ export class DxKeyEvent implements DxEvent {
     public readonly a: DxActivity,
     public readonly c: number,
     public readonly k: string,
-    public readonly t: number,
+    public readonly t: number
   ) {}
   copy(a: DxActivity = this.a): DxEvent {
-    return new DxKeyEvent(
-      a, this.c, this.k, this.t 
-    );
+    return new DxKeyEvent(a, this.c, this.k, this.t);
   }
   toString(): string {
     return `key ${this.k}`;

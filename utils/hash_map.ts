@@ -15,7 +15,7 @@ export class NoSuchKeyError<K> extends Error {
 export type Entry<K, V> = {
   k: K;
   v: V;
-}
+};
 
 export default class HashMap<K, V> {
   private fn: HashFunc;
@@ -75,13 +75,13 @@ export default class HashMap<K, V> {
       this.data[h] = [];
     }
     const es = this.data[h];
-    for (let i = 0; i < es.length; i ++) {
+    for (let i = 0; i < es.length; i++) {
       if (this.eq(es[i].k, k)) {
         es[i].v = v;
         return;
       }
     }
-    this.data[h].push({k, v});
+    this.data[h].push({ k, v });
     this.sz += 1;
   }
 
@@ -91,7 +91,7 @@ export default class HashMap<K, V> {
       throw new NoSuchKeyError(k);
     }
     const es = this.data[h];
-    for (let i = 0; i < es.length; i ++) {
+    for (let i = 0; i < es.length; i++) {
       if (this.eq(es[i].k, k)) {
         es.splice(i, 1);
         this.sz -= 1;
@@ -126,7 +126,7 @@ if (import.meta.main) {
   ];
   const eqkvs: [NoSuchKeyError<number>, number][] = [
     [kvs[0][0], -123],
-    [kvs[3][0], 921]
+    [kvs[3][0], 921],
   ];
   const delkvs = kvs.filter((kv, i) => i <= 2);
   const reskvs = kvs.filter((kv, i) => i > 2);

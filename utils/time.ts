@@ -12,7 +12,7 @@ export async function sleep(ms: number): Promise<void> {
 
 export function timeOf<R>(
   /* eslint-disable */
-  fn: (...args: any[]) => R, 
+  fn: (...args: any[]) => R,
   ...args: any[]
 ): [number, R] {
   const st = now();

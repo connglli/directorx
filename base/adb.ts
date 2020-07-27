@@ -3,20 +3,17 @@ import { readLines } from './deps.ts';
 export type AdbGlobalOptions = {
   /** Serial number */
   serial?: string;
-}
+};
 
 export type AdbResult = {
   /** Status code */
   code: number;
   /** Stdout if code == 0 else Stderr */
   out: string;
-}
+};
 
 export class ProcessError extends Error {
-  constructor(
-    public readonly code: number,
-    public readonly err: string
-  ) {
+  constructor(public readonly code: number, public readonly err: string) {
     super(`ProcessException[code=${code}]: ${err}`);
   }
 }
@@ -41,7 +38,7 @@ function makeAdbCmd(subCmd: string, opt: AdbGlobalOptions = {}): string[] {
 
 async function exec(
   subCmd: string,
-  gOpt?: AdbGlobalOptions,
+  gOpt?: AdbGlobalOptions
 ): Promise<AdbResult> {
   const proc = Deno.run({
     cmd: makeAdbCmd(subCmd, gOpt),
@@ -49,7 +46,7 @@ async function exec(
     stderr: 'piped',
   });
   // Fix: see also https://github.com/denoland/deno/issues/2505
-  // the subprocess maintains a buffer up to 64K, and once the 
+  // the subprocess maintains a buffer up to 64K, and once the
   // buffer is full, the subprocess is blocked until someone
   // reads some; so for non-blocking, read all output firstly
   // even though it is so space-consuming (considering most
@@ -70,7 +67,7 @@ async function exec(
 
 async function* poll(
   subCmd: string,
-  gOpt?: AdbGlobalOptions,
+  gOpt?: AdbGlobalOptions
 ): AsyncIterableIterator<string> {
   const proc = Deno.run({
     cmd: makeAdbCmd(subCmd, gOpt),
@@ -95,18 +92,18 @@ async function* poll(
 /** Execute shell commands by returning its code and outputs */
 export async function shell(
   cmd: string,
-  gOpt?: AdbGlobalOptions,
+  gOpt?: AdbGlobalOptions
 ): Promise<AdbResult> {
   return exec(`shell ${cmd}`, gOpt);
 }
 
-/** Execute shell commands by 
- * (1) exec-out and 
+/** Execute shell commands by
+ * (1) exec-out and
  * (2) returning its outputs (exec-out always return 0)
  */
 export async function execOut(
   cmd: string,
-  gOpt?: AdbGlobalOptions,
+  gOpt?: AdbGlobalOptions
 ): Promise<string> {
   return (await exec(`exec-out ${cmd}`, gOpt)).out;
 }
@@ -120,7 +117,7 @@ export type LogcatFormat =
   | 'tag'
   | 'thread'
   | 'threadtime'
-  | 'time'  
+  | 'time'
   | 'color'
   | 'descriptive'
   | 'epoch'
@@ -132,16 +129,9 @@ export type LogcatFormat =
   | 'year'
   | 'zone';
 
-export type LogcatPrio = 
-  | 'V'
-  | 'D'
-  | 'I'
-  | 'W'
-  | 'E'
-  | 'F'
-  | 'S';
+export type LogcatPrio = 'V' | 'D' | 'I' | 'W' | 'E' | 'F' | 'S';
 
-export type LogcatBuffer = 
+export type LogcatBuffer =
   | 'main'
   | 'system'
   | 'radio'
@@ -153,7 +143,7 @@ export type LogcatBuffer =
 export type LogcatBufferSize = {
   size: number;
   unit: 'K' | 'M';
-}
+};
 
 export type LogcatOptions = {
   prio?: LogcatPrio;
@@ -167,12 +157,9 @@ export type LogcatOptions = {
   buffers?: LogcatBuffer[];
   /** Size of log ring buffer */
   bufSize?: LogcatBufferSize;
-}
+};
 
-function makeLogcatCmd(
-  tag = '*',
-  opt: LogcatOptions = {},
-): string {
+function makeLogcatCmd(tag = '*', opt: LogcatOptions = {}): string {
   const {
     prio = 'V',
     silent = false,
@@ -209,7 +196,7 @@ function makeLogcatCmd(
 export async function logcat(
   tag?: string,
   opt?: LogcatOptions,
-  gOpt?: AdbGlobalOptions,
+  gOpt?: AdbGlobalOptions
 ): Promise<AdbResult> {
   return exec(makeLogcatCmd(tag, opt), gOpt);
 }
@@ -218,14 +205,14 @@ export async function logcat(
 export const pl = {
   async *shell(
     cmd: string,
-    gOpt?: AdbGlobalOptions,
+    gOpt?: AdbGlobalOptions
   ): AsyncIterableIterator<string> {
     yield* poll(`shell ${cmd}`, gOpt);
   },
 
   async *execOut(
     cmd: string,
-    gOpt?: AdbGlobalOptions,
+    gOpt?: AdbGlobalOptions
   ): AsyncIterableIterator<string> {
     yield* poll(`exec-out ${cmd}`, gOpt);
   },
@@ -236,7 +223,7 @@ export const pl = {
     gOpt?: AdbGlobalOptions
   ): AsyncIterableIterator<string> {
     yield* poll(makeLogcatCmd(tag, opt), gOpt);
-  }
+  },
 };
 
 export type AdbBindShape = {
@@ -246,10 +233,7 @@ export type AdbBindShape = {
   pl: {
     shell(cmd: string): AsyncIterableIterator<string>;
     execOut(cmd: string): AsyncIterableIterator<string>;
-    logcat(
-      tag?: string,
-      opt?: LogcatOptions,
-    ): AsyncIterableIterator<string>;
+    logcat(tag?: string, opt?: LogcatOptions): AsyncIterableIterator<string>;
   };
 };
 
@@ -263,10 +247,7 @@ export function bindAdb(gOpt: AdbGlobalOptions): AdbBindShape {
       return await execOut(cmd, gOpt);
     },
 
-    async logcat(
-      tag?: string,
-      opt?: LogcatOptions,
-    ): Promise<AdbResult> {
+    async logcat(tag?: string, opt?: LogcatOptions): Promise<AdbResult> {
       return await logcat(tag, opt, gOpt);
     },
 
@@ -281,7 +262,7 @@ export function bindAdb(gOpt: AdbGlobalOptions): AdbBindShape {
 
       async *logcat(
         tag?: string,
-        opt?: LogcatOptions,
+        opt?: LogcatOptions
       ): AsyncIterableIterator<string> {
         yield* pl.logcat(tag, opt, gOpt);
       },
