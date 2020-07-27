@@ -87,7 +87,8 @@ class PxPlayer extends DxPlayer {
           (e as DxSwipeEvent).x,
           (e as DxSwipeEvent).y,
           (e as DxSwipeEvent).dx,
-          (e as DxSwipeEvent).dy
+          (e as DxSwipeEvent).dy,
+          (e as DxSwipeEvent).t1 - (e as DxSwipeEvent).t0
         );
         break;
       case 'key':
@@ -121,12 +122,13 @@ class PtPlayer extends DxPlayer {
         this.rec2play(y, dev, rDev, true)
       );
     } else if (e.ty == 'swipe') {
-      const { x, y, dx, dy } = e as DxSwipeEvent;
+      const { x, y, dx, dy, t0, t1 } = e as DxSwipeEvent;
       await input.swipe(
         this.rec2play(x, dev, rDev, false),
         this.rec2play(y, dev, rDev, true),
         this.rec2play(dx, dev, rDev, false),
-        this.rec2play(dy, dev, rDev, true)
+        this.rec2play(dy, dev, rDev, true),
+        t0 - t1
       );
     } else if (e.ty == 'key') {
       await input.key((e as DxKeyEvent).k);

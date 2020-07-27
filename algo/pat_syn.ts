@@ -6,7 +6,7 @@ import DxView, {
   ViewFinder,
 } from '../dxview.ts';
 import { DxSegment } from './ui_seg.ts';
-import DxEvent, { DxTapEvent } from '../dxevent.ts';
+import DxEvent, { DxTapEvent, DxSwipeEvent } from '../dxevent.ts';
 import { DevInfo } from '../dxdroid.ts';
 import { NotImplementedError, IllegalStateError } from '../utils/error.ts';
 
@@ -97,20 +97,148 @@ export abstract class DxBpPat extends DxPat {
   abstract level(): string;
 }
 
+/** Expand is the pattern that handles scrollable parent */
 class Expand extends DxBpPat {
+  private vHSParent: N<DxView> = null;
+  private vVSParent: N<DxView> = null;
+
   level() {
     return 'expand';
   }
 
+  // TODO: what if the parent is segmented to several segments,
+  // and the parent itself does not belong to any leaf segments?
+  // Possibly not happen, because our ui segmentation parent tends
+  // not to segment a list (i.e., having many similar children)
+  // BUG: what if the scroll never stops (i.e., the list is not
+  // the corresponding matched list)
+  // BUG: if swipe to the bottom, and then swipe top, next will
+  // swipe bottom, this will make it never swipe to the top
   match(): boolean {
-    return (
-      !!ViewFinder.findVScrollableParent(this.args.v) ||
-      !!ViewFinder.findHScrollableParent(this.args.v)
-    );
+    // test whether v is children of a scrollable parent
+    this.vHSParent = ViewFinder.findHScrollableParent(this.args.v);
+    this.vVSParent = ViewFinder.findVScrollableParent(this.args.v);
+    if (!this.vHSParent && !this.vVSParent) {
+      return false;
+    }
+    // find the corresponding scrollable parent in the playee segment
+    if (this.vHSParent) {
+      this.vHSParent = this.findTarget(this.vHSParent);
+    }
+    if (this.vVSParent) {
+      this.vVSParent = this.findTarget(this.vVSParent);
+    }
+    return !!this.vHSParent || !!this.vVSParent;
   }
 
   apply(): SyntEvent {
-    throw new NotImplementedError();
+    if (this.vHSParent == null && this.vVSParent == null) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    } else if (this.vHSParent != null && this.vVSParent != null) {
+      if (this.vVSParent == this.vHSParent) {
+        throw new IllegalStateError(
+          'Both horizontally and vertically scrollable (same parent)'
+        );
+      } else {
+        throw new IllegalStateError(
+          'Both horizontally and vertically scrollable (different parent)'
+        );
+      }
+    } else if (this.vHSParent != null) {
+      return this.applyHs();
+    } else {
+      return this.applyVs();
+    }
+  }
+
+  private findTarget(v: DxView): N<DxView> {
+    let found: N<DxView> = null;
+    let fns = [
+      [v.text.length > 0, ViewFinder.findViewByText, v, v.text],
+      [
+        v.resId.length > 0,
+        ViewFinder.findViewByResource,
+        v,
+        v.resType,
+        v.resEntry,
+      ],
+      [v.desc.length > 0, ViewFinder.findViewByDesc, v, v.desc],
+    ];
+    for (const r of this.args.p.s.roots) {
+      for (const [test, fn, ...args] of fns) {
+        found = found || (test && (fn as Function)(...args));
+      }
+      if (found) {
+        break;
+      }
+    }
+    return found;
+  }
+
+  private applyHs(): SyntEvent {
+    if (this.vHSParent == null) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    if (Views.canScrollRight(this.vHSParent)) {
+      return new SyntEvent(
+        new DxSwipeEvent(
+          this.args.p.a,
+          Views.xCenter(this.vHSParent),
+          Views.yCenter(this.vHSParent),
+          Views.xCenter(this.vHSParent),
+          0,
+          0,
+          300
+        )
+      );
+    } else if (Views.canScrollLeft(this.vHSParent)) {
+      return new SyntEvent(
+        new DxSwipeEvent(
+          this.args.p.a,
+          Views.xCenter(this.vHSParent),
+          Views.yCenter(this.vHSParent),
+          -Views.xCenter(this.vHSParent),
+          0,
+          0,
+          300
+        )
+      );
+    } else {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+  }
+
+  private applyVs(): SyntEvent {
+    if (this.vVSParent == null) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    if (Views.canScrollBottom(this.vVSParent)) {
+      return new SyntEvent(
+        new DxSwipeEvent(
+          this.args.p.a,
+          Views.xCenter(this.vVSParent),
+          Views.yCenter(this.vVSParent),
+          0,
+          Views.yCenter(this.vVSParent),
+          0,
+          300
+        )
+      );
+    } else if (Views.canScrollTop(this.vVSParent)) {
+      return new SyntEvent(
+        new DxSwipeEvent(
+          this.args.p.a,
+          Views.xCenter(this.vVSParent),
+          Views.yCenter(this.vVSParent),
+          0,
+          -Views.yCenter(this.vVSParent),
+          0,
+          300
+        )
+      );
+    } else {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
   }
 }
 
@@ -216,10 +344,7 @@ class TabHostTab extends Reveal {
     for (const v of sibTabs) {
       if (v.text.length > 0) {
         for (const r of pSeg.roots) {
-          found = ViewFinder.findViewByText(r, v.text);
-          if (found) {
-            break;
-          }
+          found = found || ViewFinder.findViewByText(r, v.text);
         }
       } else if (v.desc.length > 0) {
         descViews.push(v);
@@ -232,10 +357,7 @@ class TabHostTab extends Reveal {
     if (!found) {
       for (const v of descViews) {
         for (const r of pSeg.roots) {
-          found = ViewFinder.findViewByDesc(r, v.desc);
-          if (found) {
-            break;
-          }
+          found = found || ViewFinder.findViewByDesc(r, v.desc);
         }
         if (found) {
           break;
@@ -265,17 +387,16 @@ class TabHostContent extends Reveal {
   }
 
   match(): boolean {
-    const p = this.args.v.parent;
-    while (p) {
-      if (TabHostContent.isTabHostContent(p)) {
-        return true;
-      }
-    }
-    return false;
+    // check whether v is in a TabHost
+    const found = ViewFinder.findParent(
+      this.args.v,
+      TabHostContent.isTabHostContent
+    );
+    return !!found;
   }
 
   apply(): SyntEvent {
-    throw new NotImplementedError();
+    throw new NotImplementedError('TabHostContent');
   }
 }
 

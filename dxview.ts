@@ -12,8 +12,12 @@ export type DxViewFlags = {
   S: boolean; // selected
   E: boolean; // enabled
   d: boolean; // will draw?
-  hs: boolean; // horizontal scrollable
-  vs: boolean; // vertical scrollable
+  s: {
+    l: boolean; // horizontal (left) scrollable
+    t: boolean; // vertical (top) scrollable
+    r: boolean; // horizontal (right) scrollable
+    b: boolean; // vertical (bottom) scrollable
+  };
   c: boolean; // clickable
   lc: boolean; // long clickable
   cc: boolean; // context clickable
@@ -27,8 +31,12 @@ export const DefaultFlags: DxViewFlags = {
   S: false,
   E: true,
   d: true,
-  hs: false,
-  vs: false,
+  s: {
+    l: false,
+    t: false,
+    r: false,
+    b: false,
+  },
   c: false,
   lc: false,
   cc: false,
@@ -627,12 +635,12 @@ export class ViewFinder {
 
   /** Find the first horizontally scrollable parent */
   static findHScrollableParent(v: DxView): N<DxView> {
-    return ViewFinder.findParent(v, (p) => p.flags.hs);
+    return ViewFinder.findParent(v, (p) => p.flags.s.l || p.flags.s.r);
   }
 
   /** Find the first horizontally scrollable parent */
   static findVScrollableParent(v: DxView): N<DxView> {
-    return ViewFinder.findParent(v, (p) => p.flags.vs);
+    return ViewFinder.findParent(v, (p) => p.flags.s.t || p.flags.s.b);
   }
 
   /** Find a most detailed view by x, y coordinate, set visible to false
@@ -814,6 +822,22 @@ export class Views {
     );
   }
 
+  static canScrollLeft(v: DxView): boolean {
+    return v.flags.s.l;
+  }
+
+  static canScrollRight(v: DxView): boolean {
+    return v.flags.s.r;
+  }
+
+  static canScrollTop(v: DxView): boolean {
+    return v.flags.s.t;
+  }
+
+  static canScrollBottom(v: DxView): boolean {
+    return v.flags.s.b;
+  }
+
   static hasValidChild(v: DxView): boolean {
     return v.children.some((c) => this.isValid(c));
   }
@@ -853,12 +877,20 @@ export class Views {
     return v.drawingX + v.width;
   }
 
+  static xCenter(v: DxView): number {
+    return (Views.x0(v) + Views.x1(v)) / 2;
+  }
+
   static y0(v: DxView): number {
     return v.drawingY;
   }
 
   static y1(v: DxView): number {
     return v.drawingY + v.height;
+  }
+
+  static yCenter(v: DxView): number {
+    return (Views.y0(v) + Views.y1(v)) / 2;
   }
 }
 

@@ -133,12 +133,16 @@ class DXPK {
             S: tokens[24][3] == 'S',
             E: tokens[24][4] == 'E',
             d: tokens[24][5] == 'D',
-            hs: tokens[24][6] == 'H',
-            vs: tokens[24][7] == 'V',
-            c: tokens[24][8] == 'C',
-            lc: tokens[24][9] == 'L',
-            cc: tokens[24][10] == 'X',
-            a: tokens[24][11] == 'A',
+            s: {
+              l: tokens[24][6] == 'L',
+              t: tokens[24][7] == 'T',
+              r: tokens[24][8] == 'R',
+              b: tokens[24][9] == 'B',
+            },
+            c: tokens[24][10] == 'C',
+            lc: tokens[24][11] == 'L',
+            cc: tokens[24][12] == 'X',
+            a: tokens[24][13] == 'A',
           },
           tokens[5] == 'S' ? true : false, // shown
           tokens[21], // bgClass
@@ -341,8 +345,10 @@ class DXPK {
       flags += v.flags.S ? 'S' : '.';
       flags += v.flags.E ? 'E' : '.';
       flags += v.flags.d ? 'D' : '.';
-      flags += v.flags.hs ? 'H' : '.';
-      flags += v.flags.vs ? 'V' : '.';
+      flags += v.flags.s.l ? 'L' : '.';
+      flags += v.flags.s.t ? 'T' : '.';
+      flags += v.flags.s.r ? 'R' : '.';
+      flags += v.flags.s.b ? 'B' : '.';
       flags += v.flags.c ? 'C' : '.';
       flags += v.flags.lc ? 'L' : '.';
       flags += v.flags.cc ? 'X' : '.';
@@ -537,8 +543,10 @@ export default class DxPacker {
       a.flags.S == b.flags.S &&
       a.flags.E == b.flags.E &&
       a.flags.d == b.flags.d &&
-      a.flags.hs == b.flags.hs &&
-      a.flags.vs == b.flags.vs &&
+      a.flags.s.l == b.flags.s.l &&
+      a.flags.s.t == b.flags.s.t &&
+      a.flags.s.r == b.flags.s.r &&
+      a.flags.s.b == b.flags.s.b &&
       a.flags.c == b.flags.c &&
       a.flags.lc == b.flags.lc &&
       a.flags.cc == b.flags.cc

@@ -136,7 +136,6 @@ class DxRecParser {
           Number(args[3]),
           Number(args[1])
         );
-        break;
 
       case 'LONG_TAP':
         // LONG_TAP act t x y
@@ -146,7 +145,6 @@ class DxRecParser {
           Number(args[3]),
           Number(args[1])
         );
-        break;
 
       case 'DOUBLE_TAP':
         // LONG_TAP act t x y
@@ -156,7 +154,6 @@ class DxRecParser {
           Number(args[3]),
           Number(args[1])
         );
-        break;
 
       case 'SWIPE':
         // SWIPE act t0 x y dx dy t1
@@ -169,7 +166,6 @@ class DxRecParser {
           Number(args[1]),
           Number(args[6])
         );
-        break;
 
       case 'KEY':
         // KEY act t c k
@@ -179,7 +175,6 @@ class DxRecParser {
           args[3],
           Number(args[1])
         );
-        break;
 
       default:
         throw new IllegalStateError(`Unexpected event type ${type}`);

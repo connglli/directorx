@@ -53,6 +53,12 @@ class ViewContext(val encode: Boolean) : DxContext {
                 val hint = if (view is TextView) { view.hint ?: "" } else { "" }
                 val bg = getBackgroundColor(view)
                 val fg = getForegroundColor(view)
+                var scroll = ""
+                scroll += if (view.canScrollHorizontally(-1)) "L" else "."
+                scroll += if (view.canScrollVertically(-1)) "T" else "."
+                scroll += if (view.canScrollHorizontally(1)) "R" else "."
+                scroll += if (view.canScrollVertically(1)) "B" else "."
+                appendKV(info, "scroll", scroll)
                 appendKV(info, "e", view.elevation)
                 appendKV(info, "tx", view.translationX)
                 appendKV(info, "ty", view.translationY)

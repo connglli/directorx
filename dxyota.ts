@@ -103,7 +103,7 @@ function makeViewInputOpts(type: string, opt: ViewInputOptions): string {
     if (opt.dy) {
       args += ` --dy ${q(opt.dy)}`;
     }
-    args += ' --steps 1';
+    args += ' --duration 300';
   }
 
   return args;
@@ -234,8 +234,12 @@ export class ActivityYotaBuilder {
           S: vhp.selected,
           E: vhp.enabled,
           d: true,
-          hs: vhp.scrollable,
-          vs: vhp.scrollable,
+          s: {
+            l: vhp.scrollable,
+            r: vhp.scrollable,
+            t: vhp.scrollable,
+            b: vhp.scrollable,
+          },
           c: vhp.clickable,
           lc: vhp['long-clickable'],
           cc: vhp['context-clickable'],
@@ -305,14 +309,19 @@ export default class DxYota {
     throw new NotImplementedError();
   }
 
-  async swipe(x: number, y: number, dx: number, dy: number): Promise<void> {
-    const steps = 1;
+  async swipe(
+    x: number,
+    y: number,
+    dx: number,
+    dy: number,
+    duration: number
+  ): Promise<void> {
     const toX = x + dx;
     const toY = y + dy;
     await this.adb.unsafeShell(
       `${DxYota.BIN} input swipe --from-x ${q(x)} --from-y ${q(y)} --to-x ${q(
         toX
-      )} --to-y ${q(toY)} --steps ${q(steps)}`
+      )} --to-y ${q(toY)} --duration ${q(duration)}`
     );
   }
 
