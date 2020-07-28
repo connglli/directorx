@@ -1,4 +1,4 @@
-import { DxSegment } from './ui_seg.ts';
+import DxSegment from '../dxseg.ts';
 import DxView from '../dxview.ts';
 import { BiGraph } from '../utils/bigraph.ts';
 import * as vecutil from '../utils/vecutil.ts';
@@ -7,15 +7,7 @@ import { filterStopwords, splitAsWords } from '../utils/strutil.ts';
 type WordFreq = vecutil.WordFreq;
 type WordVec = vecutil.WordVec;
 
-export const NO_MATCH: DxSegment = {
-  roots: [],
-  x: -1,
-  y: -1,
-  w: -1,
-  h: -1,
-  level: -1,
-  parent: null,
-};
+export const NO_MATCH: DxSegment = new DxSegment([], -1, -1, -1, -1, -1);
 
 type MatchItem = [DxSegment, DxSegment, number];
 

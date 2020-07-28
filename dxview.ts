@@ -158,7 +158,7 @@ export default class DxView {
   }
 
   get children(): DxView[] {
-    return this.children_;
+    return this.children_.slice();
   }
 
   get left(): number {
@@ -330,10 +330,7 @@ export default class DxView {
     }
     const ind = this.children_.indexOf(v);
     v.parent_ = null;
-    this.children_ = [
-      ...this.children_.slice(0, ind),
-      ...this.children_.slice(ind + 1),
-    ];
+    this.children_.splice(ind, 1);
   }
 
   /** Attach self as a child of view v */

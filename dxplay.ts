@@ -11,13 +11,14 @@ import DxEvent, {
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
 import DxView, { DxActivity, Views } from './dxview.ts';
+import DxSegment from './dxseg.ts';
 import DxDroid, {
   DevInfo,
   ViewInputOptions,
   SelectOptions,
   ViewMap,
 } from './dxdroid.ts';
-import segUi, { DxSegment } from './algo/ui_seg.ts';
+import segUi from './algo/ui_seg.ts';
 import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';
 import recBpPat, { Invisible, SyntEvent } from './algo/pat_syn.ts';
 import * as time from './utils/time.ts';
@@ -315,10 +316,10 @@ class ResPlayer extends DxPlayer {
 
     // segment the ui
     const droid = DxDroid.get();
-    const [rSegs] = segUi(rAct, rDev);
+    const [, rSegs] = segUi(rAct, rDev);
     const pAct = await this.top();
     const pDev = droid.dev;
-    const [pSegs] = segUi(pAct, pDev);
+    const [, pSegs] = segUi(pAct, pDev);
 
     // match segment and find the target segment
     const match = matchSeg(pSegs, rSegs);

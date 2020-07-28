@@ -5,7 +5,7 @@ import DxView, {
   Views,
   ViewFinder,
 } from '../dxview.ts';
-import { DxSegment } from './ui_seg.ts';
+import DxSegment from '../dxseg.ts';
 import DxEvent, { DxTapEvent, DxSwipeEvent } from '../dxevent.ts';
 import { DevInfo } from '../dxdroid.ts';
 import { NotImplementedError, IllegalStateError } from '../utils/error.ts';
@@ -407,7 +407,7 @@ class TabHostContent extends Reveal {
   }
 
   match(): boolean {
-    // check whether v is in a TabHost
+    // check whether v is in a TabHostContent
     const found = ViewFinder.findParent(
       this.args.v,
       TabHostContent.isTabHostContent
