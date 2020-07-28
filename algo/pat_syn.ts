@@ -105,13 +105,13 @@ abstract class Expand extends DxBpPat {
 
 /** Scroll is the pattern that handles scrollable parent */
 class Scroll extends Expand {
+  private static vLastApplied: N<DxView> = null;
+  private static lastDir: 'R2L' | 'L2R' | 'T2B' | 'B2T' | 'N' = 'N';
   private vHSParent: N<DxView> = null;
   private vVSParent: N<DxView> = null;
 
   // BUG: what if the scroll never stops (i.e., the list is not
   // the corresponding matched list)
-  // BUG: if swipe to the bottom, and then swipe top, next will
-  // swipe bottom, this will make it never swipe to the top
   match(): boolean {
     // test whether v is children of a scrollable parent
     this.vHSParent = ViewFinder.findHScrollableParent(this.args.v);
@@ -187,66 +187,114 @@ class Scroll extends Expand {
     if (this.vHSParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    if (Views.canL2RScroll(this.vHSParent)) {
-      return new SyntEvent(
-        new DxSwipeEvent(
-          this.args.p.a,
-          Views.xCenter(this.vHSParent),
-          Views.yCenter(this.vHSParent),
-          Views.xCenter(this.vHSParent),
-          0,
-          0,
-          300
-        )
-      );
-    } else if (Views.canR2LScroll(this.vHSParent)) {
-      return new SyntEvent(
-        new DxSwipeEvent(
-          this.args.p.a,
-          Views.xCenter(this.vHSParent),
-          Views.yCenter(this.vHSParent),
-          -Views.xCenter(this.vHSParent),
-          0,
-          0,
-          300
-        )
-      );
-    } else {
+    const last = Scroll.vLastApplied;
+    const lastDir = Scroll.lastDir;
+    const curr = this.args.v;
+    const canL2R = Views.canL2RScroll(this.vHSParent);
+    const canR2L = Views.canR2LScroll(this.vHSParent);
+    // prefer to scroll from right to left
+    let currDir: typeof lastDir = canR2L ? 'R2L' : canL2R ? 'L2R' : 'N';
+    // last view that applied is the same as current,
+    // prefer to scroll at the same direction
+    if (last && Views.eq(last, curr, false)) {
+      if (lastDir == 'L2R' && canL2R) {
+        currDir = 'L2R';
+      } else if (lastDir == 'R2L' && canR2L) {
+        currDir = 'R2L';
+      }
+    }
+    let e: N<SyntEvent> = null;
+    switch (currDir) {
+      case 'L2R':
+        e = new SyntEvent(
+          new DxSwipeEvent(
+            this.args.p.a,
+            Views.xCenter(this.vHSParent),
+            Views.yCenter(this.vHSParent),
+            Views.xCenter(this.vHSParent),
+            0,
+            0,
+            300
+          )
+        );
+        break;
+      case 'R2L':
+        e = new SyntEvent(
+          new DxSwipeEvent(
+            this.args.p.a,
+            Views.xCenter(this.vHSParent),
+            Views.yCenter(this.vHSParent),
+            -Views.xCenter(this.vHSParent),
+            0,
+            0,
+            300
+          )
+        );
+        break;
+    }
+    if (!e) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
+    Scroll.vLastApplied = curr;
+    Scroll.lastDir = currDir;
+    return e;
   }
 
   private applyVs(): SyntEvent {
     if (this.vVSParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    if (Views.canT2BScroll(this.vVSParent)) {
-      return new SyntEvent(
-        new DxSwipeEvent(
-          this.args.p.a,
-          Views.xCenter(this.vVSParent),
-          Views.yCenter(this.vVSParent),
-          0,
-          Views.yCenter(this.vVSParent),
-          0,
-          300
-        )
-      );
-    } else if (Views.canB2TScroll(this.vVSParent)) {
-      return new SyntEvent(
-        new DxSwipeEvent(
-          this.args.p.a,
-          Views.xCenter(this.vVSParent),
-          Views.yCenter(this.vVSParent),
-          0,
-          -Views.yCenter(this.vVSParent),
-          0,
-          300
-        )
-      );
-    } else {
+    const last = Scroll.vLastApplied;
+    const lastDir = Scroll.lastDir;
+    const curr = this.args.v;
+    const canT2B = Views.canT2BScroll(this.vVSParent);
+    const canB2T = Views.canB2TScroll(this.vVSParent);
+    // prefer to scroll from bottom to top
+    let currDir: typeof lastDir = canB2T ? 'B2T' : canT2B ? 'T2B' : 'N';
+    // last view that applied is the same as current,
+    // prefer to scroll at the same direction
+    if (last && last == curr) {
+      if (lastDir == 'T2B' && canT2B) {
+        currDir = 'T2B';
+      } else if (lastDir == 'B2T' && canB2T) {
+        currDir = 'B2T';
+      }
+    }
+    let e: N<SyntEvent> = null;
+    switch (currDir) {
+      case 'T2B':
+        e = new SyntEvent(
+          new DxSwipeEvent(
+            this.args.p.a,
+            Views.xCenter(this.vVSParent),
+            Views.yCenter(this.vVSParent),
+            0,
+            Views.yCenter(this.vVSParent),
+            0,
+            300
+          )
+        );
+        break;
+      case 'B2T':
+        e = new SyntEvent(
+          new DxSwipeEvent(
+            this.args.p.a,
+            Views.xCenter(this.vVSParent),
+            Views.yCenter(this.vVSParent),
+            0,
+            -Views.yCenter(this.vVSParent),
+            0,
+            300
+          )
+        );
+        break;
+    }
+    if (!e) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
+    Scroll.vLastApplied = curr;
+    Scroll.lastDir = currDir;
+    return e;
   }
 }
 

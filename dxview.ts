@@ -817,6 +817,50 @@ export class Views {
   static yCenter(v: DxView): number {
     return (Views.y0(v) + Views.y1(v)) / 2;
   }
+
+  static eq(a: DxView, b: DxView, flags = true): boolean {
+    let ret =
+      a.pkg == b.pkg &&
+      a.cls == b.cls &&
+      a.shown == b.shown &&
+      a.background == b.background &&
+      a.foreground == b.foreground &&
+      a.left == b.left &&
+      a.right == b.right &&
+      a.top == b.top &&
+      a.bottom == b.bottom &&
+      a.elevation == b.elevation &&
+      a.translationX == b.translationX &&
+      a.translationY == b.translationY &&
+      a.translationZ == b.translationZ &&
+      a.scrollX == b.scrollX &&
+      a.scrollY == b.scrollY &&
+      a.resId == b.resId &&
+      a.desc == b.desc &&
+      a.text == b.text &&
+      a.tag == b.tag &&
+      a.tip == b.tip &&
+      a.hint == b.hint;
+    if (flags) {
+      ret =
+        ret &&
+        a.flags.V == b.flags.V &&
+        a.flags.f == b.flags.f &&
+        a.flags.F == b.flags.F &&
+        a.flags.S == b.flags.S &&
+        a.flags.E == b.flags.E &&
+        a.flags.d == b.flags.d &&
+        a.flags.s.l == b.flags.s.l &&
+        a.flags.s.t == b.flags.s.t &&
+        a.flags.s.r == b.flags.s.r &&
+        a.flags.s.b == b.flags.s.b &&
+        a.flags.c == b.flags.c &&
+        a.flags.lc == b.flags.lc &&
+        a.flags.cc == b.flags.cc &&
+        a.flags.a == b.flags.a;
+    }
+    return ret;
+  }
 }
 
 export class DxActivity {

@@ -15,6 +15,7 @@ import DxView, {
   DxViewFactory,
   DxViewType,
   ViewFinder,
+  Views,
 } from './dxview.ts';
 import { DevInfo } from './dxadb.ts';
 import * as base64 from './utils/base64.ts';
@@ -522,35 +523,8 @@ export default class DxPacker {
     return cv;
   }
 
-  private viewEq(a: DxView, b: DxView) {
-    return (
-      a.cls == b.cls &&
-      a.left == b.left &&
-      a.right == b.right &&
-      a.top == b.top &&
-      a.bottom == b.bottom &&
-      a.translationX == b.translationX &&
-      a.translationY == b.translationY &&
-      a.translationZ == b.translationZ &&
-      a.scrollX == b.scrollX &&
-      a.scrollY == b.scrollY &&
-      a.resId == b.resId &&
-      a.desc == b.desc &&
-      a.text == b.text &&
-      a.flags.V == b.flags.V &&
-      a.flags.f == b.flags.f &&
-      a.flags.F == b.flags.F &&
-      a.flags.S == b.flags.S &&
-      a.flags.E == b.flags.E &&
-      a.flags.d == b.flags.d &&
-      a.flags.s.l == b.flags.s.l &&
-      a.flags.s.t == b.flags.s.t &&
-      a.flags.s.r == b.flags.s.r &&
-      a.flags.s.b == b.flags.s.b &&
-      a.flags.c == b.flags.c &&
-      a.flags.lc == b.flags.lc &&
-      a.flags.cc == b.flags.cc
-    );
+  private viewEq(a: DxView, b: DxView): boolean {
+    return Views.eq(a, b);
   }
 
   private infoLog(e: DxEvent) {
