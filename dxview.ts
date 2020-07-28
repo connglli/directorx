@@ -14,10 +14,10 @@ export type DxViewFlags = {
   E: boolean; // enabled
   d: boolean; // will draw?
   s: {
-    l: boolean; // horizontal (left) scrollable
-    t: boolean; // vertical (top) scrollable
-    r: boolean; // horizontal (right) scrollable
-    b: boolean; // vertical (bottom) scrollable
+    l: boolean; // horizontal (right to left) scrollable
+    t: boolean; // vertical (bottom to top) scrollable
+    r: boolean; // horizontal (left to right) scrollable
+    b: boolean; // vertical (top to bottom) scrollable
   };
   c: boolean; // clickable
   lc: boolean; // long clickable
@@ -747,19 +747,19 @@ export class Views {
     );
   }
 
-  static canScrollLeft(v: DxView): boolean {
+  static canR2LScroll(v: DxView): boolean {
     return v.flags.s.l;
   }
 
-  static canScrollRight(v: DxView): boolean {
+  static canL2RScroll(v: DxView): boolean {
     return v.flags.s.r;
   }
 
-  static canScrollTop(v: DxView): boolean {
+  static canB2TScroll(v: DxView): boolean {
     return v.flags.s.t;
   }
 
-  static canScrollBottom(v: DxView): boolean {
+  static canT2BScroll(v: DxView): boolean {
     return v.flags.s.b;
   }
 

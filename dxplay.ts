@@ -258,6 +258,7 @@ class ResPlayer extends DxPlayer {
       const droid = DxDroid.get();
       const pAct = await this.top();
       let v: DxView | null = null;
+      // TODO: what if multiple views with same text
       if (vm.text.length > 0) {
         v = pAct.findViewByText(vm.text);
       } else if (vm['resource-id'].length > 0) {
@@ -368,6 +369,7 @@ class ResPlayer extends DxPlayer {
   }
 
   private async find(e: DxXYEvent): Promise<N<ViewMap>> {
+    // TODO: what if multiple views with same text
     const { a, x, y } = e;
     // retrieve the view on recordee
     const v = a.findViewByXY(x, y);

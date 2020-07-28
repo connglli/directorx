@@ -45,6 +45,11 @@ export default class ArrayTreeOp {
     return found;
   }
 
+  /** Find all siblings */
+  static findSiblings<T>(n: Node<T>): T[] {
+    return (n.parent?.children ?? []).filter((c) => c != n);
+  }
+
   /** Find the first Node<T> via dfs that satisfy the predicate */
   static findFirst<T>(n: Node<T>, pred: (n: T) => boolean): N<T> {
     let found: N<T> = null;

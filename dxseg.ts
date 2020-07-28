@@ -1,4 +1,4 @@
-import DxView, { Views } from './dxview.ts';
+import DxView, { Views, ViewFinder } from './dxview.ts';
 import Interval, { XYInterval } from './utils/interval.ts';
 import { IllegalStateError } from './utils/error.ts';
 import ArrayTreeOp, { ArrayTreeNode } from './utils/array_tree_op.ts';
@@ -42,6 +42,10 @@ export default class DxSegment implements ArrayTreeNode<DxSegment> {
     } else {
       return [sep.after];
     }
+  }
+
+  get siblings(): DxSegment[] {
+    return (this.parent?.children ?? []).filter((c) => c != this);
   }
 
   /** Set a sep, accept children, and reject self */
@@ -202,9 +206,52 @@ export class Segments {
   }
 }
 
-class SegmentFinder extends ArrayTreeOp {
+export class SegmentFinder extends ArrayTreeOp {
   /** Find all accepted segments */
   static findAccepts(s: DxSegment): DxSegment[] {
     return SegmentFinder.find(s, (c) => c.accepted);
+  }
+
+  /** Find the first view that matches the predicate */
+  static findView(s: DxSegment, pred: (v: DxView) => boolean): N<DxView> {
+    let found: N<DxView> = null;
+    for (const r of s.roots) {
+      found = ViewFinder.findFirst(r, pred);
+      if (found) {
+        return found;
+      }
+    }
+    return found;
+  }
+
+  /** Find all views that match the predicate */
+  static findViews(s: DxSegment, pred: (v: DxView) => boolean): DxView[] {
+    let found: DxView[] = [];
+    for (const r of s.roots) {
+      found.push(...ViewFinder.find(r, pred));
+    }
+    return found;
+  }
+
+  /** Find the first met view with text t */
+  static findViewByText(s: DxSegment, text: string): N<DxView> {
+    return SegmentFinder.findView(s, (w) => w.text == text);
+  }
+
+  /** Find the first met view with desc t */
+  static findViewByDesc(s: DxSegment, desc: string): N<DxView> {
+    return SegmentFinder.findView(s, (w) => w.desc == desc);
+  }
+
+  /** Find the first met view with resource type and entry */
+  static findViewByResource(
+    s: DxSegment,
+    type: string,
+    entry: string
+  ): N<DxView> {
+    return SegmentFinder.findView(
+      s,
+      (w) => w.resType == type && w.resEntry == entry
+    );
   }
 }

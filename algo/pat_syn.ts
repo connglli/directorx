@@ -5,7 +5,7 @@ import DxView, {
   Views,
   ViewFinder,
 } from '../dxview.ts';
-import DxSegment from '../dxseg.ts';
+import DxSegment, { SegmentFinder } from '../dxseg.ts';
 import DxEvent, { DxTapEvent, DxSwipeEvent } from '../dxevent.ts';
 import { DevInfo } from '../dxdroid.ts';
 import { NotImplementedError, IllegalStateError } from '../utils/error.ts';
@@ -108,10 +108,6 @@ class Scroll extends Expand {
   private vHSParent: N<DxView> = null;
   private vVSParent: N<DxView> = null;
 
-  // TODO: what if the parent is segmented to several segments,
-  // and the parent itself does not belong to any leaf segments?
-  // Possibly not happen, because our ui segmentation parent tends
-  // not to segment a list (i.e., having many similar children)
   // BUG: what if the scroll never stops (i.e., the list is not
   // the corresponding matched list)
   // BUG: if swipe to the bottom, and then swipe top, next will
@@ -125,10 +121,10 @@ class Scroll extends Expand {
     }
     // find the corresponding scrollable parent in the playee segment
     if (this.vHSParent) {
-      this.vHSParent = this.findTarget(this.vHSParent);
+      this.vHSParent = this.findTarget(this.vHSParent, 'H');
     }
     if (this.vVSParent) {
-      this.vVSParent = this.findTarget(this.vVSParent);
+      this.vVSParent = this.findTarget(this.vVSParent, 'V');
     }
     return !!this.vHSParent || !!this.vVSParent;
   }
@@ -153,25 +149,35 @@ class Scroll extends Expand {
     }
   }
 
-  private findTarget(v: DxView): N<DxView> {
+  private findTarget(v: DxView, dir: 'V' | 'H'): N<DxView> {
     let found: N<DxView> = null;
-    let fns = [
-      [v.text.length > 0, ViewFinder.findViewByText, v, v.text],
+    const pSeg = this.args.p.s;
+    const fns = [
+      [v.text.length > 0, SegmentFinder.findViewByText, v.text],
       [
         v.resId.length > 0,
-        ViewFinder.findViewByResource,
-        v,
+        SegmentFinder.findViewByResource,
         v.resType,
         v.resEntry,
       ],
-      [v.desc.length > 0, ViewFinder.findViewByDesc, v, v.desc],
+      [v.desc.length > 0, SegmentFinder.findViewByDesc, v.desc],
     ];
-    for (const r of this.args.p.s.roots) {
-      for (const [test, fn, ...args] of fns) {
-        found = found || (test && (fn as Function)(...args));
+    for (const [test, fn, ...args] of fns) {
+      if (!found && test) {
+        found = (fn as Function)(pSeg, ...args);
       }
-      if (found) {
-        break;
+    }
+    // the scrollable parent is maybe segmented to several segments,
+    // and the parent itself does not belong to any leaf segments.
+    // let's find the scrollable parent of the first root
+    if (!found) {
+      for (const r of pSeg.roots) {
+        if (!found) {
+          found =
+            dir == 'H'
+              ? ViewFinder.findHScrollableParent(r)
+              : ViewFinder.findVScrollableParent(r);
+        }
       }
     }
     return found;
@@ -181,7 +187,7 @@ class Scroll extends Expand {
     if (this.vHSParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    if (Views.canScrollRight(this.vHSParent)) {
+    if (Views.canL2RScroll(this.vHSParent)) {
       return new SyntEvent(
         new DxSwipeEvent(
           this.args.p.a,
@@ -193,7 +199,7 @@ class Scroll extends Expand {
           300
         )
       );
-    } else if (Views.canScrollLeft(this.vHSParent)) {
+    } else if (Views.canR2LScroll(this.vHSParent)) {
       return new SyntEvent(
         new DxSwipeEvent(
           this.args.p.a,
@@ -214,7 +220,7 @@ class Scroll extends Expand {
     if (this.vVSParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    if (Views.canScrollBottom(this.vVSParent)) {
+    if (Views.canT2BScroll(this.vVSParent)) {
       return new SyntEvent(
         new DxSwipeEvent(
           this.args.p.a,
@@ -226,7 +232,7 @@ class Scroll extends Expand {
           300
         )
       );
-    } else if (Views.canScrollTop(this.vVSParent)) {
+    } else if (Views.canB2TScroll(this.vVSParent)) {
       return new SyntEvent(
         new DxSwipeEvent(
           this.args.p.a,
@@ -363,9 +369,7 @@ class TabHostTab extends Reveal {
     const descViews: DxView[] = [];
     for (const v of sibTabs) {
       if (v.text.length > 0) {
-        for (const r of pSeg.roots) {
-          found = found || ViewFinder.findViewByText(r, v.text);
-        }
+        found = SegmentFinder.findViewByText(pSeg, v.text);
       } else if (v.desc.length > 0) {
         descViews.push(v);
       }
@@ -376,9 +380,7 @@ class TabHostTab extends Reveal {
     // if no text are available, then try the desc
     if (!found) {
       for (const v of descViews) {
-        for (const r of pSeg.roots) {
-          found = found || ViewFinder.findViewByDesc(r, v.desc);
-        }
+        found = SegmentFinder.findViewByDesc(pSeg, v.desc);
         if (found) {
           break;
         }
@@ -498,18 +500,20 @@ class ViewPager extends Reveal {
     const pSeg = this.args.p.s;
     // look for all pagers in the playee segment
     const pagers: DxViewPager[] = [];
-    for (const r of pSeg.roots) {
-      if (this.vRPager.resId.length > 0) {
-        pagers.push(
-          ...(ViewFinder.find(
-            r,
-            (w) => w instanceof DxViewPager
-          ) as DxViewPager[])
-        );
-        // the pager is maybe segmented to multiple
-        // segments, and the pager itself does not belong
-        // to any leaf segment, so find the parent of
-        // each root, maybe there are pagers
+    if (this.vRPager.resId.length > 0) {
+      pagers.push(
+        ...(SegmentFinder.findViews(
+          pSeg,
+          (v) => v instanceof DxViewPager
+        ) as DxViewPager[])
+      );
+    }
+    if (pagers.length == 0) {
+      // the pager is maybe segmented to multiple
+      // segments, and the pager itself does not belong
+      // to any leaf segment, so find the parent of
+      // each root, maybe there are pagers
+      for (const r of pSeg.roots) {
         const parent = ViewPager.findPagerParent(r);
         if (parent) {
           pagers.push(parent);
@@ -546,27 +550,20 @@ class ViewPager extends Reveal {
     // to this.vRPager.curr, we find the page that containing
     // v, and then jump to that
     let targetPage: N<DxView> = null;
-    if (v.text.length > 0) {
-      for (const page of this.vPPager.children) {
-        if (ViewFinder.findViewByText(page, v.text)) {
-          targetPage = page;
-          break;
-        }
-      }
-    }
-    if (!targetPage && v.resId.length > 0) {
-      for (const page of this.vPPager.children) {
-        if (ViewFinder.findViewByResource(page, v.resType, v.resEntry)) {
-          targetPage = page;
-          break;
-        }
-      }
-    }
-    if (!targetPage && v.resId.length > 0) {
-      for (const page of this.vPPager.children) {
-        if (ViewFinder.findViewByDesc(page, v.desc)) {
-          targetPage = page;
-          break;
+    const fns = [
+      [v.text.length > 0, ViewFinder.findViewByText, v.text],
+      [
+        v.resId.length > 0,
+        ViewFinder.findViewByResource,
+        v.resType,
+        v.resEntry,
+      ],
+      [v.desc.length > 0, ViewFinder.findViewByDesc, v.desc],
+    ];
+    for (const [test, fn, ...args] of fns) {
+      if (!targetPage && test) {
+        for (const page of this.vPPager.children) {
+          targetPage = targetPage || (fn as Function)(page, ...args);
         }
       }
     }
