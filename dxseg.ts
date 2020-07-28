@@ -1,6 +1,7 @@
 import DxView, { Views } from './dxview.ts';
 import Interval, { XYInterval } from './utils/interval.ts';
 import { IllegalStateError } from './utils/error.ts';
+import ArrayTreeOp, { ArrayTreeNode } from './utils/array_tree_op.ts';
 
 type N<T> = T | null;
 
@@ -11,7 +12,7 @@ type N<T> = T | null;
  * separator is set. However, when the separator is deleted,
  * one can control whether the segment is accepted or not
  * afterwards by passing an argument `accept` to #delSep() */
-export default class DxSegment {
+export default class DxSegment implements ArrayTreeNode<DxSegment> {
   public accepted: boolean = true;
   private parent_: N<DxSegment> = null;
   private sep_: N<DxSegSep> = null;
@@ -93,11 +94,9 @@ export class DxHVESegSep {
   ) {}
 }
 
-/** A shrink sep means there are no
- * separators found for a segment,
- * but there are views segmented,
- * then create a new shrink segment
- * rooted by roots, and segment them
+/** A shrink sep means there are no separators found for a
+ * segment, but there are views segmented, then create a
+ * new shrink segment rooted by roots, and segment them
  * further
  */
 export class DxShrinkSegSep {
@@ -107,6 +106,7 @@ export class DxShrinkSegSep {
 /** Segment separator */
 export type DxSegSep = DxHVESegSep | DxShrinkSegSep;
 
+/** Utility class to compute some segment properties */
 export class Segments {
   static create(roots: DxView[]): DxSegment {
     if (roots.length == 0) {
@@ -125,20 +125,6 @@ export class Segments {
       xy.y.high - xy.y.low
     );
     return seg;
-  }
-
-  static acceptsOf(s: DxSegment): DxSegment[] {
-    let found: DxSegment[] = [];
-    function walk(ss: DxSegment) {
-      if (ss.accepted) {
-        found.push(ss);
-      }
-      for (const cs of ss.children) {
-        walk(cs);
-      }
-    }
-    walk(s);
-    return found;
   }
 
   static areaOf(s: DxSegment) {
@@ -213,5 +199,12 @@ export class Segments {
 
   static y1(s: DxSegment): number {
     return s.y + s.h;
+  }
+}
+
+class SegmentFinder extends ArrayTreeOp {
+  /** Find all accepted segments */
+  static findAccepts(s: DxSegment): DxSegment[] {
+    return SegmentFinder.find(s, (c) => c.accepted);
   }
 }

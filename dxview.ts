@@ -1,6 +1,7 @@
 import { DevInfo } from './dxdroid.ts';
 import LinkedList from './utils/linked_list.ts';
 import { XYInterval } from './utils/interval.ts';
+import ArrayTreeOp, { ArrayTreeNode } from './utils/array_tree_op.ts';
 import { CannotReachHereError } from './utils/error.ts';
 
 type N<T> = T | null;
@@ -84,7 +85,7 @@ export enum DxViewType {
  * The DxView#drawing{X,Y,Z}() returns the absolute coordinate
  * of the view after scrolling
  */
-export default class DxView {
+export default class DxView implements ArrayTreeNode<DxView> {
   // The drawing level is different from the z index of
   // each view. Views at each level are not overlapped, but
   // views at adjacent levels are overlapped at least at one
@@ -563,73 +564,8 @@ export class DxTabHost extends DxView {
   }
 }
 
-export type ViewWalkerListenerFn = (v: DxView) => void;
-
-export interface ViewWalkerListener {
-  onWalk: ViewWalkerListenerFn;
-}
-
-/** Utility to find a specific */
-export class ViewFinder {
-  /** Dfs walk the tree, and trigger the listener */
-  static walk(v: DxView, walker: ViewWalkerListener | ViewWalkerListenerFn) {
-    if (typeof walker == 'function') {
-      walker(v);
-    } else {
-      walker.onWalk(v);
-    }
-    for (const cv of v.children) {
-      ViewFinder.walk(cv, walker);
-    }
-  }
-
-  /** Find all views that satisfy the predicate */
-  static find(v: DxView, pred: (v: DxView) => boolean): DxView[] {
-    let found: DxView[] = [];
-    ViewFinder.walk(v, (w) => {
-      if (pred(w)) {
-        found.push(w);
-      }
-    });
-    return found;
-  }
-
-  /** Find the first view via dfs that satisfy the predicate */
-  static findFirst(v: DxView, pred: (v: DxView) => boolean): N<DxView> {
-    let found: N<DxView> = null;
-    ViewFinder.walk(v, (w) => {
-      if (!found && pred(w)) {
-        found = w;
-      }
-    });
-    return found;
-  }
-
-  /** Walk the hierarchy up to find all parents that satisfy the predicate */
-  static findParents(v: DxView, pred: (v: DxView) => boolean): DxView[] {
-    let found: DxView[] = [];
-    let p = v.parent;
-    while (p != null) {
-      if (pred(p)) {
-        found.push(p);
-      }
-      p = p.parent;
-    }
-    return found;
-  }
-
-  /** Walk the hierarchy up to find the first parent that satisfy the predicate */
-  static findParent(v: DxView, pred: (v: DxView) => boolean): N<DxView> {
-    let p = v.parent;
-    while (p != null) {
-      if (pred(p)) {
-        return p;
-      }
-      p = p.parent;
-    }
-    return null;
-  }
-
+/** Utility to find a specific view */
+export class ViewFinder extends ArrayTreeOp {
   /** Find the first horizontally scrollable parent */
   static findHScrollableParent(v: DxView): N<DxView> {
     return ViewFinder.findParent(v, (p) => p.flags.s.l || p.flags.s.r);
@@ -678,20 +614,12 @@ export class ViewFinder {
 
   /** Find the view by children indices */
   static findViewByIndices(v: DxView, indices: number[]): N<DxView> {
-    let p: DxView = v;
-    for (let i = 0; i < indices.length; i++) {
-      const ind = indices[i];
-      if (ind < 0 || ind >= p.children.length) {
-        return null;
-      }
-      p = p.children[ind];
-    }
-    return p;
+    return ViewFinder.findChildByIndices(v, indices);
   }
 
   /** Find all views that classes by cls */
   static findViewsByClass(v: DxView, cls: string): DxView[] {
-    return this.find(v, (w) => w.cls == cls);
+    return ViewFinder.find(v, (w) => w.cls == cls);
   }
 
   /** Find all views by x, y coordinate, set visible to false
