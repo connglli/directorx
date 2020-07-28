@@ -95,6 +95,7 @@ export default class DxView implements ArrayTreeNode<DxView> {
   constructor(
     protected pkg_: string,
     protected cls_: string,
+    protected hash_: string,
     protected flags_: DxViewFlags,
     protected shown_: boolean,
     protected bgClass_: string,
@@ -128,6 +129,10 @@ export default class DxView implements ArrayTreeNode<DxView> {
 
   get cls(): string {
     return this.cls_;
+  }
+
+  get hash(): string {
+    return this.hash_;
   }
 
   get flags(): DxViewFlags {
@@ -348,6 +353,7 @@ export default class DxView implements ArrayTreeNode<DxView> {
   reset(
     pkg: string,
     cls: string,
+    hash: string,
     flags: DxViewFlags,
     shown: boolean,
     bgClass: string,
@@ -376,6 +382,7 @@ export default class DxView implements ArrayTreeNode<DxView> {
   ): void {
     this.pkg_ = pkg;
     this.cls_ = cls;
+    this.hash_ = hash;
     this.flags_ = flags;
     this.shown_ = shown;
     this.bgClass_ = bgClass;
@@ -408,6 +415,7 @@ export default class DxView implements ArrayTreeNode<DxView> {
     return new DxView(
       this.pkg_,
       this.cls_,
+      this.hash_,
       this.flags_,
       this.shown_,
       this.bgClass_,
@@ -441,6 +449,7 @@ export class DxDecorView extends DxView {
   public static readonly NAME = 'com.android.internal.policy.DecorView';
   constructor(
     pkg: string,
+    hash: string,
     width: number,
     height: number,
     bgClass: string,
@@ -449,6 +458,7 @@ export class DxDecorView extends DxView {
     super(
       pkg,
       DxDecorView.NAME,
+      hash,
       DefaultFlags,
       true,
       bgClass,
@@ -464,6 +474,7 @@ export class DxDecorView extends DxView {
   copy(): DxDecorView {
     return new DxDecorView(
       this.pkg,
+      this.hash,
       this.width,
       this.height,
       this.bgClass,
@@ -473,20 +484,13 @@ export class DxDecorView extends DxView {
 }
 
 export class DxViewPager extends DxView {
-  private currItem_ = 0;
-
-  get currItem(): number {
-    return this.currItem_;
-  }
-
-  set currItem(newItem: number) {
-    this.currItem_ = newItem;
-  }
+  public currItem = 0;
 
   copy(parent: N<DxView> = null, children: DxView[] = []): DxView {
     const view = new DxViewPager(
       this.pkg_,
       this.cls_,
+      this.hash_,
       this.flags_,
       this.shown_,
       this.bgClass_,
@@ -513,26 +517,21 @@ export class DxViewPager extends DxView {
       parent,
       children
     );
-    view.currItem = this.currItem_;
+    view.currItem = this.currItem;
     return view;
   }
 }
 
 export class DxTabHost extends DxView {
-  private currTab_ = 0;
-
-  get currTab(): number {
-    return this.currTab_;
-  }
-
-  set currTab(newTab: number) {
-    this.currTab_ = newTab;
-  }
+  public currTab = 0;
+  public tabsHash = '';
+  public contentHash = '';
 
   copy(parent: N<DxView> = null, children: DxView[] = []): DxView {
     const view = new DxTabHost(
       this.pkg_,
       this.cls_,
+      this.hash_,
       this.flags_,
       this.shown_,
       this.bgClass_,
@@ -559,7 +558,9 @@ export class DxTabHost extends DxView {
       parent,
       children
     );
-    view.currTab = this.currTab_;
+    view.currTab = this.currTab;
+    view.tabsHash = this.tabsHash;
+    view.contentHash = this.contentHash;
     return view;
   }
 }
@@ -592,6 +593,11 @@ export class ViewFinder extends ArrayTreeOp {
     } else {
       return null;
     }
+  }
+
+  /** Find the first met view with hash h */
+  static findViewByHash(v: DxView, hash: string): N<DxView> {
+    return ViewFinder.findFirst(v, (w) => w.hash == hash);
   }
 
   /** Find the first met view with text t */
@@ -876,12 +882,20 @@ export class DxActivity {
   }
 
   installDecor(
+    hash: string,
     width: number,
     height: number,
     bgClass: string,
     bgColor: number | null
   ): void {
-    this.decor = new DxDecorView(this.app, width, height, bgClass, bgColor);
+    this.decor = new DxDecorView(
+      this.app,
+      hash,
+      width,
+      height,
+      bgClass,
+      bgColor
+    );
   }
 
   replaceDecor(decor: DxDecorView): void {
@@ -959,9 +973,10 @@ export class DxViewFactory {
   public static create(type: DxViewType): DxView {
     switch (type) {
       case DxViewType.DECOR:
-        return new DxDecorView('', -1, -1, '', null);
+        return new DxDecorView('', '', -1, -1, '', null);
       case DxViewType.VIEW_PAGER:
         return new DxViewPager(
+          '',
           '',
           '',
           DefaultFlags,
@@ -979,6 +994,7 @@ export class DxViewFactory {
         return new DxTabHost(
           '',
           '',
+          '',
           DefaultFlags,
           true,
           '',
@@ -992,6 +1008,7 @@ export class DxViewFactory {
         );
       case DxViewType.OTHERS:
         return new DxView(
+          '',
           '',
           '',
           DefaultFlags,

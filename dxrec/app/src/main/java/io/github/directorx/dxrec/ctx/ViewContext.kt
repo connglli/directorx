@@ -4,14 +4,12 @@ import android.os.Build
 import android.util.Base64
 import android.view.View
 import android.widget.TabHost
+import android.widget.TabWidget
 import android.widget.TextView
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import io.github.directorx.dxrec.DxContext
-import io.github.directorx.dxrec.utils.accessors.getBackgroundColor
-import io.github.directorx.dxrec.utils.accessors.getFieldValue
-import io.github.directorx.dxrec.utils.accessors.getForegroundColor
-import io.github.directorx.dxrec.utils.accessors.isInstanceOf
+import io.github.directorx.dxrec.utils.accessors.*
 
 class ViewContext(val encode: Boolean) : DxContext {
 
@@ -97,8 +95,9 @@ class ViewContext(val encode: Boolean) : DxContext {
 
                 // tab host properties
                 if (view is TabHost) {
-                    val curTab = view.currentTab
-                    appendKV(info, "tab-curr", curTab)
+                    appendKV(info, "tab-curr", view.currentTab)
+                    appendKV(info, "tab-widget",  view.tabWidget.hexId())
+                    appendKV(info, "tab-content", view.tabContentView.hexId())
                 }
 
                 // view pager properties: alert don't use `is` operator, 'cause

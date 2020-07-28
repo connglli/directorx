@@ -193,8 +193,8 @@ class DumpSysActivityInfo {
 
 // FIX: some apps/devices often output non-standard attributes
 // for example aid=1073741824 following resource-id
-const PAT_AV_DECOR = /DecorView@[a-fA-F0-9]+\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
-const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-scroll=(?<scroll>[\w.]{4})\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)\sdx-im-acc=(?<acc>true|false)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
+const PAT_AV_DECOR = /DecorView@(?<hash>[a-fA-F0-9]+)\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
+const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-scroll=(?<scroll>[\w.]{4})\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)\sdx-im-acc=(?<acc>true|false)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+)\sdx-tab-widget=(?<ttabs>[a-fA-F0-9]+)\sdx-tab-content=(?<tcont>[a-fA-F0-9]+))?\}/;
 
 export class ActivityDumpSysBuilder {
   private pfxLen = 0;
@@ -275,7 +275,7 @@ export class ActivityDumpSysBuilder {
         throw new IllegalStateError('Expect DecorView');
       }
 
-      const { bgclass: bgClass, bgcolor: sBgColor } = res.groups;
+      const { hash, bgclass: bgClass, bgcolor: sBgColor } = res.groups;
       if (bgClass == '.') {
         throw new IllegalStateError(
           'Expect DecorView to have at least a background'
@@ -283,6 +283,7 @@ export class ActivityDumpSysBuilder {
       }
 
       act.installDecor(
+        hash,
         this.width,
         this.height,
         bgClass,
@@ -300,6 +301,7 @@ export class ActivityDumpSysBuilder {
 
     const {
       dep: sDep,
+      hash,
       cls,
       flags: sFlags,
       pflags: sPflags,
@@ -329,6 +331,8 @@ export class ActivityDumpSysBuilder {
       acc: sAcc,
       pcurr: sPcurr,
       tcurr: sTcurr,
+      ttabs: tTabsHash,
+      tcont: tContentHash,
     } = res.groups;
 
     // find parent of current view
@@ -435,6 +439,7 @@ export class ActivityDumpSysBuilder {
     view.reset(
       parent.pkg,
       cls,
+      hash,
       flags,
       shown,
       bgClass,
@@ -464,6 +469,8 @@ export class ActivityDumpSysBuilder {
       view.currItem = Number(sPcurr);
     } else if (sTcurr && view instanceof DxTabHost) {
       view.currTab = Number(sTcurr);
+      view.tabsHash = tTabsHash;
+      view.contentHash = tContentHash;
     }
 
     // add to parent

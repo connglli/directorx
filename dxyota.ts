@@ -212,6 +212,7 @@ export class ActivityYotaBuilder {
         );
       }
       a.installDecor(
+        '',
         decor.bounds.right,
         decor.bounds.bottom,
         'ColorDrawable',
@@ -227,6 +228,7 @@ export class ActivityYotaBuilder {
       v.reset(
         vhp.package,
         vhp.class,
+        '', // TODO: use dep-index to replace hash
         {
           V: vhp.visible ? 'V' : 'I',
           f: vhp.focusable,

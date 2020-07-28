@@ -125,55 +125,58 @@ class DXPK {
         const view = DxViewFactory.create(type);
         view.reset(
           app, // pkg
-          tokens[1], // cls
+          tokens[2], // cls
+          tokens[1], // hash
           {
             // flags
-            V: tokens[24][0] as 'V' | 'I' | 'G',
-            f: tokens[24][1] == 'F',
-            F: tokens[24][2] == 'F',
-            S: tokens[24][3] == 'S',
-            E: tokens[24][4] == 'E',
-            d: tokens[24][5] == 'D',
+            V: tokens[25][0] as 'V' | 'I' | 'G',
+            f: tokens[25][1] == 'F',
+            F: tokens[25][2] == 'F',
+            S: tokens[25][3] == 'S',
+            E: tokens[25][4] == 'E',
+            d: tokens[25][5] == 'D',
             s: {
-              l: tokens[24][6] == 'L',
-              t: tokens[24][7] == 'T',
-              r: tokens[24][8] == 'R',
-              b: tokens[24][9] == 'B',
+              l: tokens[25][6] == 'L',
+              t: tokens[25][7] == 'T',
+              r: tokens[25][8] == 'R',
+              b: tokens[25][9] == 'B',
             },
-            c: tokens[24][10] == 'C',
-            lc: tokens[24][11] == 'L',
-            cc: tokens[24][12] == 'X',
-            a: tokens[24][13] == 'A',
+            c: tokens[25][10] == 'C',
+            lc: tokens[25][11] == 'L',
+            cc: tokens[25][12] == 'X',
+            a: tokens[25][13] == 'A',
           },
-          tokens[5] == 'S' ? true : false, // shown
-          tokens[21], // bgClass
-          tokens[22] == '.' // bgColor
+          tokens[6] == 'S' ? true : false, // shown
+          tokens[22], // bgClass
+          tokens[23] == '.' // bgColor
             ? null
-            : Number(tokens[22]),
-          tokens[23] == '.' ? null : tokens[23], // foreground
-          Number(tokens[6]), // left
-          Number(tokens[7]), // top
-          Number(tokens[8]), // right
-          Number(tokens[9]), // bottom
-          Number(tokens[10]), // elevation
-          Number(tokens[11]), // tx
-          Number(tokens[12]), // ty
-          Number(tokens[13]), // tz
-          Number(tokens[14]), // sx
-          Number(tokens[15]), // sy
-          tokens[2], // resPkg
-          tokens[3], // resType
-          tokens[4], // resEntry
-          base64.decode(tokens[16]), // desc
-          base64.decode(tokens[17]), // text
-          base64.decode(tokens[18]), // tag
-          base64.decode(tokens[19]), // tip
-          base64.decode(tokens[20]) // hint
+            : Number(tokens[23]),
+          tokens[24] == '.' ? null : tokens[24], // foreground
+          Number(tokens[7]), // left
+          Number(tokens[8]), // top
+          Number(tokens[9]), // right
+          Number(tokens[10]), // bottom
+          Number(tokens[11]), // elevation
+          Number(tokens[12]), // tx
+          Number(tokens[13]), // ty
+          Number(tokens[14]), // tz
+          Number(tokens[15]), // sx
+          Number(tokens[16]), // sy
+          tokens[3], // resPkg
+          tokens[4], // resType
+          tokens[5], // resEntry
+          base64.decode(tokens[17]), // desc
+          base64.decode(tokens[18]), // text
+          base64.decode(tokens[19]), // tag
+          base64.decode(tokens[20]), // tip
+          base64.decode(tokens[21]) // hint
         );
         if (view instanceof DxViewPager) {
-          view.currItem = Number(tokens[25]);
+          view.currItem = Number(tokens[26]);
         } else if (view instanceof DxTabHost) {
-          view.currTab = Number(tokens[25]);
+          view.currTab = Number(tokens[26]);
+          view.tabsHash = tokens[27];
+          view.contentHash = tokens[28];
         }
         vpool.push(view);
         size -= 1;
@@ -306,7 +309,7 @@ class DXPK {
     await DXPK.writeNumber(buf, dxpk.vpool.length);
     for (const v of dxpk.vpool) {
       const type = DxViewFactory.typeOf(v);
-      await DXPK.writeString(buf, `${DXPK.type2str(type)};`, false);
+      await DXPK.writeString(buf, `${DXPK.type2str(type)};${v.hash};`, false);
       await DXPK.writeString(
         buf,
         `${v.cls};${v.resPkg};${v.resType};${v.resEntry};${
@@ -359,7 +362,10 @@ class DXPK {
         await DXPK.writeString(buf, `${v.currItem}`);
       } else if (v instanceof DxTabHost) {
         await DXPK.writeString(buf, `${flags};`, false);
-        await DXPK.writeString(buf, `${v.currTab}`);
+        await DXPK.writeString(
+          buf,
+          `${v.currTab};${v.tabsHash};${v.contentHash}`
+        );
       } else {
         await DXPK.writeString(buf, flags);
       }
@@ -598,6 +604,6 @@ export default class DxPacker {
 }
 
 if (import.meta.main) {
-  const dxpk = await DXPK.load('./calculator2.dxpk');
-  await DXPK.dump('./calculator22.dxpk', dxpk);
+  const dxpk = await DXPK.load('./msword.tabcontent.dxpk');
+  await DXPK.dump('./msword.tabcontent2.dxpk', dxpk);
 }

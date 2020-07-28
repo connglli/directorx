@@ -28,6 +28,10 @@ private fun View.dumpInner(repeat: Int, buf: StringBuffer) {
     }
 }
 
+fun View.hexId(): String {
+    return Integer.toHexString(System.identityHashCode(this))
+}
+
 fun getBackgroundColor(view: View): Pair<String?, Int?> {
     val bg = view.background ?: null
     var type: String? = null
