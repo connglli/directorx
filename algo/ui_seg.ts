@@ -3,7 +3,7 @@ import DxSegment, { Segments, DxHVESegSep, DxShrinkSegSep } from '../dxseg.ts';
 import { DevInfo } from '../dxdroid.ts';
 import DxLog from '../dxlog.ts';
 import { XYIntervalTree } from '../utils/interval_tree.ts';
-import Interval, { XYIntervals } from '../utils/interval.ts';
+import Interval, { XYIntervals, XYInterval } from '../utils/interval.ts';
 import { CannotReachHereError } from '../utils/error.ts';
 
 type N<T> = T | null;
@@ -631,6 +631,29 @@ export default function segUi(
   segments.forEach((s) => {
     if (!Segments.isImportantForA11y(s)) {
       s.accepted = false;
+    }
+  });
+
+  // thirdly, to include as more hierarchies as possible,
+  // let's enlarge each accepted segment as long as they
+  // are the same large as their parents in the hierarchy
+  segments.forEach((s) => {
+    if (!s.accepted) {
+      return;
+    }
+    const roots = s.roots.slice();
+    const added = new Set<DxView>();
+    s.roots.splice(0, roots.length);
+    for (const r of roots) {
+      const bounds = Views.bounds(r);
+      let p = r;
+      while (p.parent && XYInterval.equals(bounds, Views.bounds(p.parent))) {
+        p = p.parent;
+      }
+      if (!added.has(p)) {
+        added.add(p);
+        s.roots.push(p);
+      }
     }
   });
 

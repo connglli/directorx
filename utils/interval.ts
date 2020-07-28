@@ -222,6 +222,10 @@ export class XYInterval {
     }
   }
 
+  static equals(a: XYInterval, b: XYInterval): boolean {
+    return Interval.equals(a.x, b.x) && Interval.equals(a.y, b.y);
+  }
+
   toString(): string {
     return `[${this.x.low}-${this.x.high},${this.y.low}-${this.y.high}]`;
   }
