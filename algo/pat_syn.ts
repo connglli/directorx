@@ -495,8 +495,7 @@ class TabHostContent extends Reveal {
 }
 
 /** A much robust heuristic for TabHost, for handling
- * cases where android:id/tabs does not exist
- */
+ * cases where android:id/tabs does not exist */
 class TabHost extends TabHostTab {
   // tabs are all children of TabHost
   static isTabHost(v: DxView): v is DxTabHost {
@@ -545,17 +544,19 @@ class TabHost extends TabHostTab {
   }
 }
 
-/** ViewPager is the pattern for handling ViewPager */
-class ViewPager extends Reveal {
+/** DoubleSideViewPager is the pattern for handling ViewPager
+ * that both exists in recordee and playee
+ */
+class DoubleSideViewPager extends Reveal {
   // pages are all children of ViewPager
   static isViewPager(v: DxView): v is DxViewPager {
     return v instanceof DxViewPager;
   }
 
   static findPagerParent(v: DxView): N<DxViewPager> {
-    return ViewFinder.findParent(v, (p) => ViewPager.isViewPager(p)) as N<
-      DxViewPager
-    >;
+    return ViewFinder.findParent(v, (p) =>
+      DoubleSideViewPager.isViewPager(p)
+    ) as N<DxViewPager>;
   }
 
   // the page's parent pager in recordee
@@ -564,7 +565,7 @@ class ViewPager extends Reveal {
   private vPPager: N<DxViewPager> = null;
 
   match(): boolean {
-    this.vRPager = ViewPager.findPagerParent(this.args.v);
+    this.vRPager = DoubleSideViewPager.findPagerParent(this.args.v);
     if (!this.vRPager) {
       return false;
     }
@@ -586,7 +587,7 @@ class ViewPager extends Reveal {
       // to any leaf segment, so find the parent of
       // each root, maybe there are pagers
       for (const r of playee.s.roots) {
-        const parent = ViewPager.findPagerParent(r);
+        const parent = DoubleSideViewPager.findPagerParent(r);
         if (parent) {
           pagers.push(parent);
         }
@@ -649,6 +650,37 @@ class ViewPager extends Reveal {
   }
 }
 
+/** Different from DoubleSideViewPager, SingleSideViewPager is the pattern
+ * for handling ViewPager that only shows in playee side */
+class SingleSideViewPager extends Reveal {
+  // the pager in playee side
+  private vPager: N<DxViewPager> = null;
+
+  match(): boolean {
+    const playee = this.args.p;
+    this.vPager = SegmentBottomUpFinder.findView(
+      playee.s,
+      DoubleSideViewPager.isViewPager
+    ) as N<DxViewPager>;
+    return !!this.vPager;
+  }
+
+  async apply(droid: DxDroid): Promise<void> {
+    if (!this.vPager) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    // test from the first page, to the last page,
+    // until the target view shown
+    for (const page of this.vPager.children) {
+      await droid.input.tap(Views.x0(page) + 1, Views.y0(page) + 1);
+      if ((await droid.input.select(this.args.v)).length != 0) {
+        return;
+      }
+    }
+    throw new NotImplementedError('No page contains the target view');
+  }
+}
+
 // The Pattern is sorted bottom-up, in order of
 // [None, Reflow, Expand, Merge, Reveal, Transform]
 const patterns = [
@@ -660,7 +692,8 @@ const patterns = [
   TabHostTab,
   TabHostContent,
   TabHost,
-  ViewPager,
+  DoubleSideViewPager,
+  SingleSideViewPager,
 ];
 
 /** Recognize the pattern bottom-up from None to

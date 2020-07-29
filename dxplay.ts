@@ -296,6 +296,10 @@ class ResPlayer extends DxPlayer {
       }
       vm = await this.find(ne);
       if (vm != null && this.isVmVisibleToUser(vm)) {
+        if (!this.canSkip(vm)) {
+          // can skip more views
+          break;
+        }
         // find one, directly skip all previously
         this.seq.popN(Number(i) + 1);
         DxLog.info(`/* skip ${e.toString()} */`);
@@ -403,6 +407,13 @@ class ResPlayer extends DxPlayer {
 
   private isVmVisibleToUser(vm: ViewMap): boolean {
     return vm.visible && vm.important;
+  }
+
+  // TODO: add more rules for checking, some views even
+  // text view can be skipped, e.g., MoreOptions, maybe
+  // a word2vec model should be used here to test more??
+  private canSkip(vm: ViewMap): boolean {
+    return vm.text == null;
   }
 }
 
