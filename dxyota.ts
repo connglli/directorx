@@ -350,7 +350,26 @@ export default class DxYota {
     }
   }
 
-  async select(opt: ViewOptions): Promise<ViewMap[]> {
+  async select(optOrView: ViewOptions | DxView): Promise<ViewMap[]> {
+    let opt: SelectOptions;
+    if (optOrView instanceof DxView) {
+      const v = optOrView;
+      opt = {
+        n: 1,
+      };
+      if (v.text.length != 0) {
+        opt.textContains = v.text;
+      } else if (v.resId.length != 0) {
+        opt.resIdContains = v.resEntry;
+      } else if (v.desc.length != 0) {
+        opt.descContains = v.desc;
+      }
+      if (!opt.resIdContains && !opt.textContains && !opt.descContains) {
+        throw new NotImplementedError('resId, text and desc are all empty');
+      }
+    } else {
+      opt = optOrView;
+    }
     const args = makeSelectOpts(opt);
     let retry = 3,
       status: AdbResult;

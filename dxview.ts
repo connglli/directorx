@@ -577,6 +577,11 @@ export class ViewFinder extends ArrayTreeOp {
     return ViewFinder.findParent(v, (p) => p.flags.s.t || p.flags.s.b);
   }
 
+  /** Find the first view that satisfy the predicate */
+  static findView(v: DxView, pred: (v: DxView) => boolean): N<DxView> {
+    return ViewFinder.findFirst(v, pred);
+  }
+
   /** Find a most detailed view by x, y coordinate, set visible to false
    * if need to find invisible also */
   static findViewByXY(
@@ -597,22 +602,22 @@ export class ViewFinder extends ArrayTreeOp {
 
   /** Find the first met view with hash h */
   static findViewByHash(v: DxView, hash: string): N<DxView> {
-    return ViewFinder.findFirst(v, (w) => w.hash == hash);
+    return ViewFinder.findView(v, (w) => w.hash == hash);
   }
 
   /** Find the first met view with text t */
   static findViewByText(v: DxView, text: string): N<DxView> {
-    return ViewFinder.findFirst(v, (w) => w.text == text);
+    return ViewFinder.findView(v, (w) => w.text == text);
   }
 
   /** Find the first met view with desc t */
   static findViewByDesc(v: DxView, desc: string): N<DxView> {
-    return ViewFinder.findFirst(v, (w) => w.desc == desc);
+    return ViewFinder.findView(v, (w) => w.desc == desc);
   }
 
   /** Find the first met view with resource type and entry */
   static findViewByResource(v: DxView, type: string, entry: string): N<DxView> {
-    return ViewFinder.findFirst(
+    return ViewFinder.findView(
       v,
       (w) => w.resType == type && w.resEntry == entry
     );
@@ -623,9 +628,14 @@ export class ViewFinder extends ArrayTreeOp {
     return ViewFinder.findChildByIndices(v, indices);
   }
 
+  /** Find all views that satisfy the predicate */
+  static findViews(v: DxView, pred: (v: DxView) => boolean): DxView[] {
+    return ViewFinder.find(v, pred);
+  }
+
   /** Find all views that classes by cls */
   static findViewsByClass(v: DxView, cls: string): DxView[] {
-    return ViewFinder.find(v, (w) => w.cls == cls);
+    return ViewFinder.findViews(v, (w) => w.cls == cls);
   }
 
   /** Find all views by x, y coordinate, set visible to false
@@ -638,9 +648,10 @@ export class ViewFinder extends ArrayTreeOp {
     enabled = true
   ): DxView[] {
     let found: DxView[] = [];
-    if (ViewFinder.isInView(v, x, y, visible, enabled)) {
-      found.push(v);
+    if (!ViewFinder.isInView(v, x, y, visible, enabled)) {
+      return found;
     }
+    found.push(v);
     for (const c of v.children) {
       found = [
         ...ViewFinder.findViewsByXY(c, x, y, visible, enabled),
@@ -738,10 +749,13 @@ export class Views {
     return v.text.length != 0;
   }
 
+  /** Test whether the given view obeys the valid
+   * definition, i.e., is large enough */
   static isValid(v: DxView): boolean {
     return v.width >= 5 && v.height >= 5;
   }
 
+  /** Test whether the user can see the given view */
   static isVisibleToUser(v: DxView, d: DevInfo): boolean {
     if (!v.shown) {
       return false;
@@ -920,6 +934,10 @@ export class DxActivity {
     return this.decor
       ? ViewFinder.findViewByResource(this.decor, type, entry)
       : null;
+  }
+
+  findViews(pred: (v: DxView) => boolean): DxView[] {
+    return this.decor ? ViewFinder.findViews(this.decor, pred) : [];
   }
 
   /** Build the drawing level top-down. Views at each level are

@@ -206,6 +206,7 @@ export class Segments {
   }
 }
 
+/** Utility to find views/segments on segment */
 export class SegmentFinder extends ArrayTreeOp {
   /** Find all accepted segments */
   static findAccepts(s: DxSegment): DxSegment[] {
@@ -250,6 +251,66 @@ export class SegmentFinder extends ArrayTreeOp {
     entry: string
   ): N<DxView> {
     return SegmentFinder.findView(
+      s,
+      (w) => w.resType == type && w.resEntry == entry
+    );
+  }
+}
+
+/** Utility to find views/segments on segment bottom-up,
+ * i.e., find in self, then siblings, then parent, then
+ * parent's siblings, then ...
+ */
+export class SegmentBottomUpFinder {
+  /** Find in the first view that satisfy the predicate  */
+  static findView(s: DxSegment, pred: (v: DxView) => boolean): N<DxView> {
+    let checked = new Set<DxView>();
+    let realPred = (v: DxView) => {
+      if (checked.has(v)) {
+        return false;
+      }
+      const ret = pred(v);
+      checked.add(v);
+      return ret;
+    };
+
+    function doFind(c: DxSegment): N<DxView> {
+      let found: N<DxView> = SegmentFinder.findView(c, realPred);
+      if (found) {
+        return found;
+      }
+      for (const sib of c.siblings) {
+        found = SegmentFinder.findView(sib, realPred);
+        if (found) {
+          return found;
+        }
+      }
+      if (c.parent) {
+        found = doFind(c.parent);
+      }
+      return found;
+    }
+
+    return doFind(s);
+  }
+
+  /** Find the first met view with text t */
+  static findViewByText(s: DxSegment, text: string): N<DxView> {
+    return SegmentBottomUpFinder.findView(s, (w) => w.text == text);
+  }
+
+  /** Find the first met view with desc t */
+  static findViewByDesc(s: DxSegment, desc: string): N<DxView> {
+    return SegmentBottomUpFinder.findView(s, (w) => w.desc == desc);
+  }
+
+  /** Find the first met view with resource type and entry */
+  static findViewByResource(
+    s: DxSegment,
+    type: string,
+    entry: string
+  ): N<DxView> {
+    return SegmentBottomUpFinder.findView(
       s,
       (w) => w.resType == type && w.resEntry == entry
     );

@@ -20,7 +20,7 @@ import DxDroid, {
 } from './dxdroid.ts';
 import segUi from './algo/ui_seg.ts';
 import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';
-import recBpPat, { Invisible, SyntEvent } from './algo/pat_syn.ts';
+import recBpPat, { Invisible } from './algo/pat_syn.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,
@@ -225,14 +225,12 @@ class WdgPlayer extends DxPlayer {
 
 /** ResPlayer plays each event responsively */
 class ResPlayer extends DxPlayer {
-  private pxp: PxPlayer;
   constructor(
     app: string,
     public readonly decode: boolean,
     public readonly K: number
   ) {
     super(app);
-    this.pxp = new PxPlayer(app);
   }
 
   async playEvent(e: DxEvent, rDev: DevInfo): Promise<void> {
@@ -271,19 +269,20 @@ class ResPlayer extends DxPlayer {
       if (v == null) {
         throw new IllegalStateError('Cannot find view on playee tree');
       }
-      const pat = new Invisible({
+      const pattern = new Invisible({
         v,
         a: pAct,
         d: droid.dev,
       });
-      if (!pat.match()) {
+      if (!pattern.match()) {
         throw new NotImplementedError('Pattern is not invisible');
       } else {
         DxLog.info('pattern invisible');
       }
-      const ne = pat.apply();
-      await this.fireSyntEvent(ne);
+      // push the raw event back to the sequence, and try again
       this.seq.push(e);
+      // apply the rules to get the synthesized event
+      await pattern.apply(droid);
       return;
     }
 
@@ -329,32 +328,27 @@ class ResPlayer extends DxPlayer {
     const pSeg = match.getMatch(rSeg);
     if (!pSeg) {
       throw new IllegalStateError(
-        'Does not found any matched segment, event NO_MATCH'
+        'Does not find any matched segment, even NO_MATCH'
       );
     } else if (pSeg == NO_MATCH) {
       throw new NotImplementedError('Matched segment is NO_MATCH');
     }
 
     // recognize the pattern
-    const bpArgs = {
+    const pattern = recBpPat({
       v,
-      r: { a: rAct, s: rSeg },
-      p: { a: pAct, s: pSeg },
-    };
-    const pat = recBpPat(bpArgs);
-    if (pat == null) {
+      r: { a: rAct, s: rSeg, d: rDev },
+      p: { a: pAct, s: pSeg, d: pDev },
+    });
+    if (pattern == null) {
       throw new NotImplementedError('No pattern is recognized');
     } else {
-      DxLog.info(`pattern ${pat.level()}`);
+      DxLog.info(`pattern ${pattern.level()}`);
     }
-    // apply the rules to get the synthesized event
-    const ne = pat.apply();
-    // fire the event
-    await this.fireSyntEvent(ne);
-
-    // push the raw event back to the sequence,
-    // and try again
+    // push the raw event back to the sequence, and try again
     this.seq.push(e);
+    // apply the rules to get the synthesized event
+    await pattern.apply(droid);
   }
 
   private findSegByView(v: DxView, segs: DxSegment[]): DxSegment {
@@ -378,21 +372,8 @@ class ResPlayer extends DxPlayer {
         `No visible view found on recordee tree at (${x}, ${y})`
       );
     }
-    const opt: SelectOptions = {
-      n: 1,
-    };
-    if (v.text.length != 0) {
-      opt.textContains = v.text;
-    } else if (v.resId.length != 0) {
-      opt.resIdContains = v.resEntry;
-    } else if (v.desc.length != 0) {
-      opt.descContains = v.desc;
-    }
-    if (!opt.resIdContains && !opt.textContains && !opt.descContains) {
-      throw new NotImplementedError('resId, text and desc are all empty');
-    }
     // try to select its corresponding view on playee
-    const vms = await DxDroid.get().input.select(opt);
+    const vms = await DxDroid.get().input.select(v);
     return vms.length == 0 ? null : vms[0];
   }
 
@@ -414,10 +395,6 @@ class ResPlayer extends DxPlayer {
       default:
         throw new CannotReachHereError();
     }
-  }
-
-  private async fireSyntEvent(se: SyntEvent) {
-    return await this.pxp.playEvent(se.e);
   }
 
   private async top(): Promise<DxActivity> {

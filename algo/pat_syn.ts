@@ -5,24 +5,18 @@ import DxView, {
   Views,
   ViewFinder,
 } from '../dxview.ts';
-import DxSegment, { SegmentFinder } from '../dxseg.ts';
-import DxEvent, { DxTapEvent, DxSwipeEvent } from '../dxevent.ts';
-import { DevInfo } from '../dxdroid.ts';
+import DxSegment, { SegmentFinder, SegmentBottomUpFinder } from '../dxseg.ts';
+import DxDroid, { DevInfo } from '../dxdroid.ts';
 import { NotImplementedError, IllegalStateError } from '../utils/error.ts';
 
 type N<T> = T | null;
-
-/** Synthetic event returned by applying each pattern */
-export class SyntEvent {
-  constructor(public readonly e: DxEvent) {}
-}
 
 export interface PatRecArgs {}
 
 export abstract class DxPat {
   constructor(protected readonly args: PatRecArgs) {}
   abstract match(): boolean;
-  abstract apply(): SyntEvent;
+  abstract async apply(droid: DxDroid): Promise<void>;
 }
 
 export interface InvisiblePatRecArgs extends PatRecArgs {
@@ -53,19 +47,15 @@ export class Invisible extends DxPat {
     return !!this.vParent;
   }
 
-  apply(): SyntEvent {
+  async apply(droid: DxDroid): Promise<void> {
     // TODO: what if the view is not triggered by
     // tapping its visible parent?
     if (this.vParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    return new SyntEvent(
-      new DxTapEvent(
-        this.args.a,
-        this.vParent.drawingX + 1,
-        this.vParent.drawingY + 1,
-        -1
-      )
+    return await droid.input.tap(
+      Views.x0(this.vParent) + 1,
+      Views.y0(this.vParent) + 1
     );
   }
 }
@@ -77,11 +67,13 @@ export interface BpPatRecArgs extends PatRecArgs {
   r: {
     s: DxSegment;
     a: DxActivity;
+    d: DevInfo;
   };
   // the playee
   p: {
     s: DxSegment;
     a: DxActivity;
+    d: DevInfo;
   };
 }
 
@@ -103,15 +95,15 @@ abstract class Expand extends DxBpPat {
   }
 }
 
+type ScrollDir = 'R2L' | 'L2R' | 'T2B' | 'B2T' | 'N';
+
 /** Scroll is the pattern that handles scrollable parent */
 class Scroll extends Expand {
   private static vLastApplied: N<DxView> = null;
-  private static lastDir: 'R2L' | 'L2R' | 'T2B' | 'B2T' | 'N' = 'N';
+  private static lastDir: ScrollDir = 'N';
   private vHSParent: N<DxView> = null;
   private vVSParent: N<DxView> = null;
 
-  // BUG: what if the scroll never stops (i.e., the list is not
-  // the corresponding matched list)
   match(): boolean {
     // test whether v is children of a scrollable parent
     this.vHSParent = ViewFinder.findHScrollableParent(this.args.v);
@@ -121,15 +113,15 @@ class Scroll extends Expand {
     }
     // find the corresponding scrollable parent in the playee segment
     if (this.vHSParent) {
-      this.vHSParent = this.findTarget(this.vHSParent, 'H');
+      this.vHSParent = this.findTarget(this.vHSParent);
     }
     if (this.vVSParent) {
-      this.vVSParent = this.findTarget(this.vVSParent, 'V');
+      this.vVSParent = this.findTarget(this.vVSParent);
     }
     return !!this.vHSParent || !!this.vVSParent;
   }
 
-  apply(): SyntEvent {
+  async apply(droid: DxDroid): Promise<void> {
     if (this.vHSParent == null && this.vVSParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     } else if (this.vHSParent != null && this.vVSParent != null) {
@@ -139,162 +131,129 @@ class Scroll extends Expand {
         );
       } else {
         throw new IllegalStateError(
-          'Both horizontally and vertically scrollable (different parent)'
+          'Both horizontally and vertically scrollable (different parents)'
         );
       }
     } else if (this.vHSParent != null) {
-      return this.applyHs();
-    } else {
-      return this.applyVs();
+      let iteration = 1;
+      let lastDir: ScrollDir = 'N';
+      // scroll to find the target view
+      do {
+        const canL2R = Views.canL2RScroll(this.vHSParent);
+        const canR2L = Views.canR2LScroll(this.vHSParent);
+        let currDir: ScrollDir = canR2L ? 'R2L' : canL2R ? 'L2R' : 'N';
+        if (lastDir == 'L2R' && canL2R) {
+          currDir = 'L2R';
+        } else if (lastDir == 'R2L' && canR2L) {
+          currDir = 'R2L';
+        }
+        switch (currDir) {
+          case 'L2R':
+            await droid.input.swipe(
+              Views.xCenter(this.vHSParent),
+              Views.yCenter(this.vHSParent),
+              Views.xCenter(this.vHSParent),
+              0,
+              300
+            );
+            break;
+          case 'R2L':
+            await droid.input.swipe(
+              Views.xCenter(this.vHSParent),
+              Views.yCenter(this.vHSParent),
+              -Views.xCenter(this.vHSParent),
+              0,
+              300
+            );
+            break;
+          default:
+            throw new IllegalStateError(
+              "Pattern is not satisfied, don't apply"
+            );
+        }
+        if (lastDir != 'N' && lastDir != currDir) {
+          iteration += 1;
+        }
+        lastDir = currDir;
+      } while (
+        iteration < 3 &&
+        (await droid.input.select(this.args.v)).length == 0
+      );
+      if (iteration == 3) {
+        throw new NotImplementedError('No views found in the list');
+      }
+    } else if (this.vVSParent != null) {
+      let iteration = 1;
+      let lastDir: ScrollDir = 'N';
+      // scroll to find the target view
+      do {
+        const canT2B = Views.canT2BScroll(this.vVSParent);
+        const canB2T = Views.canB2TScroll(this.vVSParent);
+        let currDir: ScrollDir = canB2T ? 'B2T' : canT2B ? 'T2B' : 'N';
+        // prefer to scroll at the same direction
+        if (lastDir == 'T2B' && canT2B) {
+          currDir = 'T2B';
+        } else if (lastDir == 'B2T' && canB2T) {
+          currDir = 'B2T';
+        }
+        switch (currDir) {
+          case 'T2B':
+            await droid.input.swipe(
+              Views.xCenter(this.vVSParent),
+              Views.yCenter(this.vVSParent),
+              0,
+              Views.yCenter(this.vVSParent),
+              300
+            );
+            break;
+          case 'B2T':
+            await droid.input.swipe(
+              Views.xCenter(this.vVSParent),
+              Views.yCenter(this.vVSParent),
+              0,
+              -Views.yCenter(this.vVSParent),
+              300
+            );
+            break;
+          default:
+            throw new IllegalStateError(
+              "Pattern is not satisfied, don't apply"
+            );
+        }
+        if (lastDir != 'N' && lastDir != currDir) {
+          iteration += 1;
+        }
+        lastDir = currDir;
+      } while (
+        iteration < 3 &&
+        (await droid.input.select(this.args.v)).length == 0
+      );
+      if (iteration == 3) {
+        throw new NotImplementedError('No views found in the list');
+      }
     }
   }
 
-  private findTarget(v: DxView, dir: 'V' | 'H'): N<DxView> {
+  /** Try to find the scrollable target bottom-up in playee */
+  private findTarget(v: DxView): N<DxView> {
     let found: N<DxView> = null;
-    const pSeg = this.args.p.s;
+    const playee = this.args.p;
     const fns = [
-      [v.text.length > 0, SegmentFinder.findViewByText, v.text],
+      [v.text.length > 0, SegmentBottomUpFinder.findViewByText, v.text],
       [
         v.resId.length > 0,
-        SegmentFinder.findViewByResource,
+        SegmentBottomUpFinder.findViewByResource,
         v.resType,
         v.resEntry,
       ],
-      [v.desc.length > 0, SegmentFinder.findViewByDesc, v.desc],
+      [v.desc.length > 0, SegmentBottomUpFinder.findViewByDesc, v.desc],
     ];
     for (const [test, fn, ...args] of fns) {
       if (!found && test) {
-        found = (fn as Function)(pSeg, ...args);
-      }
-    }
-    // the scrollable parent is maybe segmented to several segments,
-    // and the parent itself does not belong to any leaf segments.
-    // let's find the scrollable parent of the first root
-    if (!found) {
-      for (const r of pSeg.roots) {
-        if (!found) {
-          found =
-            dir == 'H'
-              ? ViewFinder.findHScrollableParent(r)
-              : ViewFinder.findVScrollableParent(r);
-        }
+        found = (fn as Function)(playee.s, ...args);
       }
     }
     return found;
-  }
-
-  private applyHs(): SyntEvent {
-    if (this.vHSParent == null) {
-      throw new IllegalStateError("Pattern is not satisfied, don't apply");
-    }
-    const last = Scroll.vLastApplied;
-    const lastDir = Scroll.lastDir;
-    const curr = this.args.v;
-    const canL2R = Views.canL2RScroll(this.vHSParent);
-    const canR2L = Views.canR2LScroll(this.vHSParent);
-    // prefer to scroll from right to left
-    let currDir: typeof lastDir = canR2L ? 'R2L' : canL2R ? 'L2R' : 'N';
-    // last view that applied is the same as current,
-    // prefer to scroll at the same direction
-    if (last && Views.eq(last, curr, false)) {
-      if (lastDir == 'L2R' && canL2R) {
-        currDir = 'L2R';
-      } else if (lastDir == 'R2L' && canR2L) {
-        currDir = 'R2L';
-      }
-    }
-    let e: N<SyntEvent> = null;
-    switch (currDir) {
-      case 'L2R':
-        e = new SyntEvent(
-          new DxSwipeEvent(
-            this.args.p.a,
-            Views.xCenter(this.vHSParent),
-            Views.yCenter(this.vHSParent),
-            Views.xCenter(this.vHSParent),
-            0,
-            0,
-            300
-          )
-        );
-        break;
-      case 'R2L':
-        e = new SyntEvent(
-          new DxSwipeEvent(
-            this.args.p.a,
-            Views.xCenter(this.vHSParent),
-            Views.yCenter(this.vHSParent),
-            -Views.xCenter(this.vHSParent),
-            0,
-            0,
-            300
-          )
-        );
-        break;
-    }
-    if (!e) {
-      throw new IllegalStateError("Pattern is not satisfied, don't apply");
-    }
-    Scroll.vLastApplied = curr;
-    Scroll.lastDir = currDir;
-    return e;
-  }
-
-  private applyVs(): SyntEvent {
-    if (this.vVSParent == null) {
-      throw new IllegalStateError("Pattern is not satisfied, don't apply");
-    }
-    const last = Scroll.vLastApplied;
-    const lastDir = Scroll.lastDir;
-    const curr = this.args.v;
-    const canT2B = Views.canT2BScroll(this.vVSParent);
-    const canB2T = Views.canB2TScroll(this.vVSParent);
-    // prefer to scroll from bottom to top
-    let currDir: typeof lastDir = canB2T ? 'B2T' : canT2B ? 'T2B' : 'N';
-    // last view that applied is the same as current,
-    // prefer to scroll at the same direction
-    if (last && last == curr) {
-      if (lastDir == 'T2B' && canT2B) {
-        currDir = 'T2B';
-      } else if (lastDir == 'B2T' && canB2T) {
-        currDir = 'B2T';
-      }
-    }
-    let e: N<SyntEvent> = null;
-    switch (currDir) {
-      case 'T2B':
-        e = new SyntEvent(
-          new DxSwipeEvent(
-            this.args.p.a,
-            Views.xCenter(this.vVSParent),
-            Views.yCenter(this.vVSParent),
-            0,
-            Views.yCenter(this.vVSParent),
-            0,
-            300
-          )
-        );
-        break;
-      case 'B2T':
-        e = new SyntEvent(
-          new DxSwipeEvent(
-            this.args.p.a,
-            Views.xCenter(this.vVSParent),
-            Views.yCenter(this.vVSParent),
-            0,
-            -Views.yCenter(this.vVSParent),
-            0,
-            300
-          )
-        );
-        break;
-    }
-    if (!e) {
-      throw new IllegalStateError("Pattern is not satisfied, don't apply");
-    }
-    Scroll.vLastApplied = curr;
-    Scroll.lastDir = currDir;
-    return e;
   }
 }
 
@@ -310,10 +269,11 @@ abstract class SpecialButton extends Reveal {
   protected vButton: N<DxView> = null;
 
   match(): boolean {
-    // check if there are MoreOptions button
+    // check if there are special button
     // buttons in the playee segment
-    for (const r of this.args.p.s.roots) {
-      const btn = this.findView(r);
+    const playee = this.args.p;
+    for (const r of playee.s.roots) {
+      const btn = this.findButton(r);
       if (btn != null) {
         this.vButton = btn;
         return true;
@@ -322,30 +282,27 @@ abstract class SpecialButton extends Reveal {
     return false;
   }
 
-  apply(): SyntEvent {
+  async apply(droid: DxDroid): Promise<void> {
     if (this.vButton == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
     // synthesize a tap event on the
     // more options button
-    return new SyntEvent(
-      new DxTapEvent(
-        this.args.p.a,
-        Views.x0(this.vButton) + 1,
-        Views.y0(this.vButton) + 1,
-        -1
-      )
+    return await droid.input.tap(
+      Views.x0(this.vButton) + 1,
+      Views.y0(this.vButton) + 1
     );
   }
 
-  abstract findView(v: DxView): N<DxView>;
+  /** Find the special buttons in the given view of playee */
+  abstract findButton(v: DxView): N<DxView>;
 }
 
 /** MoreOption is the pattern for more options */
 class MoreOptions extends SpecialButton {
   static DESC = 'More options';
 
-  findView(v: DxView): N<DxView> {
+  findButton(v: DxView): N<DxView> {
     return ViewFinder.findViewByDesc(v, MoreOptions.DESC);
   }
 }
@@ -354,7 +311,7 @@ class MoreOptions extends SpecialButton {
 class DrawerMenu extends SpecialButton {
   static DESC = 'Open navigation drawer';
 
-  findView(v: DxView): N<DxView> {
+  findButton(v: DxView): N<DxView> {
     return ViewFinder.findViewByDesc(v, DrawerMenu.DESC);
   }
 }
@@ -371,8 +328,8 @@ class TabHostTab extends Reveal {
   protected vPath: DxView[] = [];
 
   match(): boolean {
-    // check whether v is in a TabHost
     this.vPath.unshift(this.args.v);
+    // find the TabHost tabs parent
     const found = ViewFinder.findParent(this.args.v, (p) => {
       this.vPath.unshift(p);
       return TabHostTab.isTabHostTabs(p);
@@ -384,8 +341,8 @@ class TabHostTab extends Reveal {
     return !!found;
   }
 
-  apply(): SyntEvent {
-    const pSeg = this.args.p.s;
+  async apply(droid: DxDroid): Promise<void> {
+    const playee = this.args.p;
     // vPath[0] is the direct parent of all tabs;
     const parent = this.vPath.shift();
     if (!parent) {
@@ -406,45 +363,33 @@ class TabHostTab extends Reveal {
         i,
         ...indices.slice(1),
       ]);
-      if (tab) {
+      // we assume each tab has a text indicator
+      if (tab && tab.text.length > 0) {
         sibTabs.push(tab);
       }
     }
     // find the available tabs in the playee segment
     // firstly try the text, and collect ones having
     // valid content descriptions
+    const found: N<DxView> = TabHostTab.findTab(sibTabs, playee.s);
+    if (!found) {
+      throw new NotImplementedError('View not found');
+    }
+    // tap found to reveal maybe the tab list
+    await droid.input.tap(Views.x0(found) + 1, Views.y0(found) + 1);
+  }
+
+  /** Try to find an available one in the playee segment (if not found,
+   * bottom-up find an available one in its siblings and parents) */
+  public static findTab(tabs: DxView[], seg: DxSegment): N<DxView> {
     let found: N<DxView> = null;
-    const descViews: DxView[] = [];
-    for (const v of sibTabs) {
-      if (v.text.length > 0) {
-        found = SegmentFinder.findViewByText(pSeg, v.text);
-      } else if (v.desc.length > 0) {
-        descViews.push(v);
-      }
+    for (const v of tabs) {
+      found = SegmentBottomUpFinder.findViewByText(seg, v.text);
       if (found) {
         break;
       }
     }
-    // if no text are available, then try the desc
-    if (!found) {
-      for (const v of descViews) {
-        found = SegmentFinder.findViewByDesc(pSeg, v.desc);
-        if (found) {
-          break;
-        }
-      }
-    }
-    if (!found) {
-      throw new NotImplementedError('View not found');
-    }
-    return new SyntEvent(
-      new DxTapEvent(
-        this.args.p.a,
-        Views.x0(found) + 1,
-        Views.y0(found) + 1,
-        -1
-      )
-    );
+    return found;
   }
 }
 
@@ -453,20 +398,99 @@ class TabHostContent extends Reveal {
   // tab contents are direct children of the a view
   // whose resource-id is android:id/tabcontent
   static isTabHostContent(v: DxView): boolean {
-    return v.resId == 'android:id/tabcontent';
+    return (
+      v.resId == 'android:id/tabcontent' ||
+      v.resEntry.toLocaleLowerCase().includes('tabcontent')
+    );
   }
+
+  private vTabContent: N<DxView> = null;
 
   match(): boolean {
     // check whether v is in a TabHostContent
-    const found = ViewFinder.findParent(
+    this.vTabContent = ViewFinder.findParent(
       this.args.v,
       TabHostContent.isTabHostContent
     );
-    return !!found;
+    return !!this.vTabContent;
   }
 
-  apply(): SyntEvent {
-    throw new NotImplementedError('TabHostContent');
+  async apply(droid: DxDroid): Promise<void> {
+    if (!this.vTabContent) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    const recordee = this.args.r;
+    const playee = this.args.p;
+    // find all available tab hosts on recordee
+    let tabHosts = recordee.a.findViews(
+      (v) => TabHostTab.isTabHostTabs(v) && Views.isVisibleToUser(v, recordee.d)
+    );
+    if (tabHosts.length == 0) {
+      tabHosts = recordee.a.findViews(
+        (v) => TabHost.isTabHost(v) && Views.isVisibleToUser(v, recordee.d)
+      );
+      // remove all other views and return the
+      // direct parent of all tabs
+      tabHosts = tabHosts.map((tab) => {
+        let child = tab;
+        let goodChildren: DxView[] = [];
+        do {
+          goodChildren = TabHost.goodChildren(child);
+          if (goodChildren.length != 1) {
+            return child;
+          }
+          child = goodChildren[0];
+        } while (true);
+      });
+    }
+    // filter out those has no visible children
+    tabHosts = tabHosts.filter(
+      (t) =>
+        Views.hasValidChild(t) &&
+        t.children.filter((c) => !c.shown).length != t.children.length
+    );
+    if (tabHosts.length == 0) {
+      throw new NotImplementedError('No TabHosts found');
+    } else if (tabHosts.length != 1) {
+      throw new NotImplementedError('Multiple TabHosts found');
+    }
+    const parent = tabHosts[0];
+    // find the selected tab on recordee
+    let currTabContainer = parent.children.find((c) => c.flags.S);
+    if (!currTabContainer) {
+      throw new NotImplementedError('No selected tab');
+    }
+    // try to find the selected firstly
+    let tabContainers = [currTabContainer, ...currTabContainer.siblings];
+    let tabs: DxView[] = [];
+    tabContainers.forEach((t) => {
+      // TODO: what if the tab has no text?
+      let found = ViewFinder.findView(t, (v) => Views.isText(v));
+      if (found) {
+        tabs.push(found);
+      }
+    });
+    if (tabs.length == 0) {
+      throw new NotImplementedError('No tabs (having TextView) found');
+    }
+    const selectedTab = tabs[0];
+    // check whether there are tabs on playee
+    let found: N<DxView> = TabHostTab.findTab(tabs, playee.s);
+    if (!found) {
+      throw new NotImplementedError('No tabs are found');
+    }
+    // jump to the tab
+    await droid.input.tap(Views.x0(found) + 1, Views.y0(found) + 1);
+    // in case tapped tab is not the selected
+    if (found.text != selectedTab.text) {
+      const vms = await droid.input.select({
+        textContains: selectedTab.text,
+      });
+      if (vms.length == 0) {
+        throw new NotImplementedError('Selected tab not found');
+      }
+      await droid.input.tap(vms[0].bounds.left + 1, vms[0].bounds.top + 1);
+    }
   }
 }
 
@@ -497,7 +521,7 @@ class TabHost extends TabHostTab {
     return !!found;
   }
 
-  apply(): SyntEvent {
+  async apply(droid: DxDroid): Promise<void> {
     // find all tabs in recordee
     if (this.vPath.length == 0) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
@@ -507,14 +531,14 @@ class TabHost extends TabHostTab {
     // host the tabs, but its children
     while (
       this.vPath.length > 0 &&
-      this.goodChildren(this.vPath[0]).length == 1
+      TabHost.goodChildren(this.vPath[0]).length == 1
     ) {
       this.vPath.shift();
     }
-    return super.apply();
+    return await super.apply(droid);
   }
 
-  private goodChildren(v: DxView): DxView[] {
+  static goodChildren(v: DxView): DxView[] {
     return v.children.filter(
       (c) => Views.isValid(c) && Views.isViewHierarchyImportantForA11y(c)
     );
@@ -545,13 +569,13 @@ class ViewPager extends Reveal {
       return false;
     }
 
-    const pSeg = this.args.p.s;
+    const playee = this.args.p;
     // look for all pagers in the playee segment
     const pagers: DxViewPager[] = [];
     if (this.vRPager.resId.length > 0) {
       pagers.push(
         ...(SegmentFinder.findViews(
-          pSeg,
+          playee.s,
           (v) => v instanceof DxViewPager
         ) as DxViewPager[])
       );
@@ -561,7 +585,7 @@ class ViewPager extends Reveal {
       // segments, and the pager itself does not belong
       // to any leaf segment, so find the parent of
       // each root, maybe there are pagers
-      for (const r of pSeg.roots) {
+      for (const r of playee.s.roots) {
         const parent = ViewPager.findPagerParent(r);
         if (parent) {
           pagers.push(parent);
@@ -572,24 +596,24 @@ class ViewPager extends Reveal {
       return false;
     }
     // look for the specific pager that matched
-    let index = -1;
-    if (this.vRPager.resId.length > 0) {
-      index = pagers.findIndex((p) => p.resId == this.vRPager?.resId);
+    let pager: DxViewPager | undefined = undefined;
+    if (this.vRPager.text.length > 0) {
+      pager = pagers.find((p) => p.text == this.vRPager?.text);
     }
-    if (index == -1 && this.vRPager.text.length > 0) {
-      index = pagers.findIndex((p) => p.text == this.vRPager?.text);
+    if (!pager && this.vRPager.resId.length > 0) {
+      pager = pagers.find((p) => p.resId == this.vRPager?.resId);
     }
-    if (index == -1 && this.vRPager.desc.length > 0) {
-      index = pagers.findIndex((p) => p.desc == this.vRPager?.desc);
+    if (!pager && this.vRPager.desc.length > 0) {
+      pager = pagers.find((p) => p.desc == this.vRPager?.desc);
     }
-    if (index == -1) {
+    if (!pager) {
       return false;
     }
-    this.vPPager = pagers[index];
+    this.vPPager = pager;
     return true;
   }
 
-  apply(): SyntEvent {
+  async apply(droid: DxDroid): Promise<void> {
     const v = this.args.v;
     if (!this.vRPager || !this.vPPager) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
@@ -618,13 +642,9 @@ class ViewPager extends Reveal {
     if (!targetPage) {
       throw new NotImplementedError('Page containing v does not found');
     }
-    return new SyntEvent(
-      new DxTapEvent(
-        this.args.p.a,
-        Views.x0(targetPage) + 1,
-        Views.y0(targetPage) + 1,
-        -1
-      )
+    return await droid.input.tap(
+      Views.x0(targetPage) + 1,
+      Views.y0(targetPage) + 1
     );
   }
 }
