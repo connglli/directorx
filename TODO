@@ -1,6 +1,9 @@
 FEATURES:
 ***1. intercept more events, e.g.,
-      1. ui events: dialog, popupwindow, editor
+      1. ui events: dialog/popupwindow (modify DxActivity as DxWindow, 
+         use a proxy to proxy to that, see 
+         https://stackoverflow.com/questions/51865430/typescript-compiler-does-not-know-about-es6-proxy-trap-on-class), 
+         editor, ...
       2. system events: orientation, gps, ...
       3. webview
 2. collect crash information by adding states

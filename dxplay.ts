@@ -243,28 +243,59 @@ class ResPlayer extends DxPlayer {
       return;
     }
 
-    // find the view in playee first
-    let vm = await this.find(e);
-    if (vm != null) {
-      if (this.isVmVisibleToUser(vm)) {
-        await this.fireOnViewMap(e, vm);
-        return;
+    // find the view in recordee and playee first
+    const [v, vm] = await this.find(e);
+    if (vm != null && vm.visible) {
+      return await this.fireOnViewMap(e, vm);
+    }
+
+    // try to look ahead next K events, and skip several events.
+    // these events (including current) can be skipped if and only
+    // if their next event can be fired directly on current ui
+    // TODO: add more rules to check whether v can be skipped
+    if (v.text.length == 0 && this.seq.size() > 0) {
+      let skipped = 0;
+      const nextK = this.seq.topN(this.K);
+      for (let i = 0; i < nextK.length; i++) {
+        const ne = nextK[i];
+        if (!isXYEvent(ne)) {
+          skipped = i;
+          break;
+        }
+        const [, vm] = await this.find(ne);
+        if (vm != null && vm.visible) {
+          skipped = i;
+          break;
+        }
       }
+      DxLog.info(`/* skip next ${skipped + 1} events */`);
+      this.seq.popN(skipped);
+      return;
+    }
+
+    // let's see if the view is invisible, and apply
+    // the invisible pattern if possible
+    const [, ivm] = await this.find(e, false);
+    const droid = DxDroid.get();
+    const pAct = await this.top();
+    const pDev = droid.dev;
+    if (ivm && !ivm.important) {
       // sometimes an important or invisible view may got,
       // even though it is not suitable to fire it, it provides
       // useful information, specific patterns can be used.
-      const droid = DxDroid.get();
-      const pAct = await this.top();
       let v: DxView | null = null;
       // TODO: what if multiple views with same text
-      if (vm.text.length > 0) {
-        v = pAct.findViewByText(vm.text);
-      } else if (vm['resource-id'].length > 0) {
-        v = pAct.findViewByResource(vm['resource-type'], vm['resource-entry']);
-      } else if (vm['content-desc'].length > 0) {
-        v = pAct.findViewByDesc(vm['content-desc']);
+      if (ivm.text.length > 0) {
+        v = pAct.findViewByText(ivm.text);
+      } else if (ivm['resource-id'].length > 0) {
+        v = pAct.findViewByResource(
+          ivm['resource-type'],
+          ivm['resource-entry']
+        );
+      } else if (ivm['content-desc'].length > 0) {
+        v = pAct.findViewByDesc(ivm['content-desc']);
       } else {
-        v = pAct.findViewByXY(vm.bounds.left + 1, vm.bounds.top + 1);
+        v = pAct.findViewByXY(ivm.bounds.left + 1, ivm.bounds.top + 1);
       }
       if (v == null) {
         throw new IllegalStateError('Cannot find view on playee tree');
@@ -272,7 +303,7 @@ class ResPlayer extends DxPlayer {
       const pattern = new Invisible({
         v,
         a: pAct,
-        d: droid.dev,
+        d: pDev,
       });
       if (!pattern.match()) {
         throw new NotImplementedError('Pattern is not invisible');
@@ -286,43 +317,13 @@ class ResPlayer extends DxPlayer {
       return;
     }
 
-    // try to look ahead next K events
-    // TODO: not all events can be skipped, check for reasonable events
-    const nextK = this.seq.topN(this.K);
-    for (const i in nextK) {
-      const ne = nextK[i];
-      if (!isXYEvent(ne)) {
-        continue;
-      }
-      vm = await this.find(ne);
-      if (vm != null && this.isVmVisibleToUser(vm)) {
-        if (!this.canSkip(vm)) {
-          // can skip more views
-          break;
-        }
-        // find one, directly skip all previously
-        this.seq.popN(Number(i) + 1);
-        DxLog.info(`/* skip ${e.toString()} */`);
-        return await this.fireOnViewMap(ne, vm);
-      }
-    }
-
     // when lookahead fails, segment the ui,
     // find the matched segment, and synthesize
     // the equivalent event sequence
     const rAct = e.a;
-    const v = rAct.findViewByXY(e.x, e.y);
-    if (v == null) {
-      throw new IllegalStateError(
-        `No visible view found on rec tree at (${e.x}, ${e.y})`
-      );
-    }
 
     // segment the ui
-    const droid = DxDroid.get();
     const [, rSegs] = segUi(rAct, rDev);
-    const pAct = await this.top();
-    const pDev = droid.dev;
     const [, pSegs] = segUi(pAct, pDev);
 
     // match segment and find the target segment
@@ -366,7 +367,11 @@ class ResPlayer extends DxPlayer {
     throw new IllegalStateError('Cannot find the view on any segment');
   }
 
-  private async find(e: DxXYEvent): Promise<N<ViewMap>> {
+  /** Return then view on recordee and view map on playee */
+  private async find(
+    e: DxXYEvent,
+    visible = true
+  ): Promise<[DxView, N<ViewMap>]> {
     // TODO: what if multiple views with same text
     const { a, x, y } = e;
     // retrieve the view on recordee
@@ -377,16 +382,17 @@ class ResPlayer extends DxPlayer {
       );
     }
     // try to select its corresponding view on playee
-    const vms = await DxDroid.get().input.select(v);
-    return vms.length == 0 ? null : vms[0];
+    const vms = await DxDroid.get().input.select(v, visible);
+    return [v, vms.length == 0 ? null : vms[0]];
   }
 
   private async fireOnViewMap(e: DxEvent, v: ViewMap) {
+    // fire on the top-left corner
     const {
       bounds: { left, right, top, bottom },
     } = v;
-    const x = (left + right) / 2;
-    const y = (top + bottom) / 2;
+    const x = Math.min(left + 1, right);
+    const y = Math.min(top + 1, bottom);
     switch (e.ty) {
       case 'tap':
         return await DxDroid.get().input.tap(x, y);
@@ -403,17 +409,6 @@ class ResPlayer extends DxPlayer {
 
   private async top(): Promise<DxActivity> {
     return await DxDroid.get().topActivity(this.app, this.decode, 'dumpsys');
-  }
-
-  private isVmVisibleToUser(vm: ViewMap): boolean {
-    return vm.visible && vm.important;
-  }
-
-  // TODO: add more rules for checking, some views even
-  // text view can be skipped, e.g., MoreOptions, maybe
-  // a word2vec model should be used here to test more??
-  private canSkip(vm: ViewMap): boolean {
-    return vm.text == null;
   }
 }
 

@@ -946,6 +946,10 @@ export class DxActivity {
    * Android Studio Dynamic Layout Inspector:
    * https://android.googlesource.com/platform/tools/adt/idea/+/refs/heads/studio-master-dev/layout-inspector/src/com/android/tools/idea/layoutinspector/ui/DeviceViewPanelModel.kt#175 */
   buildDrawingLevelLists(): DxView[][] {
+    if (!this.decor) {
+      return [];
+    }
+
     const levelLists: DxView[][] = [];
 
     function doBuildForView(view: DxView, level: number) {
@@ -980,8 +984,7 @@ export class DxActivity {
       view.children.forEach((v) => doBuildForView(v, viewLevel));
     }
 
-    const decor = this.decorView!;
-    decor.children.forEach((v) => doBuildForView(v, levelLists.length));
+    this.decor.children.forEach((v) => doBuildForView(v, levelLists.length));
 
     return levelLists;
   }

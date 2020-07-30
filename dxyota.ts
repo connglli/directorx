@@ -42,6 +42,7 @@ export interface ViewInputOptions extends ViewOptions {
 
 export interface SelectOptions extends ViewOptions {
   n?: number; // which one
+  compressed?: boolean; // compressed tree
 }
 
 function makeViewOpts(opt: ViewOptions): string {
@@ -113,6 +114,9 @@ function makeSelectOpts(opt: SelectOptions): string {
   let args = makeViewOpts(opt as ViewOptions);
   if (opt.n) {
     args += ` -n ${q(opt.n)}`;
+  }
+  if (opt.compressed) {
+    args += ` --compressed`;
   }
   return args;
 }
@@ -350,7 +354,10 @@ export default class DxYota {
     }
   }
 
-  async select(optOrView: ViewOptions | DxView): Promise<ViewMap[]> {
+  async select(
+    optOrView: ViewOptions | DxView,
+    compressed = true // use this flag only when no compressed flag in optOrView
+  ): Promise<ViewMap[]> {
     let opt: SelectOptions;
     if (optOrView instanceof DxView) {
       const v = optOrView;
@@ -370,6 +377,10 @@ export default class DxYota {
     } else {
       opt = optOrView;
     }
+    if (opt.compressed === undefined) {
+      opt.compressed = compressed;
+    }
+
     const args = makeSelectOpts(opt);
     let retry = 3,
       status: AdbResult;

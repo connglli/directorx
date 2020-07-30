@@ -20,6 +20,7 @@ export abstract class DxPat {
 }
 
 export interface InvisiblePatRecArgs extends PatRecArgs {
+  // view on playee
   v: DxView;
   // playee activity
   a: DxActivity;
@@ -99,8 +100,6 @@ type ScrollDir = 'R2L' | 'L2R' | 'T2B' | 'B2T' | 'N';
 
 /** Scroll is the pattern that handles scrollable parent */
 class Scroll extends Expand {
-  private static vLastApplied: N<DxView> = null;
-  private static lastDir: ScrollDir = 'N';
   private vHSParent: N<DxView> = null;
   private vVSParent: N<DxView> = null;
 
