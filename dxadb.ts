@@ -7,12 +7,9 @@ import {
 } from './base/adb.ts';
 import DxView, {
   DxActivity,
-  DxViewFlags,
-  DxViewPager,
-  DxTabHost,
-  DxViewType,
-  DxViewCache,
-  DxViewFactory,
+  ViewFlags,
+  ViewType,
+  ViewFactory,
 } from './dxview.ts';
 import * as base64 from './utils/base64.ts';
 import { IllegalStateError } from './utils/error.ts';
@@ -194,7 +191,7 @@ class DumpSysActivityInfo {
 // FIX: some apps/devices often output non-standard attributes
 // for example aid=1073741824 following resource-id
 const PAT_AV_DECOR = /DecorView@(?<hash>[a-fA-F0-9]+)\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
-const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-scroll=(?<scroll>[\w.]{4})\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)\sdx-im-acc=(?<acc>true|false)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+)\sdx-tab-widget=(?<ttabs>[a-fA-F0-9]+)\sdx-tab-content=(?<tcont>[a-fA-F0-9]+))?\}/;
+const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-type=(?<type>[\w.]+)\sdx-scroll=(?<scroll>[\w.]{4})\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)\sdx-im-acc=(?<acc>true|false)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+)\sdx-tab-widget=(?<ttabs>[a-fA-F0-9]+)\sdx-tab-content=(?<tcont>[a-fA-F0-9]+))?\}/;
 
 export class ActivityDumpSysBuilder {
   private pfxLen = 0;
@@ -203,7 +200,6 @@ export class ActivityDumpSysBuilder {
   private viewHierarchy: string[] = [];
   private width = -1;
   private height = -1;
-  private cache: DxViewCache | null = null;
 
   constructor(private readonly app: string, private readonly name: string) {}
 
@@ -229,11 +225,6 @@ export class ActivityDumpSysBuilder {
 
   withStep(step: number): ActivityDumpSysBuilder {
     this.step = step;
-    return this;
-  }
-
-  withCache(cache: DxViewCache): ActivityDumpSysBuilder {
-    this.cache = cache;
     return this;
   }
 
@@ -301,6 +292,7 @@ export class ActivityDumpSysBuilder {
 
     const {
       dep: sDep,
+      type,
       hash,
       cls,
       flags: sFlags,
@@ -309,9 +301,9 @@ export class ActivityDumpSysBuilder {
       top: sOffT,
       right: sOffR,
       bottom: sOffB,
-      rpkg = '',
-      rtype = '',
-      rentry = '',
+      rpkg: resPkg = '',
+      rtype: resType = '',
+      rentry: resEntry = '',
       scroll: sScrollFlags,
       e: sOffE,
       tx: sTx,
@@ -361,7 +353,7 @@ export class ActivityDumpSysBuilder {
     }
 
     // parse and construct the view
-    const flags: DxViewFlags = {
+    const flags: ViewFlags = {
       V: sFlags[0] == 'V' ? 'V' : sFlags[0] == 'I' ? 'I' : 'G',
       f: sFlags[1] == 'F',
       F: sPflags[1] == 'F',
@@ -401,7 +393,7 @@ export class ActivityDumpSysBuilder {
         ? null // not color, maybe ripple, images
         : Number(sBgColor); // color int value
     // '.' means no foreground
-    const fg = sFg == '.' ? null : sFg;
+    const foreground = sFg == '.' ? null : sFg;
 
     // calculate absolute bounds, translation, and scroll
     const left = parent.left + Number(sOffL);
@@ -409,11 +401,11 @@ export class ActivityDumpSysBuilder {
     const right = parent.left + Number(sOffR);
     const bottom = parent.top + Number(sOffB);
     const elevation = parent.elevation + Number(sOffE);
-    const tx = parent.translationX + Number(sTx);
-    const ty = parent.translationY + Number(sTy);
-    const tz = parent.translationZ + Number(sTz);
-    const sx = parent.scrollX + Number(sSx);
-    const sy = parent.scrollY + Number(sSy);
+    const translationX = parent.translationX + Number(sTx);
+    const translationY = parent.translationY + Number(sTy);
+    const translationZ = parent.translationZ + Number(sTz);
+    const scrollX = parent.scrollX + Number(sSx);
+    const scrollY = parent.scrollY + Number(sSy);
 
     // parse shown
     const shown = sShown == 'true';
@@ -425,53 +417,45 @@ export class ActivityDumpSysBuilder {
     const tip: string = this.decode ? base64.decode(sTip) : sTip;
     const hint: string = this.decode ? base64.decode(sHint) : sTip;
 
-    // create the view
-    let view: DxView;
-    if (sPcurr) {
-      view = this.newView(DxViewType.VIEW_PAGER);
-    } else if (sTcurr) {
-      view = this.newView(DxViewType.TAB_HOST);
-    } else {
-      view = this.newView(DxViewType.OTHERS);
-    }
+    // create view props
+    const currPage = Number(sPcurr);
+    const currTab = Number(sTcurr);
+    const tabsHash = tTabsHash;
+    const contentHash = tContentHash;
 
-    // reset common properties
-    view.reset(
-      parent.pkg,
-      cls,
+    // create the view
+    const view = ViewFactory.create(this.typeOf(type), {
+      package: parent.pkg,
+      class: cls,
       hash,
       flags,
       shown,
       bgClass,
       bgColor,
-      fg,
+      foreground,
       left,
       top,
       right,
       bottom,
       elevation,
-      tx,
-      ty,
-      tz,
-      sx,
-      sy,
-      rpkg,
-      rtype,
-      rentry,
+      translationX,
+      translationY,
+      translationZ,
+      scrollX,
+      scrollY,
+      resPkg,
+      resType,
+      resEntry,
       desc,
       text,
       tag,
       tip,
-      hint
-    );
-    // set properties for specific views
-    if (sPcurr && view instanceof DxViewPager) {
-      view.currItem = Number(sPcurr);
-    } else if (sTcurr && view instanceof DxTabHost) {
-      view.currTab = Number(sTcurr);
-      view.tabsHash = tTabsHash;
-      view.contentHash = tContentHash;
-    }
+      hint,
+      currPage,
+      currTab,
+      tabsHash,
+      contentHash,
+    });
 
     // add to parent
     parent.addView(view);
@@ -479,11 +463,16 @@ export class ActivityDumpSysBuilder {
     return [view, dep];
   }
 
-  private newView(type: DxViewType): DxView {
-    if (this.cache) {
-      return this.cache.get(type);
-    } else {
-      return DxViewFactory.create(type);
+  private typeOf(type: string): ViewType {
+    switch (type) {
+      case 'TH':
+        return ViewType.TAB_HOST;
+      case 'VP':
+        return ViewType.VIEW_PAGER;
+      case 'WV':
+        return ViewType.WEB_VIEW;
+      default:
+        return ViewType.VIEW;
     }
   }
 

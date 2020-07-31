@@ -49,7 +49,7 @@ fun Class<*>.getDeclaredFieldIncludingParent(name: String): Field? {
 // belonging to a 2nd or 3rd party libraries, because the same class
 // of different versions are still different, and the operator
 // returns false thereby
-fun Any.isInstanceOf(clsName: String): Boolean {
+infix fun Any.instanceof(clsName: String): Boolean {
     val queue = LinkedList<Class<*>>()
     queue.offer(this.javaClass)
     while (queue.isNotEmpty()) {

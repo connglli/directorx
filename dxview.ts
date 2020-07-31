@@ -1,12 +1,12 @@
 import { DevInfo } from './dxdroid.ts';
-import LinkedList from './utils/linked_list.ts';
 import { XYInterval } from './utils/interval.ts';
 import ArrayTreeOp, { ArrayTreeNode } from './utils/array_tree_op.ts';
-import { CannotReachHereError } from './utils/error.ts';
+import { extract } from './utils/types.ts';
 
 type N<T> = T | null;
 
-export type DxViewFlags = {
+/** View flags */
+export type ViewFlags = {
   V: 'V' | 'G' | 'I'; // visibility
   f: boolean; // focusable
   F: boolean; // focused
@@ -25,7 +25,7 @@ export type DxViewFlags = {
   a: boolean; // important for accessibility
 };
 
-export const DefaultFlags: DxViewFlags = {
+const DefaultFlags: ViewFlags = {
   V: 'V',
   f: false,
   F: false,
@@ -44,12 +44,69 @@ export const DefaultFlags: DxViewFlags = {
   a: true,
 };
 
-export enum DxViewType {
-  DECOR = 1,
-  VIEW_PAGER,
-  TAB_HOST,
-  OTHERS,
+/** View properties that all views have */
+interface BaseProps {
+  readonly package: string;
+  readonly class: string;
+  readonly hash: string;
+  readonly flags: ViewFlags;
+  readonly shown: boolean;
+  readonly bgClass: string;
+  readonly bgColor: number | null;
+  readonly foreground: string | null;
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly elevation: number;
+  readonly translationX?: number;
+  readonly translationY?: number;
+  readonly translationZ?: number;
+  readonly scrollX?: number;
+  readonly scrollY?: number;
+  readonly resPkg?: string;
+  readonly resType?: string;
+  readonly resEntry?: string;
+  readonly desc?: string;
+  readonly text?: string;
+  readonly tag?: string;
+  readonly tip?: string;
+  readonly hint?: string;
 }
+
+const DefaultProps = {
+  package: '',
+  class: '',
+  hash: '',
+  flags: DefaultFlags,
+  shown: true,
+  bgClass: '',
+  bgColor: null,
+  foreground: null,
+  left: 0,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  elevation: 0,
+  translationX: 0,
+  translationY: 0,
+  translationZ: 0,
+  scrollX: 0,
+  scrollY: 0,
+  resPkg: '',
+  resType: '',
+  resEntry: '',
+  desc: '',
+  text: '',
+  tag: '',
+  tip: '',
+  hint: '',
+};
+
+/** Specific view properties that belong sto
+ * specific custom views
+ */
+interface ExtraProps {}
 
 /** DxView represents a View or a ViewGroup on Android.
  *
@@ -69,94 +126,107 @@ export enum DxViewType {
  * view. The DxView#my{left,right,top,bottom,elevation}()
  * returns the relative ones
  *
- * The DxView#translation{X,Y,Z}() returns the absolute
+ * The DxView#translation{X, Y ,Z}() returns the absolute
  * translation (recursively including its parent's translation)
  * in pixel of the view. The DxView#myTranslation{X,Y,Z}()
  * returns the relative ones
  *
  * The DxView#scroll{X, Y}() returns the the scroll x and y
  * of the view itself to its children (recursively including
- * its ancestor's scroll). DxView#myScroll{X,Y,Z}() returns
+ * its ancestor's scroll). DxView#myScroll{X, Y, Z}() returns
  * the relative ones
  *
- * The DxView#{X,Y,Z}() returns the absolute coordinate
+ * The DxView#{x, y, z}() returns the absolute coordinate
  * of the view after translation
  *
- * The DxView#drawing{X,Y,Z}() returns the absolute coordinate
+ * The DxView#drawing{x, y, z}() returns the absolute coordinate
  * of the view after scrolling
+ *
+ * To extend this class, define a custom ViewExtraProps, and
+ * override the #copy() method to return a correct copy
  */
-export default class DxView implements ArrayTreeNode<DxView> {
+export default class DxView<T extends ExtraProps = ExtraProps>
+  implements ArrayTreeNode<DxView> {
   // The drawing level is different from the z index of
   // each view. Views at each level are not overlapped, but
   // views at adjacent levels are overlapped at least at one
   // view. To construct the drawing level, invoke method
   // DxActivity#buildDrawingLevel()
   public drawingLevel: number = -1;
-  constructor(
-    protected pkg_: string,
-    protected cls_: string,
-    protected hash_: string,
-    protected flags_: DxViewFlags,
-    protected shown_: boolean,
-    protected bgClass_: string,
-    protected bgColor_: number | null,
-    protected fg_: string | null,
-    protected left_: number,
-    protected top_: number,
-    protected right_: number,
-    protected bottom_: number,
-    protected elevation_: number,
-    protected tx_ = 0,
-    protected ty_ = 0,
-    protected tz_ = 0,
-    protected sx_ = 0,
-    protected sy_ = 0,
-    protected resPkg_ = '',
-    protected resType_ = '',
-    protected resEntry_ = '',
-    protected desc_ = '',
-    protected text_ = '',
-    protected tag_ = '',
-    protected tip_ = '',
-    protected hint_ = '',
-    protected parent_: N<DxView> = null,
-    protected children_: DxView[] = []
-  ) {}
+
+  protected props: Required<BaseProps>;
+  protected extra: T;
+  protected parent_: N<DxView> = null;
+  protected children_: DxView[] = [];
+
+  constructor(props: BaseProps, extra: T) {
+    this.props = {
+      package: props.package,
+      class: props.class,
+      hash: props.hash,
+      flags: props.flags,
+      shown: props.shown,
+      bgClass: props.bgClass,
+      bgColor: props.bgColor,
+      foreground: props.foreground,
+      left: props.left,
+      top: props.top,
+      right: props.right,
+      bottom: props.bottom,
+      elevation: props.elevation,
+      translationX: props.translationX ?? DefaultProps.translationX,
+      translationY: props.translationY ?? DefaultProps.translationY,
+      translationZ: props.translationZ ?? DefaultProps.translationZ,
+      scrollX: props.scrollX ?? DefaultProps.scrollX,
+      scrollY: props.scrollY ?? DefaultProps.scrollY,
+      resPkg: props.resPkg ?? DefaultProps.resPkg,
+      resType: props.resType ?? DefaultProps.resType,
+      resEntry: props.resEntry ?? DefaultProps.resEntry,
+      desc: props.desc ?? DefaultProps.desc,
+      text: props.text ?? DefaultProps.text,
+      tag: props.tag ?? DefaultProps.tag,
+      tip: props.tip ?? DefaultProps.tip,
+      hint: props.hint ?? DefaultProps.hint,
+    };
+    this.extra = extra;
+  }
 
   get pkg(): string {
-    return this.pkg_;
+    return this.props.package;
   }
 
   get cls(): string {
-    return this.cls_;
+    return this.props.class;
   }
 
   get hash(): string {
-    return this.hash_;
+    return this.props.hash;
   }
 
-  get flags(): DxViewFlags {
-    return this.flags_;
+  get flags(): ViewFlags {
+    return this.props.flags;
   }
 
   get shown(): boolean {
-    return this.shown_;
+    return this.props.shown;
   }
 
   get bgClass(): string {
-    return this.bgClass_;
+    return this.props.bgClass;
   }
 
   get bgColor(): number | null {
-    return this.bgColor_;
+    return this.props.bgColor;
   }
 
   get background(): string {
-    return `${this.bgClass_}/#${this.bgColor_?.toString(16) ?? 'nnnn'}`;
+    return `${this.props.bgClass}/#${
+      this.props.bgColor?.toString(16) ?? 'nnnn'
+    }`;
   }
 
   get foreground(): string | null {
-    return this.fg_;
+    return this.props.foreground;
   }
 
   get parent(): N<DxView> {
@@ -168,23 +238,23 @@ export default class DxView implements ArrayTreeNode<DxView> {
   }
 
   get left(): number {
-    return this.left_;
+    return this.props.left;
   }
 
   get right(): number {
-    return this.right_;
+    return this.props.right;
   }
 
   get top(): number {
-    return this.top_;
+    return this.props.top;
   }
 
   get bottom(): number {
-    return this.bottom_;
+    return this.props.bottom;
   }
 
   get elevation(): number {
-    return this.elevation_;
+    return this.props.elevation;
   }
 
   get width(): number {
@@ -196,23 +266,23 @@ export default class DxView implements ArrayTreeNode<DxView> {
   }
 
   get translationX(): number {
-    return this.tx_;
+    return this.props.translationX;
   }
 
   get translationY(): number {
-    return this.ty_;
+    return this.props.translationY;
   }
 
   get translationZ(): number {
-    return this.tz_;
+    return this.props.translationZ;
   }
 
   get scrollX(): number {
-    return this.sx_;
+    return this.props.scrollX;
   }
 
   get scrollY(): number {
-    return this.sy_;
+    return this.props.scrollY;
   }
 
   get x(): number {
@@ -288,35 +358,35 @@ export default class DxView implements ArrayTreeNode<DxView> {
   }
 
   get resPkg(): string {
-    return this.resPkg_;
+    return this.props.resPkg;
   }
 
   get resType(): string {
-    return this.resType_;
+    return this.props.resType;
   }
 
   get resEntry(): string {
-    return this.resEntry_;
+    return this.props.resEntry;
   }
 
   get desc(): string {
-    return this.desc_;
+    return this.props.desc;
   }
 
   get text(): string {
-    return this.text_;
+    return this.props.text;
   }
 
   get tag(): string {
-    return this.tag_;
+    return this.props.tag;
   }
 
   get tip(): string {
-    return this.tip_;
+    return this.props.tip;
   }
 
   get hint(): string {
-    return this.hint_;
+    return this.props.hint;
   }
 
   get siblings(): DxView[] {
@@ -349,99 +419,9 @@ export default class DxView implements ArrayTreeNode<DxView> {
     this.parent?.removeView(this);
   }
 
-  /** Reset view properties: remember to detach from parents first */
-  reset(
-    pkg: string,
-    cls: string,
-    hash: string,
-    flags: DxViewFlags,
-    shown: boolean,
-    bgClass: string,
-    bgColor: number | null,
-    fg: string | null,
-    left: number,
-    top: number,
-    right: number,
-    bottom: number,
-    elevation: number,
-    tx = 0,
-    ty = 0,
-    tz = 0,
-    sx = 0,
-    sy = 0,
-    rpkg = '',
-    rtype = '',
-    rentry = '',
-    desc = '',
-    text = '',
-    tag = '',
-    tip = '',
-    hint = '',
-    parent: N<DxView> = null,
-    children: DxView[] = []
-  ): void {
-    this.pkg_ = pkg;
-    this.cls_ = cls;
-    this.hash_ = hash;
-    this.flags_ = flags;
-    this.shown_ = shown;
-    this.bgClass_ = bgClass;
-    this.bgColor_ = bgColor;
-    this.fg_ = fg;
-    this.left_ = left;
-    this.top_ = top;
-    this.right_ = right;
-    this.bottom_ = bottom;
-    this.elevation_ = elevation;
-    this.tx_ = tx;
-    this.ty_ = ty;
-    this.tz_ = tz;
-    this.sx_ = sx;
-    this.sy_ = sy;
-    this.resPkg_ = rpkg;
-    this.resType_ = rtype;
-    this.resEntry_ = rentry;
-    this.desc_ = desc;
-    this.text_ = text;
-    this.tag_ = tag;
-    this.tip_ = tip;
-    this.hint_ = hint;
-    this.parent_ = parent;
-    this.children_ = children;
-  }
-
   /** Return a new DxView that are copied from this */
-  copy(parent: N<DxView> = null, children: DxView[] = []): DxView {
-    return new DxView(
-      this.pkg_,
-      this.cls_,
-      this.hash_,
-      this.flags_,
-      this.shown_,
-      this.bgClass_,
-      this.bgColor_,
-      this.fg_,
-      this.left_,
-      this.top_,
-      this.right_,
-      this.bottom_,
-      this.elevation_,
-      this.tx_,
-      this.ty_,
-      this.tz_,
-      this.sx_,
-      this.sy_,
-      this.resPkg_,
-      this.resType_,
-      this.resEntry_,
-      this.desc_,
-      this.text_,
-      this.tag_,
-      this.tip_,
-      this.hint_,
-      parent,
-      children
-    );
+  copy(): DxView {
+    return new DxView(this.props, this.extra);
   }
 }
 
@@ -456,19 +436,22 @@ export class DxDecorView extends DxView {
     bgColor: number | null
   ) {
     super(
-      pkg,
-      DxDecorView.NAME,
-      hash,
-      DefaultFlags,
-      true,
-      bgClass,
-      bgColor,
-      null,
-      0,
-      0,
-      width,
-      height,
-      0
+      {
+        package: pkg,
+        class: DxDecorView.NAME,
+        hash,
+        flags: DefaultFlags,
+        shown: DefaultProps.shown,
+        foreground: DefaultProps.foreground,
+        bgClass,
+        bgColor,
+        left: 0,
+        right: width,
+        top: 0,
+        bottom: height,
+        elevation: 0,
+      },
+      {}
     );
   }
   copy(): DxDecorView {
@@ -483,85 +466,57 @@ export class DxDecorView extends DxView {
   }
 }
 
-export class DxViewPager extends DxView {
-  public currItem = 0;
+interface ViewPagerProps extends ExtraProps {
+  currPage: number;
+}
 
-  copy(parent: N<DxView> = null, children: DxView[] = []): DxView {
-    const view = new DxViewPager(
-      this.pkg_,
-      this.cls_,
-      this.hash_,
-      this.flags_,
-      this.shown_,
-      this.bgClass_,
-      this.bgColor_,
-      this.fg_,
-      this.left_,
-      this.top_,
-      this.right_,
-      this.bottom_,
-      this.elevation_,
-      this.tx_,
-      this.ty_,
-      this.tz_,
-      this.sx_,
-      this.sy_,
-      this.resPkg_,
-      this.resType_,
-      this.resEntry_,
-      this.desc_,
-      this.text_,
-      this.tag_,
-      this.tip_,
-      this.hint_,
-      parent,
-      children
-    );
-    view.currItem = this.currItem;
-    return view;
+const DefaultViewPagerProps = {
+  currPage: 0,
+};
+
+export class DxViewPager extends DxView<ViewPagerProps> {
+  get currPage(): number {
+    return this.extra.currPage;
+  }
+
+  copy(): DxViewPager {
+    return new DxViewPager(this.props, this.extra);
   }
 }
 
-export class DxTabHost extends DxView {
-  public currTab = 0;
-  public tabsHash = '';
-  public contentHash = '';
+interface TabHostProps extends ExtraProps {
+  currTab: number;
+  tabsHash: string;
+  contentHash: string;
+}
 
-  copy(parent: N<DxView> = null, children: DxView[] = []): DxView {
-    const view = new DxTabHost(
-      this.pkg_,
-      this.cls_,
-      this.hash_,
-      this.flags_,
-      this.shown_,
-      this.bgClass_,
-      this.bgColor_,
-      this.fg_,
-      this.left_,
-      this.top_,
-      this.right_,
-      this.bottom_,
-      this.elevation_,
-      this.tx_,
-      this.ty_,
-      this.tz_,
-      this.sx_,
-      this.sy_,
-      this.resPkg_,
-      this.resType_,
-      this.resEntry_,
-      this.desc_,
-      this.text_,
-      this.tag_,
-      this.tip_,
-      this.hint_,
-      parent,
-      children
-    );
-    view.currTab = this.currTab;
-    view.tabsHash = this.tabsHash;
-    view.contentHash = this.contentHash;
-    return view;
+const DefaultTabHostProps: TabHostProps = {
+  currTab: 0,
+  tabsHash: '',
+  contentHash: '',
+};
+
+export class DxTabHost extends DxView<TabHostProps> {
+  get currTab(): number {
+    return this.extra.currTab;
+  }
+
+  get tabsHash(): string {
+    return this.extra.tabsHash;
+  }
+
+  get contentHash(): string {
+    return this.extra.contentHash;
+  }
+
+  copy(): DxTabHost {
+    return new DxTabHost(this.props, this.extra);
+  }
+}
+
+export class DxWebView extends DxView {
+  copy(): DxWebView {
+    return new DxWebView(this.props, this.extra);
   }
 }
 
@@ -990,120 +945,50 @@ export class DxActivity {
   }
 }
 
-export class DxViewFactory {
-  public static create(type: DxViewType): DxView {
-    switch (type) {
-      case DxViewType.DECOR:
-        return new DxDecorView('', '', -1, -1, '', null);
-      case DxViewType.VIEW_PAGER:
-        return new DxViewPager(
-          '',
-          '',
-          '',
-          DefaultFlags,
-          true,
-          '',
-          null,
-          null,
-          -1,
-          -1,
-          -1,
-          -1,
-          -1
-        );
-      case DxViewType.TAB_HOST:
-        return new DxTabHost(
-          '',
-          '',
-          '',
-          DefaultFlags,
-          true,
-          '',
-          null,
-          null,
-          -1,
-          -1,
-          -1,
-          -1,
-          -1
-        );
-      case DxViewType.OTHERS:
-        return new DxView(
-          '',
-          '',
-          '',
-          DefaultFlags,
-          true,
-          '',
-          null,
-          null,
-          -1,
-          -1,
-          -1,
-          -1,
-          -1
-        );
-      default:
-        throw new CannotReachHereError();
-    }
-  }
-
-  public static typeOf(v: DxView): DxViewType {
-    if (v instanceof DxDecorView) {
-      return DxViewType.DECOR;
-    } else if (v instanceof DxViewPager) {
-      return DxViewType.VIEW_PAGER;
-    } else if (v instanceof DxTabHost) {
-      return DxViewType.TAB_HOST;
-    } else {
-      return DxViewType.OTHERS;
-    }
-  }
+export interface ViewProps extends BaseProps, ExtraProps {
+  [key: string]: any;
 }
 
-export class DxViewCache {
-  private decorCache = new LinkedList<DxDecorView>();
-  private pagerCache = new LinkedList<DxViewPager>();
-  private tabCache = new LinkedList<DxTabHost>();
-  private otherCache = new LinkedList<DxView>();
+export enum ViewType {
+  DECOR_VIEW = 1,
+  VIEW_PAGER,
+  TAB_HOST,
+  WEB_VIEW,
+  VIEW,
+}
 
-  get(type: DxViewType): DxView {
-    let cache: LinkedList<DxView>;
+export class ViewFactory {
+  public static create(type: ViewType, props: ViewProps): DxView {
     switch (type) {
-      case DxViewType.DECOR:
-        cache = this.decorCache;
-        break;
-      case DxViewType.VIEW_PAGER:
-        cache = this.pagerCache;
-        break;
-      case DxViewType.TAB_HOST:
-        cache = this.tabCache;
-        break;
-      case DxViewType.OTHERS:
-        cache = this.otherCache;
-        break;
+      case ViewType.DECOR_VIEW:
+        return new DxDecorView(
+          props.package,
+          props.hash,
+          props.right,
+          props.bottom,
+          props.bgClass,
+          props.bgColor
+        );
+      case ViewType.VIEW_PAGER:
+        return new DxViewPager(props, extract(props, DefaultViewPagerProps));
+      case ViewType.TAB_HOST:
+        return new DxTabHost(props, extract(props, DefaultTabHostProps));
       default:
-        throw new CannotReachHereError();
-    }
-    if (cache.isEmpty()) {
-      return DxViewFactory.create(type);
-    } else {
-      return cache.remove(0);
+        return new DxView(props, {});
     }
   }
 
-  put(v: DxView): void {
-    switch (DxViewFactory.typeOf(v)) {
-      case DxViewType.DECOR:
-        return this.decorCache.pushFront(v as DxDecorView);
-      case DxViewType.VIEW_PAGER:
-        return this.pagerCache.pushFront(v as DxViewPager);
-      case DxViewType.TAB_HOST:
-        return this.tabCache.pushFront(v as DxTabHost);
-      case DxViewType.OTHERS:
-        return this.otherCache.pushFront(v);
-      default:
-        throw new CannotReachHereError();
+  public static typeOf(v: DxView): ViewType {
+    if (v instanceof DxDecorView) {
+      return ViewType.DECOR_VIEW;
+    } else if (v instanceof DxViewPager) {
+      return ViewType.VIEW_PAGER;
+    } else if (v instanceof DxTabHost) {
+      return ViewType.TAB_HOST;
+    } else if (v instanceof DxWebView) {
+      return ViewType.WEB_VIEW;
+    } else {
+      return ViewType.VIEW;
     }
   }
 }

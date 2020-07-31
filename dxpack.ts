@@ -12,10 +12,11 @@ import DxView, {
   DxDecorView,
   DxViewPager,
   DxTabHost,
-  DxViewFactory,
-  DxViewType,
+  ViewFactory,
+  ViewType,
   ViewFinder,
   Views,
+  ViewProps,
 } from './dxview.ts';
 import { DevInfo } from './dxadb.ts';
 import * as base64 from './utils/base64.ts';
@@ -55,31 +56,35 @@ class DXPK {
   private static readonly STATE_SEQ = 5; // read seq item (event) next
   private static readonly STATE_DNE = 6; // no long read
 
-  private static type2str(t: DxViewType): string {
+  private static type2str(t: ViewType): string {
     switch (t) {
-      case DxViewType.DECOR:
+      case ViewType.DECOR_VIEW:
         return 'd';
-      case DxViewType.VIEW_PAGER:
+      case ViewType.VIEW_PAGER:
         return 'p';
-      case DxViewType.TAB_HOST:
+      case ViewType.TAB_HOST:
         return 't';
-      case DxViewType.OTHERS:
+      case ViewType.WEB_VIEW:
+        return 'w';
+      case ViewType.VIEW:
         return '.';
       default:
         throw new CannotReachHereError();
     }
   }
 
-  private static str2type(s: string): DxViewType {
+  private static str2type(s: string): ViewType {
     switch (s) {
       case 'd':
-        return DxViewType.DECOR;
+        return ViewType.DECOR_VIEW;
       case 'p':
-        return DxViewType.VIEW_PAGER;
+        return ViewType.VIEW_PAGER;
       case 't':
-        return DxViewType.TAB_HOST;
+        return ViewType.TAB_HOST;
+      case 'w':
+        return ViewType.WEB_VIEW;
       case '.':
-        return DxViewType.OTHERS;
+        return ViewType.VIEW;
       default:
         throw new CannotReachHereError();
     }
@@ -122,13 +127,11 @@ class DXPK {
       } else if (state == DXPK.STATE_POL) {
         const tokens = l.trim().split(';');
         const type = DXPK.str2type(tokens[0]);
-        const view = DxViewFactory.create(type);
-        view.reset(
-          app, // pkg
-          tokens[2], // cls
-          tokens[1], // hash
-          {
-            // flags
+        const props: ViewProps = {
+          package: app,
+          class: tokens[2],
+          hash: tokens[1],
+          flags: {
             V: tokens[25][0] as 'V' | 'I' | 'G',
             f: tokens[25][1] == 'F',
             F: tokens[25][2] == 'F',
@@ -146,38 +149,40 @@ class DXPK {
             cc: tokens[25][12] == 'X',
             a: tokens[25][13] == 'A',
           },
-          tokens[6] == 'S' ? true : false, // shown
-          tokens[22], // bgClass
-          tokens[23] == '.' // bgColor
-            ? null
-            : Number(tokens[23]),
-          tokens[24] == '.' ? null : tokens[24], // foreground
-          Number(tokens[7]), // left
-          Number(tokens[8]), // top
-          Number(tokens[9]), // right
-          Number(tokens[10]), // bottom
-          Number(tokens[11]), // elevation
-          Number(tokens[12]), // tx
-          Number(tokens[13]), // ty
-          Number(tokens[14]), // tz
-          Number(tokens[15]), // sx
-          Number(tokens[16]), // sy
-          tokens[3], // resPkg
-          tokens[4], // resType
-          tokens[5], // resEntry
-          base64.decode(tokens[17]), // desc
-          base64.decode(tokens[18]), // text
-          base64.decode(tokens[19]), // tag
-          base64.decode(tokens[20]), // tip
-          base64.decode(tokens[21]) // hint
-        );
-        if (view instanceof DxViewPager) {
-          view.currItem = Number(tokens[26]);
-        } else if (view instanceof DxTabHost) {
-          view.currTab = Number(tokens[26]);
-          view.tabsHash = tokens[27];
-          view.contentHash = tokens[28];
+          shown: tokens[6] == 'S' ? true : false,
+          bgClass: tokens[22],
+          bgColor: tokens[23] == '.' ? null : Number(tokens[23]),
+          foreground: tokens[24] == '.' ? null : tokens[24],
+          left: Number(tokens[7]),
+          top: Number(tokens[8]),
+          right: Number(tokens[9]),
+          bottom: Number(tokens[10]),
+          elevation: Number(tokens[11]),
+          translationX: Number(tokens[12]),
+          translationY: Number(tokens[13]),
+          translationZ: Number(tokens[14]),
+          scrollX: Number(tokens[15]),
+          scrollY: Number(tokens[16]),
+          resPkg: tokens[3],
+          resType: tokens[4],
+          resEntry: tokens[5],
+          desc: base64.decode(tokens[17]),
+          text: base64.decode(tokens[18]),
+          tag: base64.decode(tokens[19]),
+          tip: base64.decode(tokens[20]),
+          hint: base64.decode(tokens[21]),
+        };
+        switch (type) {
+          case ViewType.VIEW_PAGER:
+            props.currItem = Number(tokens[26]);
+            break;
+          case ViewType.TAB_HOST:
+            props.currTab = Number(tokens[26]);
+            props.tabsHash = tokens[27];
+            props.contentHash = tokens[28];
+            break;
         }
+        const view = ViewFactory.create(type, props);
         vpool.push(view);
         size -= 1;
         if (size == 0) {
@@ -308,7 +313,7 @@ class DXPK {
     await DXPK.writeString(buf, dxpk.app);
     await DXPK.writeNumber(buf, dxpk.vpool.length);
     for (const v of dxpk.vpool) {
-      const type = DxViewFactory.typeOf(v);
+      const type = ViewFactory.typeOf(v);
       await DXPK.writeString(buf, `${DXPK.type2str(type)};${v.hash};`, false);
       await DXPK.writeString(
         buf,
@@ -359,7 +364,7 @@ class DXPK {
       flags += v.flags.a ? 'A' : '.';
       if (v instanceof DxViewPager) {
         await DXPK.writeString(buf, `${flags};`, false);
-        await DXPK.writeString(buf, `${v.currItem}`);
+        await DXPK.writeString(buf, `${v.currPage}`);
       } else if (v instanceof DxTabHost) {
         await DXPK.writeString(buf, `${flags};`, false);
         await DXPK.writeString(
@@ -604,6 +609,6 @@ export default class DxPacker {
 }
 
 if (import.meta.main) {
-  const dxpk = await DXPK.load('./msword.tabcontent.dxpk');
-  await DXPK.dump('./msword.tabcontent2.dxpk', dxpk);
+  const dxpk = await DXPK.load('./msword.dxpk');
+  await DXPK.dump('./msword2.dxpk', dxpk);
 }

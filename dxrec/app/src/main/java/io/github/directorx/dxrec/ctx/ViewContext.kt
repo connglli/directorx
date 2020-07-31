@@ -3,9 +3,8 @@ package io.github.directorx.dxrec.ctx
 import android.os.Build
 import android.util.Base64
 import android.view.View
-import android.widget.TabHost
-import android.widget.TabWidget
-import android.widget.TextView
+import android.webkit.WebView
+import android.widget.*
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import io.github.directorx.dxrec.DxContext
@@ -56,6 +55,25 @@ class ViewContext(val encode: Boolean) : DxContext {
                 scroll += if (view.canScrollVertically(-1)) "T" else "."
                 scroll += if (view.canScrollHorizontally(1)) "R" else "."
                 scroll += if (view.canScrollVertically(1)) "B" else "."
+                val type = when {
+                    view is Toolbar -> "TB"
+                    view instanceof "android.support.v7.widget.Toolbar" -> "TB"
+                    view instanceof "androidx.widget.Toolbar" -> "TB"
+                    view is ListView -> "LV"
+                    view is GridView -> "GV"
+                    view is ScrollView -> "VSV"
+                    view is HorizontalScrollView -> "HSV"
+                    view instanceof "android.support.v4.widget.NestedScrollView" -> "NSV"
+                    view instanceof "androidx.widget.NestedScrollView" -> "NSV"
+                    view instanceof "android.support.v7.widget.RecyclerView" -> "RV"
+                    view instanceof "androidx.widget.RecyclerView" -> "RV"
+                    view instanceof "android.support.v4.view.ViewPager" -> "VP"
+                    view instanceof "androidx.widget.ViewPager" -> "VP"
+                    view is TabHost -> "TH"
+                    view is WebView -> "WV"
+                    else -> "."
+                }
+                appendKV(info, "type", type)
                 appendKV(info, "scroll", scroll)
                 appendKV(info, "e", view.elevation)
                 appendKV(info, "tx", view.translationX)
@@ -103,8 +121,8 @@ class ViewContext(val encode: Boolean) : DxContext {
                 // view pager properties: alert don't use `is` operator, 'cause
                 // ViewPager is not in framework, but in androidx (a 2nd party
                 // library)
-                if (view.isInstanceOf("androidx.widget.ViewPager") ||
-                    view.isInstanceOf("android.support.v4.view.ViewPager")) {
+                if (view instanceof "androidx.widget.ViewPager" ||
+                    view instanceof "android.support.v4.view.ViewPager") {
                     val curItem = view.javaClass.getFieldValue<Int>(view, "mCurItem")
                     if (curItem != null) {
                         appendKV(info, "pgr-curr", curItem)

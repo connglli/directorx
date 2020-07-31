@@ -1,5 +1,10 @@
 import DxAdb, { AdbResult, AdbError } from './dxadb.ts';
-import DxView, { DxActivity, DxViewFactory, DxViewType } from './dxview.ts';
+import DxView, {
+  DxActivity,
+  ViewFactory,
+  ViewType,
+  ViewProps,
+} from './dxview.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
 
@@ -227,13 +232,12 @@ export class ActivityYotaBuilder {
       }
       v = a.decorView;
     } else {
-      v = DxViewFactory.create(DxViewType.OTHERS);
       let [resPkg, resType, resEntry] = splitResourceId(vhp['resource-id']);
-      v.reset(
-        vhp.package,
-        vhp.class,
-        '', // TODO: use dep-index to replace hash
-        {
+      const props: ViewProps = {
+        package: vhp.package,
+        class: vhp.class,
+        hash: '', // TODO: use dep-index to replace hash
+        flags: {
           V: vhp.visible ? 'V' : 'I',
           f: vhp.focusable,
           F: vhp.focused,
@@ -251,26 +255,27 @@ export class ActivityYotaBuilder {
           cc: vhp['context-clickable'],
           a: vhp['important'],
         },
-        vhp.visible,
-        'ColorDrawable',
-        vhp.background!, // eslint-disable-line
-        null,
-        vhp.bounds.left,
-        vhp.bounds.top,
-        vhp.bounds.right,
-        vhp.bounds.bottom,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        shown: vhp.visible,
+        bgClass: 'ColorDrawable',
+        bgColor: vhp.background!, // eslint-disable-line
+        foreground: null,
+        left: vhp.bounds.left,
+        top: vhp.bounds.top,
+        right: vhp.bounds.right,
+        bottom: vhp.bounds.bottom,
+        elevation: 0,
+        translationX: 0,
+        translationY: 0,
+        translationZ: 0,
+        scrollX: 0,
+        scrollY: 0,
         resPkg,
         resType,
         resEntry,
-        vhp['content-desc'],
-        vhp.text
-      );
+        desc: vhp['content-desc'],
+        text: vhp.text,
+      };
+      v = ViewFactory.create(ViewType.VIEW, props);
     }
 
     for (const chm of vhp.children) {
