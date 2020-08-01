@@ -30,7 +30,10 @@ export interface InvisiblePatRecArgs extends PatRecArgs {
 }
 
 /** Invisible pattern is used for those views which are
- * invisible but still presented on the view tree */
+ * invisible but still presented on the view tree. Invisible
+ * pattern assumes that the invisible button can be manifested
+ * by actions on its visible parent, currently the actions
+ * includes only the tap action. */
 export class Invisible extends DxPat {
   // parent that are visible to user
   private vParent: N<DxView> = null;
@@ -102,7 +105,10 @@ abstract class Expand extends DxBpPat {
 
 type ScrollDir = 'R2L' | 'L2R' | 'T2B' | 'B2T' | 'N';
 
-/** Scroll is the pattern that handles scrollable parent */
+/** Scroll is the pattern that handles scrollable parent.
+ * Scroll assumes that the view to be triggered resides in
+ * a scrollable parent. And thus this pattern finds the view
+ * by scrolling the parent until the view shows. */
 class Scroll extends Expand {
   private vHSParent: N<DxView> = null;
   private vVSParent: N<DxView> = null;
@@ -271,7 +277,13 @@ abstract class Reveal extends DxBpPat {
   }
 }
 
-/** RevealButton is the pattern for some special reveal buttons */
+/** RevealButton is the pattern for some special reveal buttons.
+ * This pattern assumes that these special buttons locates at the
+ * matched playee pattern. And these special buttons are responsible
+ * for showing/hiding some advanced buttons. Thus, this pattern finds
+ * the triggered view by tap these buttons. These buttons are collected
+ * from the official Android Documents, especially from many specific
+ * official widgets. */
 abstract class RevealButton extends Reveal {
   // the specific button that triggers a specific functionality
   protected vButton: N<DxView> = null;
@@ -306,7 +318,9 @@ abstract class RevealButton extends Reveal {
   abstract findButton(v: DxView): N<DxView>;
 }
 
-/** MoreOption is the pattern for more options */
+/** MoreOption is the pattern for more options button (often
+ * located at the top-right, or end of a container, and responsible
+ * for hiding/showing some advanced operations). */
 class MoreOptions extends RevealButton {
   static DESC = 'More options';
 
@@ -319,7 +333,9 @@ class MoreOptions extends RevealButton {
   }
 }
 
-/** DrawerMenu is the pattern for drawer */
+/** DrawerMenu is the pattern for drawer button (often located
+ * at the top-left corner, and responsible for showing/hiding
+ * the drawer). */
 class DrawerMenu extends RevealButton {
   static DESC = 'Open navigation drawer';
 
@@ -332,7 +348,11 @@ class DrawerMenu extends RevealButton {
   }
 }
 
-/** TabHostTab is the pattern for tabs of a TabHost */
+/** TabHostTab is the pattern for tabs of a TabHost. TabHost
+ * assumes that all tabs of a TabHost are placed either together
+ * or hided by some tabs, and one can find the target tab by
+ * finding the tab on the view, or firstly find its sibling
+ * tab then check if there are siblings show. */
 class TabHostTab extends Reveal {
   // tabs are direct children of the a view
   // whose resource-id is android:id/tabs
@@ -413,7 +433,9 @@ class TabHostTab extends Reveal {
   }
 }
 
-/** TabHostContent is the pattern for contents of a TabHost */
+/** TabHostContent is the pattern for contents of a TabHost. Like
+ * TabHost, TabHostContent will find the corresponding tab of the view
+ * to be triggered. The assumes and applies like what TabHostTab does. */
 class TabHostContent extends Reveal {
   // tab contents are direct children of the a view
   // whose resource-id is android:id/tabcontent
@@ -518,8 +540,8 @@ class TabHostContent extends Reveal {
   }
 }
 
-/** A much robust heuristic for TabHost, for handling
- * cases where android:id/tabs does not exist */
+/** Custom TabHost may override the default tabs and tabcontent.
+ * TabHost is a much robust heuristic  for handling such cases */
 class TabHost extends TabHostTab {
   // tabs are all children of TabHost
   static isTabHost(v: DxView): v is DxTabHost {
@@ -573,8 +595,9 @@ class TabHost extends TabHostTab {
 }
 
 /** DoubleSideViewPager is the pattern for handling ViewPager
- * that both exists in recordee and playee
- */
+ * that both exists in recordee and playee. This pattern assumes
+ * that the view to be triggered is hided by its ViewPager parent,
+ * and can be manifested by this parent. */
 class DoubleSideViewPager extends Reveal {
   // pages are all children of ViewPager
   static isViewPager(v: DxView): v is DxViewPager {
@@ -682,8 +705,10 @@ class DoubleSideViewPager extends Reveal {
   }
 }
 
-/** Different from DoubleSideViewPager, SingleSideViewPager is the pattern
- * for handling ViewPager that only shows in playee side */
+/** Different from DoubleSideViewPager, SingleSideViewPager is the
+ * pattern for handling ViewPager that only shows in playee side.
+ * Same as DoubleSideViewPager, this pattern also manifests the views
+ * by operating its parents. */
 class SingleSideViewPager extends Reveal {
   // the pager in playee side
   private vPager: N<DxViewPager> = null;
@@ -723,7 +748,13 @@ abstract class Merge extends DxBpPat {
   }
 }
 
-/** MergeButton is those buttons that can show a merge page */
+/** MergeButton is those buttons that can show a merge page. MergeButton
+ * differs from RevealButton in that, it does not assume the special button
+ * resides in the matched playee segment, but assumes that the special button
+ * locates at the neighborhood of the playee segment. And thereby, MergeButton
+ * finds the special button bottom-up from the matched playee segment to its
+ * sibling, then its parent, then its parent's sibling, ...
+ */
 abstract class MergeButton extends Merge {
   private vButton: N<DxView> = null;
 
