@@ -87,8 +87,7 @@ const rules: Rule[] = [
   ({ v }) => (!Views.isValid(v) ? 's' : '-'),
   /** If the view has no children, and is not informative
    * (provides no useful information), and not important for
-   * accessibility, skip this view
-   */
+   * accessibility, skip this view */
   ({ v }) =>
     v.children.length == 0 &&
     Views.informativeLevelOf(v) == 0 &&
@@ -96,12 +95,10 @@ const rules: Rule[] = [
       ? 's'
       : '-',
   /** If the view is very informative (providing sufficient
-   * information), then don't divide this view
-   */
+   * information), then don't divide this view */
   ({ v }) => (Views.informativeLevelOf(v) >= 2 ? 'n' : '-'),
-  /** If the view has no children, and important for
-   * accessibility or a text view, then don't divide this view
-   */
+  /** If the view has no children, and important for accessibility
+   * or a text view, then don't divide this view */
   ({ v }) =>
     v.children.length == 0 &&
     (Views.isViewImportantForA11y(v) || Views.isText(v))
@@ -111,12 +108,10 @@ const rules: Rule[] = [
   ({ v }) => (v.children.length == 0 ? 's' : '-'),
   /** If the view is a not text view, and it has no valid
    * child view, then this view cannot be divided and will
-   * be cut
-   */
+   * be cut */
   ({ v }) => (!Views.isText(v) && !Views.hasValidChild(v) ? 's' : '-'),
   /** If the view has only one valid child and the child is
-   * not a text view, then divide this view
-   */
+   * not a text view, then divide this view */
   ({ v }) => {
     const valid = v.children.filter((c) => Views.isValid(c));
     if (valid.length == 1 && !Views.isText(valid[0])) {
@@ -143,19 +138,16 @@ const rules: Rule[] = [
     return same > diff && diff <= 2 ? 'n' : '-';
   },
   /** If the view is the *only* root of a segment, divide
-   * the view
-   */
+   * the view */
   ({ v, s }) => (s.roots.indexOf(v) != -1 && s.roots.length == 1 ? 'y' : '-'),
   /** If the view is less than the size threshold,
-   * then don't divide this view
-   */
+   * then don't divide this view */
   ({ v, s, d }) =>
     Views.areaOf(v) < d.width * d.height * DEFAULTS.THRESHOLD.V_IN_SCR
       ? 'n'
       : '-',
   /** If sum of all the children's size is greater than
-   * this view's size, then divide this view
-   */
+   * this view's size, then divide this view */
   ({ v }) => {
     const sum = v.children.reduce((s, c) => s + Views.areaOf(c), 0);
     return sum > Views.areaOf(v) ? 'y' : '-';
@@ -163,8 +155,7 @@ const rules: Rule[] = [
   /** If background color of this view is different from
    * one of its children's, divide this view, and at the
    * same time, the child with different background color
-   * will not be divided in this round
-   */
+   * will not be divided in this round */
   ({ v }) => {
     // TODO: iteration
     const diff = v.children.filter((c) => {
@@ -180,8 +171,7 @@ const rules: Rule[] = [
   },
   /** If the view has at least one text child, and the
    * view's size is smaller than the threshold, the don't
-   * divide this view
-   */
+   * divide this view */
   ({ v, s }) => {
     // TODO: relative size
     return Views.areaOf(v) < Segments.areaOf(s) * DEFAULTS.THRESHOLD.V_IN_SEG &&
@@ -190,8 +180,7 @@ const rules: Rule[] = [
       : '-';
   },
   /** If the child with maximum size of the view is smaller than
-   * the threshold, don't divide the view
-   */
+   * the threshold, don't divide the view */
   ({ v, s }) => {
     const max = v.children.reduce((max, c) => {
       const area = Views.areaOf(c);

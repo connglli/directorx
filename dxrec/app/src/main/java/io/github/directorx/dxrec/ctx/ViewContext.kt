@@ -58,17 +58,17 @@ class ViewContext(val encode: Boolean) : DxContext {
                 val type = when {
                     view is Toolbar -> "TB"
                     view instanceof "android.support.v7.widget.Toolbar" -> "TB"
-                    view instanceof "androidx.widget.Toolbar" -> "TB"
+                    view instanceof "androidx.appcompat.widget.Toolbar" -> "TB"
                     view is ListView -> "LV"
                     view is GridView -> "GV"
                     view is ScrollView -> "VSV"
                     view is HorizontalScrollView -> "HSV"
                     view instanceof "android.support.v4.widget.NestedScrollView" -> "NSV"
-                    view instanceof "androidx.widget.NestedScrollView" -> "NSV"
+                    view instanceof "androidx.core.widget.NestedScrollView" -> "NSV"
                     view instanceof "android.support.v7.widget.RecyclerView" -> "RV"
-                    view instanceof "androidx.widget.RecyclerView" -> "RV"
+                    view instanceof "androidx.recyclerview.widget.RecyclerView" -> "RV"
                     view instanceof "android.support.v4.view.ViewPager" -> "VP"
-                    view instanceof "androidx.widget.ViewPager" -> "VP"
+                    view instanceof "androidx.viewpager.widget.ViewPager" -> "VP"
                     view is TabHost -> "TH"
                     view is WebView -> "WV"
                     else -> "."
@@ -121,7 +121,7 @@ class ViewContext(val encode: Boolean) : DxContext {
                 // view pager properties: alert don't use `is` operator, 'cause
                 // ViewPager is not in framework, but in androidx (a 2nd party
                 // library)
-                if (view instanceof "androidx.widget.ViewPager" ||
+                if (view instanceof "androidx.viewpager.widget.ViewPager" ||
                     view instanceof "android.support.v4.view.ViewPager") {
                     val curItem = view.javaClass.getFieldValue<Int>(view, "mCurItem")
                     if (curItem != null) {
