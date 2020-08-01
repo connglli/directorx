@@ -15,6 +15,7 @@ export interface PatRecArgs {}
 
 export abstract class DxPat {
   constructor(protected readonly args: PatRecArgs) {}
+  abstract get name(): string;
   abstract match(): boolean;
   abstract async apply(droid: DxDroid): Promise<void>;
 }
@@ -29,13 +30,16 @@ export interface InvisiblePatRecArgs extends PatRecArgs {
 }
 
 /** Invisible pattern is used for those views which are
- * invisible but still presented on the view tree
- */
+ * invisible but still presented on the view tree */
 export class Invisible extends DxPat {
   // parent that are visible to user
   private vParent: N<DxView> = null;
   constructor(protected args: InvisiblePatRecArgs) {
     super(args);
+  }
+
+  get name(): string {
+    return 'invisible';
   }
 
   match(): boolean {
@@ -87,11 +91,11 @@ export abstract class DxBpPat extends DxPat {
     super(args);
   }
 
-  abstract level(): string;
+  abstract get level(): string;
 }
 
 abstract class Expand extends DxBpPat {
-  level() {
+  get level() {
     return 'expand';
   }
 }
@@ -102,6 +106,10 @@ type ScrollDir = 'R2L' | 'L2R' | 'T2B' | 'B2T' | 'N';
 class Scroll extends Expand {
   private vHSParent: N<DxView> = null;
   private vVSParent: N<DxView> = null;
+
+  get name(): string {
+    return 'scroll';
+  }
 
   match(): boolean {
     // test whether v is children of a scrollable parent
@@ -238,6 +246,7 @@ class Scroll extends Expand {
     let found: N<DxView> = null;
     const playee = this.args.p;
     const fns = [
+      // TODO: change to only find parents, no siblings
       [v.text.length > 0, SegmentBottomUpFinder.findViewByText, v.text],
       [
         v.resId.length > 0,
@@ -257,13 +266,13 @@ class Scroll extends Expand {
 }
 
 abstract class Reveal extends DxBpPat {
-  level() {
+  get level() {
     return 'reveal';
   }
 }
 
-/** SpecialButton is the pattern for some special buttons */
-abstract class SpecialButton extends Reveal {
+/** RevealButton is the pattern for some special reveal buttons */
+abstract class RevealButton extends Reveal {
   // the specific button that triggers a specific functionality
   protected vButton: N<DxView> = null;
 
@@ -298,8 +307,12 @@ abstract class SpecialButton extends Reveal {
 }
 
 /** MoreOption is the pattern for more options */
-class MoreOptions extends SpecialButton {
+class MoreOptions extends RevealButton {
   static DESC = 'More options';
+
+  get name(): string {
+    return 'more-options';
+  }
 
   findButton(v: DxView): N<DxView> {
     return ViewFinder.findViewByDesc(v, MoreOptions.DESC);
@@ -307,8 +320,12 @@ class MoreOptions extends SpecialButton {
 }
 
 /** DrawerMenu is the pattern for drawer */
-class DrawerMenu extends SpecialButton {
+class DrawerMenu extends RevealButton {
   static DESC = 'Open navigation drawer';
+
+  get name(): string {
+    return 'drawer-menu';
+  }
 
   findButton(v: DxView): N<DxView> {
     return ViewFinder.findViewByDesc(v, DrawerMenu.DESC);
@@ -325,6 +342,10 @@ class TabHostTab extends Reveal {
 
   // the path from the view to the tab's parent
   protected vPath: DxView[] = [];
+
+  get name() {
+    return 'tab-host-tab';
+  }
 
   match(): boolean {
     this.vPath.unshift(this.args.v);
@@ -404,6 +425,10 @@ class TabHostContent extends Reveal {
   }
 
   private vTabContent: N<DxView> = null;
+
+  get name() {
+    return 'tab-host-content';
+  }
 
   match(): boolean {
     // check whether v is in a TabHostContent
@@ -501,6 +526,10 @@ class TabHost extends TabHostTab {
     return v instanceof DxTabHost;
   }
 
+  get name() {
+    return 'tab-host';
+  }
+
   match(): boolean {
     // TODO: what if v is a tab content, then how to
     // resolve the tab name where v resides? Maybe we
@@ -562,6 +591,10 @@ class DoubleSideViewPager extends Reveal {
   private vRPager: N<DxViewPager> = null;
   // the page's parent pager in playee
   private vPPager: N<DxViewPager> = null;
+
+  get name() {
+    return 'double-side-view-pager';
+  }
 
   match(): boolean {
     this.vRPager = DoubleSideViewPager.findPagerParent(this.args.v);
@@ -655,6 +688,10 @@ class SingleSideViewPager extends Reveal {
   // the pager in playee side
   private vPager: N<DxViewPager> = null;
 
+  get name() {
+    return 'single-side-view-pager';
+  }
+
   match(): boolean {
     const playee = this.args.p;
     this.vPager = SegmentBottomUpFinder.findView(
@@ -680,6 +717,61 @@ class SingleSideViewPager extends Reveal {
   }
 }
 
+abstract class Merge extends DxBpPat {
+  get level() {
+    return 'merge';
+  }
+}
+
+/** MergeButton is those buttons that can show a merge page */
+abstract class MergeButton extends Merge {
+  private vButton: N<DxView> = null;
+
+  match(): boolean {
+    const playee = this.args.p;
+    this.vButton = SegmentBottomUpFinder.findView(playee.s, this.isMergeButton);
+    return !!this.vButton;
+  }
+
+  async apply(droid: DxDroid) {
+    if (this.vButton == null) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    // synthesize a tap event on the
+    // more options button
+    return await droid.input.tap(
+      Views.x0(this.vButton) + 1,
+      Views.y0(this.vButton) + 1
+    );
+  }
+
+  protected abstract isMergeButton(v: DxView): boolean;
+}
+
+/** NewButton is those buttons that can are typically used to
+ * create/add something new, e.g., create a new thing */
+class NewButton extends MergeButton {
+  private static WORDS = ['New', 'Create', 'Add'];
+
+  get name() {
+    return 'new-button';
+  }
+
+  protected isMergeButton(v: DxView) {
+    for (const w of NewButton.WORDS) {
+      if (v.text.startsWith(w)) {
+        return true;
+      }
+    }
+    for (const w of NewButton.WORDS) {
+      if (v.desc.startsWith(w)) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
 // The Pattern is sorted bottom-up, in order of
 // [None, Reflow, Expand, Merge, Reveal, Transform]
 const patterns = [
@@ -693,6 +785,8 @@ const patterns = [
   TabHost,
   DoubleSideViewPager,
   SingleSideViewPager,
+  // Merge
+  NewButton,
 ];
 
 /** Recognize the pattern bottom-up from None to

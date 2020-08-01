@@ -12,12 +12,7 @@ import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
 import DxView, { DxActivity, Views } from './dxview.ts';
 import DxSegment from './dxseg.ts';
-import DxDroid, {
-  DevInfo,
-  ViewInputOptions,
-  SelectOptions,
-  ViewMap,
-} from './dxdroid.ts';
+import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
 import segUi from './algo/ui_seg.ts';
 import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';
 import recBpPat, { Invisible } from './algo/pat_syn.ts';
@@ -268,9 +263,12 @@ class ResPlayer extends DxPlayer {
           break;
         }
       }
-      DxLog.info(`/* skip next ${skipped + 1} events */`);
-      this.seq.popN(skipped);
-      return;
+      // found one that can be fired on current ui
+      if (skipped != 0) {
+        DxLog.info(`/* skip next ${skipped + 1} events */`);
+        this.seq.popN(skipped);
+        return;
+      }
     }
 
     // let's see if the view is invisible, and apply
@@ -306,9 +304,9 @@ class ResPlayer extends DxPlayer {
         d: pDev,
       });
       if (!pattern.match()) {
-        throw new NotImplementedError('Pattern is not invisible');
+        throw new NotImplementedError(`Pattern is not ${pattern.name}`);
       } else {
-        DxLog.info('pattern invisible');
+        DxLog.info(`pattern ${pattern.name}`);
       }
       // push the raw event back to the sequence, and try again
       this.seq.push(e);
@@ -348,7 +346,7 @@ class ResPlayer extends DxPlayer {
     if (pattern == null) {
       throw new NotImplementedError('No pattern is recognized');
     } else {
-      DxLog.info(`pattern ${pattern.level()}`);
+      DxLog.info(`pattern ${pattern.level}:${pattern.name}`);
     }
     // push the raw event back to the sequence, and try again
     this.seq.push(e);
