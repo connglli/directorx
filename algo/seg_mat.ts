@@ -1,5 +1,5 @@
-import DxSegment from '../dxseg.ts';
-import DxView from '../dxview.ts';
+import DxView from '../ui/dxview.ts';
+import DxSegment from '../ui/dxseg.ts';
 import { BiGraph } from '../utils/bigraph.ts';
 import * as vecutil from '../utils/vecutil.ts';
 import { filterStopwords, splitAsWords } from '../utils/strutil.ts';

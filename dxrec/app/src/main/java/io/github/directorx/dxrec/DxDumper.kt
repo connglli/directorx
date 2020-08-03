@@ -22,7 +22,7 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
 
         // ACTIVITY act
         DxLogger.i("ACTIVITY_BEGIN $act")
-        DxLogger.i(eDump, noPrefix = true)
+        DxLogger.i(eDump)
         DxLogger.i("ACTIVITY_END $act")
         when (evt) {
             // TAP act down_time x y

@@ -1,50 +1,27 @@
 package io.github.directorx.dxrec
 
-import android.util.Log
+import android.os.Handler
+import android.os.HandlerThread
+import io.github.directorx.dxrec.log.DxAbsLogger
 
 object DxLogger {
 
-    lateinit var pkgName: String
+    private lateinit var thread: HandlerThread
+    private lateinit var handler: Handler
+    private lateinit var logger: DxAbsLogger
 
-    fun i(msg: String, noPrefix: Boolean = false) =
-        if (noPrefix) {
-            androidLog(Log.INFO, DxRecorder.LOG_TAG, msg)
-        } else {
-            androidLog(Log.INFO, DxRecorder.LOG_TAG, "$pkgName $msg")
-        }
-
-    fun e(msg: String, tr: Throwable? = null) {
-        androidLog(Log.ERROR, DxRecorder.LOG_ETAG, "($pkgName) $msg")
-        if (tr != null) {
-            androidLog(Log.ERROR, DxRecorder.LOG_ETAG, Log.getStackTraceString(tr))
-        }
+    fun setLogger(value: DxAbsLogger) {
+        thread = HandlerThread("${value.pkgName}.dxlogger.thread")
+        thread.start()
+        handler = Handler(thread.looper)
+        logger = value
     }
 
-    fun catchAndLog(block: () -> Unit) {
-        try {
-            block()
-        } catch (t: Throwable) {
-            if (t.message != null) {
-                e(t.message!!, t)
-            }
-        }
-    }
+    fun d(msg: String) = handler.post { logger.d(msg) }
 
-    private const val MAX_LOG_LENGTH = 4000
-    private fun androidLog(logLevel: Int, logTag: String, logMessage: String) {
-        // Copied from OkHttp
-        // Split by line, then ensure each line can fit into Log's maximum length.
-        var i = 0
-        val length = logMessage.length
-        while (i < length) {
-            var newline = logMessage.indexOf('\n', i)
-            newline = if (newline != -1) newline else length
-            do {
-                val end = minOf(newline, i + MAX_LOG_LENGTH)
-                Log.println(logLevel, logTag, logMessage.substring(i, end))
-                i = end
-            } while (i < newline)
-            i++
-        }
-    }
+    fun i(msg: String) = handler.post { logger.i(msg) }
+
+    fun e(msg: String) = handler.post { logger.e(msg) }
+
+    fun catchAndLog(block: () -> Unit) = handler.post { logger.catchAndLog(block) }
 }

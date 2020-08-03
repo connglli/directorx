@@ -1,7 +1,10 @@
 package io.github.directorx.dxrec.utils.accessors
 
 import java.lang.reflect.Field
+import java.lang.reflect.Method
 import java.util.*
+
+// Attention, all reflection always fails when come across obfuscations
 
 // Get a field value (if does exist, search its parent)
 fun <F> Class<*>.getFieldValue(obj: Any?, name: String, parent: Boolean = true): F? {
@@ -39,6 +42,23 @@ fun Class<*>.getDeclaredFieldIncludingParent(name: String): Field? {
         if (field != null) {
             field.isAccessible = true
             return field
+        }
+        currClass = currClass.superclass
+    }
+    return null
+}
+
+fun Class<*>.getDeclaredMethodIncludingParent(name: String, vararg parameterTypes: Class<*>): Method? {
+    var currClass: Class<*>? = this
+    while (currClass != null) {
+        val method = try {
+            currClass.getDeclaredMethod(name, *parameterTypes)
+        } catch (e: NoSuchMethodException) {
+            null
+        }
+        if (method != null) {
+            method.isAccessible = true
+            return method
         }
         currClass = currClass.superclass
     }

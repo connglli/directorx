@@ -9,11 +9,11 @@ import java.util.concurrent.LinkedBlockingQueue
 class DxBroker(private val capacity: Int) {
     private val buffer: StringBuffer = StringBuffer()
 
-    val staged: BlockingQueue<Item> = LinkedBlockingQueue()
-    val indexed: LinkedList<Item> = LinkedList()
+    val committed: BlockingQueue<Item> = LinkedBlockingQueue()
+    val staged: LinkedList<Item> = LinkedList()
 
     val curr: Item?
-    get() = indexed.lastOrNull()
+    get() = staged.lastOrNull()
 
     fun addActivity(act: Activity) {
         // each time an activity is added, a new item should
@@ -24,24 +24,24 @@ class DxBroker(private val capacity: Int) {
     fun addEvent(evt: DxEvent) {
         // each time an event is added, last item should
         // be refreshed, and re-pushed
-        val item = indexed.removeAt(indexed.size - 1)
-        indexed.add(item.copy(evt = evt))
+        val item = staged.removeAt(staged.size - 1)
+        staged.add(item.copy(evt = evt))
     }
 
     fun addPair(act: Activity, evt: DxEvent) {
         buffer.setLength(0)
         act.dump(buffer)
-        if (indexed.size >= capacity) {
-            indexed.removeAt(0)
+        if (staged.size >= capacity) {
+            staged.removeAt(0)
         }
-        indexed.add(Item(act.javaClass.name, evt, buffer.toString()))
+        staged.add(Item(act.javaClass.name, evt, buffer.toString()))
     }
 
     fun commit() {
-        for (i in indexed) {
+        for (i in staged) {
             if (!i.committed) {
                 i.committed = true
-                staged.put(i)
+                committed.put(i)
             }
         }
     }

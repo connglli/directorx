@@ -9,6 +9,7 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.directorx.dxrec.ctx.DecorViewContext
 import io.github.directorx.dxrec.ctx.ViewContext
+import io.github.directorx.dxrec.log.AndroidLogger
 import io.github.directorx.dxrec.utils.accessors.contains
 import org.json.JSONArray
 import org.json.JSONObject
@@ -18,7 +19,6 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
 
     companion object {
         const val LOG_TAG = "DxRecorder"
-        const val LOG_ETAG = "DxRecorderError"
         const val MEM_CAP = 5
         const val CONFIG = "/data/local/tmp/directorx/dxrec.config.json"
     }
@@ -42,6 +42,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         val whitelist = config.opt("whitelist") as? JSONArray ?: JSONArray("[]")
         val encode = config.optBoolean("encode", false)
         if (pkgName !in whitelist) { return }
+        DxLogger.setLogger(AndroidLogger(pkgName))
 
         DxLogger.catchAndLog {
             prepare(pkgName, encode)
@@ -131,12 +132,10 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
     }
 
     private fun prepare(pkgName: String, encode: Boolean) {
-        DxLogger.pkgName = pkgName
-
         // initialize components
         broker = DxBroker(MEM_CAP)
         detector = EvDetector(this, pkgName)
-        dumper = DxDumper(broker.staged)
+        dumper = DxDumper(broker.committed)
 
         try { // initialize hooking context
             ViewContext(encode).prepare()

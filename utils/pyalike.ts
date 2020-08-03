@@ -8,3 +8,9 @@ export function* zip<T, R>(a: T[], b: R[]): IterableIterator<[T, R]> {
     yield [a[i], b[i]];
   }
 }
+
+export function* enumerate<T>(a: T[]): IterableIterator<[number, T]> {
+  for (let i = 0; i < a.length; i++) {
+    yield [i, a[i]];
+  }
+}

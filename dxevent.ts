@@ -1,4 +1,4 @@
-import { DxActivity } from './dxview.ts';
+import DxActivity from './ui/dxact.ts';
 import Stack from './utils/stack.ts';
 
 export type DxEventType = 'tap' | 'long-tap' | 'double-tap' | 'swipe' | 'key';

@@ -8,7 +8,6 @@ import DxEvent, {
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxView, {
-  DxActivity,
   DxDecorView,
   DxViewPager,
   DxTabHost,
@@ -17,7 +16,8 @@ import DxView, {
   ViewFinder,
   Views,
   ViewProps,
-} from './dxview.ts';
+} from './ui/dxview.ts';
+import DxActivity, { FragmentManager, DxFragment } from './ui/dxact.ts';
 import { DevInfo } from './dxadb.ts';
 import * as base64 from './utils/base64.ts';
 import KnaryTree from './utils/knary_tree.ts';
@@ -27,7 +27,8 @@ class ActivityPack extends DxActivity {
   constructor(
     app: string,
     name: string,
-    public readonly indTree: KnaryTree<number>
+    public readonly vTree: KnaryTree<number>,
+    public readonly fInd: number[] // TODO: change to fTree, because it each fragment is also an owner
   ) {
     super(app, name);
   }
@@ -41,6 +42,7 @@ type DxpkFields = {
   app: string;
   dev: DevInfo;
   vpool: DxView[];
+  fpool: DxFragment[];
   eseq: EventPack[];
 };
 
@@ -50,11 +52,13 @@ class DXPK {
 
   private static readonly STATE_DEV = 0; // read dev info next
   private static readonly STATE_APP = 1; // read app next
-  private static readonly STATE_PSZ = 2; // read pool_size next
-  private static readonly STATE_POL = 3; // read pool item (view) next
-  private static readonly STATE_SSZ = 4; // read seq_size next
-  private static readonly STATE_SEQ = 5; // read seq item (event) next
-  private static readonly STATE_DNE = 6; // no long read
+  private static readonly STATE_PSZ = 2; // read view pool size next
+  private static readonly STATE_POL = 3; // read view pool item (view) next
+  private static readonly STATE_FPS = 4; // read fragment pool size next
+  private static readonly STATE_FPL = 5; // read fragment pool item (fragment) next
+  private static readonly STATE_SSZ = 6; // read seq_size next
+  private static readonly STATE_SEQ = 7; // read seq item (event) next
+  private static readonly STATE_DNE = 8; // no long read
 
   private static type2str(t: ViewType): string {
     switch (t) {
@@ -66,6 +70,20 @@ class DXPK {
         return 't';
       case ViewType.WEB_VIEW:
         return 'w';
+      case ViewType.LIST_VIEW:
+        return 'l';
+      case ViewType.RECYCLER_VIEW:
+        return 'r';
+      case ViewType.GRID_VIEW:
+        return 'g';
+      case ViewType.SCROLL_VIEW:
+        return 's';
+      case ViewType.HORIZONTAL_SCROLL_VIEW:
+        return 'h';
+      case ViewType.NESTED_SCROLL_VIEW:
+        return 'n';
+      case ViewType.TOOLBAR:
+        return 'b';
       case ViewType.VIEW:
         return '.';
       default:
@@ -83,6 +101,20 @@ class DXPK {
         return ViewType.TAB_HOST;
       case 'w':
         return ViewType.WEB_VIEW;
+      case 'l':
+        return ViewType.LIST_VIEW;
+      case 'r':
+        return ViewType.RECYCLER_VIEW;
+      case 'g':
+        return ViewType.GRID_VIEW;
+      case 's':
+        return ViewType.SCROLL_VIEW;
+      case 'h':
+        return ViewType.HORIZONTAL_SCROLL_VIEW;
+      case 'n':
+        return ViewType.NESTED_SCROLL_VIEW;
+      case 'b':
+        return ViewType.TOOLBAR;
       case '.':
         return ViewType.VIEW;
       default:
@@ -95,6 +127,7 @@ class DXPK {
     // TODO: throw meaningful exception and
     // add semantic checking
     const vpool: DxView[] = [];
+    const fpool: DxFragment[] = [];
     const eseq: EventPack[] = [];
     let app = '';
     let dev: DevInfo | null = null;
@@ -129,61 +162,83 @@ class DXPK {
         const type = DXPK.str2type(tokens[0]);
         const props: ViewProps = {
           package: app,
-          class: tokens[2],
-          hash: tokens[1],
+          class: tokens[1],
+          id: tokens[2],
+          hash: tokens[3],
           flags: {
-            V: tokens[25][0] as 'V' | 'I' | 'G',
-            f: tokens[25][1] == 'F',
-            F: tokens[25][2] == 'F',
-            S: tokens[25][3] == 'S',
-            E: tokens[25][4] == 'E',
-            d: tokens[25][5] == 'D',
+            V: tokens[26][0] as 'V' | 'I' | 'G',
+            f: tokens[26][1] == 'F',
+            F: tokens[26][2] == 'F',
+            S: tokens[26][3] == 'S',
+            E: tokens[26][4] == 'E',
+            d: tokens[26][5] == 'D',
             s: {
-              l: tokens[25][6] == 'L',
-              t: tokens[25][7] == 'T',
-              r: tokens[25][8] == 'R',
-              b: tokens[25][9] == 'B',
+              l: tokens[26][6] == 'L',
+              t: tokens[26][7] == 'T',
+              r: tokens[26][8] == 'R',
+              b: tokens[26][9] == 'B',
             },
-            c: tokens[25][10] == 'C',
-            lc: tokens[25][11] == 'L',
-            cc: tokens[25][12] == 'X',
-            a: tokens[25][13] == 'A',
+            c: tokens[26][10] == 'C',
+            lc: tokens[26][11] == 'L',
+            cc: tokens[26][12] == 'X',
+            a: tokens[26][13] == 'A',
           },
-          shown: tokens[6] == 'S' ? true : false,
-          bgClass: tokens[22],
-          bgColor: tokens[23] == '.' ? null : Number(tokens[23]),
-          foreground: tokens[24] == '.' ? null : tokens[24],
-          left: Number(tokens[7]),
-          top: Number(tokens[8]),
-          right: Number(tokens[9]),
-          bottom: Number(tokens[10]),
-          elevation: Number(tokens[11]),
-          translationX: Number(tokens[12]),
-          translationY: Number(tokens[13]),
-          translationZ: Number(tokens[14]),
-          scrollX: Number(tokens[15]),
-          scrollY: Number(tokens[16]),
-          resPkg: tokens[3],
-          resType: tokens[4],
-          resEntry: tokens[5],
-          desc: base64.decode(tokens[17]),
-          text: base64.decode(tokens[18]),
-          tag: base64.decode(tokens[19]),
-          tip: base64.decode(tokens[20]),
-          hint: base64.decode(tokens[21]),
+          shown: tokens[7] == 'S' ? true : false,
+          bgClass: tokens[23],
+          bgColor: tokens[24] == '.' ? null : Number(tokens[24]),
+          foreground: tokens[25] == '.' ? null : tokens[24],
+          left: Number(tokens[8]),
+          top: Number(tokens[9]),
+          right: Number(tokens[10]),
+          bottom: Number(tokens[11]),
+          elevation: Number(tokens[12]),
+          translationX: Number(tokens[13]),
+          translationY: Number(tokens[14]),
+          translationZ: Number(tokens[15]),
+          scrollX: Number(tokens[16]),
+          scrollY: Number(tokens[17]),
+          resPkg: tokens[4],
+          resType: tokens[5],
+          resEntry: tokens[6],
+          desc: base64.decode(tokens[18]),
+          text: base64.decode(tokens[19]),
+          tag: base64.decode(tokens[20]),
+          tip: base64.decode(tokens[21]),
+          hint: base64.decode(tokens[22]),
         };
         switch (type) {
           case ViewType.VIEW_PAGER:
-            props.currItem = Number(tokens[26]);
+            props.currItem = Number(tokens[27]);
             break;
           case ViewType.TAB_HOST:
-            props.currTab = Number(tokens[26]);
-            props.tabsHash = tokens[27];
-            props.contentHash = tokens[28];
+            props.currTab = Number(tokens[27]);
+            props.tabsHash = tokens[28];
+            props.contentHash = tokens[29];
             break;
         }
         const view = ViewFactory.create(type, props);
         vpool.push(view);
+        size -= 1;
+        if (size == 0) {
+          state = DXPK.STATE_FPS;
+        }
+      } else if (state == DXPK.STATE_FPS) {
+        size = Number(l.trim());
+        state = DXPK.STATE_FPL;
+      } else if (state == DXPK.STATE_FPL) {
+        const tokens = l.trim().split(';');
+        const fr = new DxFragment(
+          {
+            class: tokens[0],
+            hash: tokens[1],
+            containerId: tokens[2],
+            fragmentId: tokens[3],
+            hidden: tokens[4][1] == 'H',
+            detached: tokens[4][2] == 'D',
+          },
+          tokens[4][0] == 'A'
+        );
+        fpool.push(fr);
         size -= 1;
         if (size == 0) {
           state = DXPK.STATE_SSZ;
@@ -221,7 +276,13 @@ class DXPK {
           }
           i += 1;
         }
-        const ap = new ActivityPack(app, name, tree);
+        const indices: number[] = [];
+        const count = Number(tokens[i]);
+        for (let j = 0; j < count; j++) {
+          indices.push(Number(tokens[i + 1 + j]));
+        }
+        i += count + 1;
+        const ap = new ActivityPack(app, name, tree, indices);
         let e: DxEvent;
         switch (tokens[i]) {
           case 'tap':
@@ -280,7 +341,7 @@ class DXPK {
 
     await dxpk.close();
 
-    return { app, dev: dev!, vpool, eseq }; // eslint-disable-line
+    return { app, dev: dev!, vpool, fpool, eseq }; // eslint-disable-line
   }
 
   /** Dump dxpk to file
@@ -293,6 +354,11 @@ class DXPK {
    *      v2
    *      ...
    *      vM
+   *      T # fpool_size
+   *      f1 # cls;hash;...
+   *      f2
+   *      ...
+   *      fT
    *      N # eseq_size
    *      e1 # tree;type;...
    *      e2
@@ -314,12 +380,14 @@ class DXPK {
     await DXPK.writeNumber(buf, dxpk.vpool.length);
     for (const v of dxpk.vpool) {
       const type = ViewFactory.typeOf(v);
-      await DXPK.writeString(buf, `${DXPK.type2str(type)};${v.hash};`, false);
       await DXPK.writeString(
         buf,
-        `${v.cls};${v.resPkg};${v.resType};${v.resEntry};${
-          v.shown ? 'S' : '.'
-        };`,
+        `${DXPK.type2str(type)};${v.cls};${v.id};${v.hash};`,
+        false
+      );
+      await DXPK.writeString(
+        buf,
+        `${v.resPkg};${v.resType};${v.resEntry};${v.shown ? 'S' : '.'};`,
         false
       );
       await DXPK.writeString(
@@ -375,14 +443,29 @@ class DXPK {
         await DXPK.writeString(buf, flags);
       }
     }
+    await DXPK.writeNumber(buf, dxpk.fpool.length);
+    for (const f of dxpk.fpool) {
+      await DXPK.writeString(
+        buf,
+        `${f.cls};${f.hash};${f.containerId};${f.fragmentId};`,
+        false
+      );
+      let flags = '';
+      flags += f.active ? 'A' : '.';
+      flags += f.hidden ? 'H' : '.';
+      flags += f.detached ? 'D' : '.';
+      await DXPK.writeString(buf, flags);
+    }
     await DXPK.writeNumber(buf, dxpk.eseq.length);
     for (const ep of dxpk.eseq) {
       await DXPK.writeString(buf, `${ep.ap.app};${ep.ap.name};`, false);
-      await ep.ap.indTree.accept(
+      await ep.ap.vTree.accept(
         async (n: KnaryTree<number>): Promise<void> => {
           await DXPK.writeString(buf, `${n.value},${n.childrenCount};`, false);
         }
       );
+      await DXPK.writeString(buf, `${ep.ap.fInd.length};`, false);
+      await DXPK.writeString(buf, `${ep.ap.fInd.join(';')};`, false);
       await DXPK.writeString(buf, ep.e.ty + ';', false);
       if (ep.e.ty == 'tap') {
         const e = ep.e as DxTapEvent;
@@ -420,20 +503,25 @@ class DXPK {
 }
 
 export default class DxPacker {
-  // view pool: views that are same
-  // are saved only 1 copy
+  // view pool: views that are same are saved only 1 copy
   private readonly vpool: DxView[] = [];
+  // fragment pool: many fragments are same as well
+  private readonly fpool: DxFragment[] = [];
   // event sequence: one by one
   private readonly eseq: EventPack[] = [];
 
   constructor(public readonly dev: DevInfo, public readonly app: string) {}
 
   get viewPool(): DxView[] {
-    return this.vpool.slice(0);
+    return this.vpool.slice();
+  }
+
+  get fragmentPool(): DxFragment[] {
+    return this.fpool.slice();
   }
 
   get eventSeq(): EventPack[] {
-    return this.eseq.slice(0);
+    return this.eseq.slice();
   }
 
   append(e: DxEvent): void {
@@ -466,6 +554,7 @@ export default class DxPacker {
       app: this.app,
       dev: this.dev,
       vpool: this.vpool.slice(),
+      fpool: this.fpool.slice(),
       eseq: this.eseq.slice(),
     });
   }
@@ -476,6 +565,9 @@ export default class DxPacker {
     for (const v of dxpk.vpool) {
       packer.vpool.push(v as DxView);
     }
+    for (const f of dxpk.fpool) {
+      packer.fpool.push(f);
+    }
     for (const e of dxpk.eseq) {
       packer.eseq.push(e);
     }
@@ -483,9 +575,10 @@ export default class DxPacker {
   }
 
   private packAct(a: DxActivity): ActivityPack {
-    const { app, name, decorView } = a;
-    const tree = this.packView(decorView!); // eslint-disable-line
-    const pack = new ActivityPack(app, name, tree);
+    const { app, name, decorView, fragmentManager } = a;
+    const vTree = this.packView(decorView!); // eslint-disable-line
+    const fInd = this.packFragmentManager(fragmentManager);
+    const pack = new ActivityPack(app, name, vTree, fInd);
     return pack;
   }
 
@@ -493,7 +586,7 @@ export default class DxPacker {
     v.detach(); // detach from its parent
     let ind = -1;
     for (const i in this.vpool) {
-      if (this.viewEq(v, this.vpool[i])) {
+      if (v.equals(this.vpool[i])) {
         ind = Number(i);
         break;
       }
@@ -514,14 +607,36 @@ export default class DxPacker {
     return node;
   }
 
+  private packFragmentManager(fm: FragmentManager): number[] {
+    const indices = [];
+    for (const fr of fm.added) {
+      let found = -1;
+      for (let i = 0; i < this.fpool.length; i++) {
+        if (fr.equals(this.fpool[i])) {
+          found = i;
+          break;
+        }
+      }
+      if (found == -1) {
+        found = this.fpool.length;
+        this.fpool.push(fr);
+      }
+      indices.push(found);
+      // TODO: fragment are also fragment owner, and should
+      // also be detached, and packed recursively
+    }
+    return indices;
+  }
+
   private unpackActP(ap: ActivityPack): DxActivity {
     const a = new DxActivity(ap.app, ap.name);
-    const v = this.unpackViewP(ap.indTree);
+    const v = this.unpackViewP(ap.vTree);
     if (!(v instanceof DxDecorView)) {
       throw new IllegalStateError('Expect a DxDecorView as root');
     }
     a.replaceDecor(v as DxDecorView);
     a.buildDrawingLevelLists();
+    this.unpackFragmentP(a, ap.fInd);
     return a;
   }
 
@@ -534,8 +649,15 @@ export default class DxPacker {
     return cv;
   }
 
-  private viewEq(a: DxView, b: DxView): boolean {
-    return Views.eq(a, b);
+  private unpackFragmentP(act: DxActivity, indices: number[]) {
+    for (const ind of indices) {
+      const fr = this.fpool[ind];
+      if (fr.active) {
+        act.fragmentManager.activateFragment(this.fpool[ind].props);
+      } else {
+        act.fragmentManager.addFragment(this.fpool[ind].props);
+      }
+    }
   }
 
   private infoLog(e: DxEvent) {
@@ -606,9 +728,4 @@ export default class DxPacker {
       }
     }
   }
-}
-
-if (import.meta.main) {
-  const dxpk = await DXPK.load('./msword.dxpk');
-  await DXPK.dump('./msword2.dxpk', dxpk);
 }

@@ -1,7 +1,7 @@
 import DxView, { Views, ViewFinder } from './dxview.ts';
-import Interval, { XYInterval } from './utils/interval.ts';
-import { IllegalStateError } from './utils/error.ts';
-import ArrayTreeOp, { ArrayTreeNode } from './utils/array_tree_op.ts';
+import Interval, { XYInterval } from '../utils/interval.ts';
+import { IllegalStateError } from '../utils/error.ts';
+import ArrayTreeOp, { ArrayTreeNode } from '../utils/array_tree_op.ts';
 
 type N<T> = T | null;
 

@@ -1,7 +1,7 @@
-import { DevInfo } from './dxdroid.ts';
-import { XYInterval } from './utils/interval.ts';
-import ArrayTreeOp, { ArrayTreeNode } from './utils/array_tree_op.ts';
-import { extract } from './utils/types.ts';
+import { DevInfo } from '../dxdroid.ts';
+import { XYInterval } from '../utils/interval.ts';
+import ArrayTreeOp, { ArrayTreeNode } from '../utils/array_tree_op.ts';
+import { extract } from '../utils/types.ts';
 
 type N<T> = T | null;
 
@@ -48,6 +48,7 @@ const DefaultFlags: ViewFlags = {
 interface BaseProps {
   readonly package: string;
   readonly class: string;
+  readonly id: string;
   readonly hash: string;
   readonly flags: ViewFlags;
   readonly shown: boolean;
@@ -77,6 +78,7 @@ interface BaseProps {
 const DefaultProps = {
   package: '',
   class: '',
+  id: '',
   hash: '',
   flags: DefaultFlags,
   shown: true,
@@ -163,6 +165,7 @@ export default class DxView<T extends ExtraProps = ExtraProps>
     this.props = {
       package: props.package,
       class: props.class,
+      id: props.id,
       hash: props.hash,
       flags: props.flags,
       shown: props.shown,
@@ -197,6 +200,10 @@ export default class DxView<T extends ExtraProps = ExtraProps>
 
   get cls(): string {
     return this.props.class;
+  }
+
+  get id(): string {
+    return this.props.id;
   }
 
   get hash(): string {
@@ -423,6 +430,53 @@ export default class DxView<T extends ExtraProps = ExtraProps>
   copy(): DxView {
     return new DxView(this.props, this.extra);
   }
+
+  /** Check the equality of two views */
+  equals(v: DxView, flags = true) {
+    let ret =
+      this.id == v.id &&
+      this.hash == v.hash &&
+      this.pkg == v.pkg &&
+      this.cls == v.cls &&
+      this.shown == v.shown &&
+      this.background == v.background &&
+      this.foreground == v.foreground &&
+      this.left == v.left &&
+      this.right == v.right &&
+      this.top == v.top &&
+      this.bottom == v.bottom &&
+      this.elevation == v.elevation &&
+      this.translationX == v.translationX &&
+      this.translationY == v.translationY &&
+      this.translationZ == v.translationZ &&
+      this.scrollX == v.scrollX &&
+      this.scrollY == v.scrollY &&
+      this.resId == v.resId &&
+      this.desc == v.desc &&
+      this.text == v.text &&
+      this.tag == v.tag &&
+      this.tip == v.tip &&
+      this.hint == v.hint;
+    if (flags) {
+      ret =
+        ret &&
+        this.flags.V == v.flags.V &&
+        this.flags.f == v.flags.f &&
+        this.flags.F == v.flags.F &&
+        this.flags.S == v.flags.S &&
+        this.flags.E == v.flags.E &&
+        this.flags.d == v.flags.d &&
+        this.flags.s.l == v.flags.s.l &&
+        this.flags.s.t == v.flags.s.t &&
+        this.flags.s.r == v.flags.s.r &&
+        this.flags.s.b == v.flags.s.b &&
+        this.flags.c == v.flags.c &&
+        this.flags.lc == v.flags.lc &&
+        this.flags.cc == v.flags.cc &&
+        this.flags.a == v.flags.a;
+    }
+    return ret;
+  }
 }
 
 export class DxDecorView extends DxView {
@@ -440,6 +494,7 @@ export class DxDecorView extends DxView {
         package: pkg,
         class: DxDecorView.NAME,
         hash,
+        id: DefaultProps.id,
         flags: DefaultFlags,
         shown: DefaultProps.shown,
         foreground: DefaultProps.foreground,
@@ -482,6 +537,14 @@ export class DxViewPager extends DxView<ViewPagerProps> {
   copy(): DxViewPager {
     return new DxViewPager(this.props, this.extra);
   }
+
+  equals(v: DxView, flags = true) {
+    return (
+      v instanceof DxViewPager &&
+      super.equals(v, flags) &&
+      this.currPage == v.currPage
+    );
+  }
 }
 
 interface TabHostProps extends ExtraProps {
@@ -512,11 +575,87 @@ export class DxTabHost extends DxView<TabHostProps> {
   copy(): DxTabHost {
     return new DxTabHost(this.props, this.extra);
   }
+
+  equals(v: DxView, flags = true) {
+    return (
+      v instanceof DxTabHost &&
+      super.equals(v, flags) &&
+      this.currTab == v.currTab &&
+      this.tabsHash == v.tabsHash &&
+      this.contentHash == v.contentHash
+    );
+  }
 }
 
 export class DxWebView extends DxView {
   copy(): DxWebView {
     return new DxWebView(this.props, this.extra);
+  }
+  equals(v: DxView, flags = true) {
+    return v instanceof DxWebView && super.equals(v, flags);
+  }
+}
+
+export class DxRecyclerView extends DxView {
+  copy(): DxRecyclerView {
+    return new DxRecyclerView(this.props, this.extra);
+  }
+  equals(v: DxView, flags = true) {
+    return v instanceof DxRecyclerView && super.equals(v, flags);
+  }
+}
+
+export class DxListView extends DxView {
+  copy(): DxListView {
+    return new DxListView(this.props, this.extra);
+  }
+  equals(v: DxView, flags = true) {
+    return v instanceof DxListView && super.equals(v, flags);
+  }
+}
+
+export class DxGridView extends DxView {
+  copy(): DxGridView {
+    return new DxGridView(this.props, this.extra);
+  }
+  equals(v: DxView, flags = true) {
+    return v instanceof DxGridView && super.equals(v, flags);
+  }
+}
+
+export class DxScrollView extends DxView {
+  copy(): DxScrollView {
+    return new DxScrollView(this.props, this.extra);
+  }
+  equals(v: DxView, flags = true) {
+    return v instanceof DxScrollView && super.equals(v, flags);
+  }
+}
+
+export class DxHorizontalScrollView extends DxView {
+  copy(): DxHorizontalScrollView {
+    return new DxHorizontalScrollView(this.props, this.extra);
+  }
+  equals(v: DxView, flags = true) {
+    return v instanceof DxHorizontalScrollView && super.equals(v, flags);
+  }
+}
+
+export class DxNestedScrollView extends DxView {
+  copy(): DxNestedScrollView {
+    return new DxNestedScrollView(this.props, this.extra);
+  }
+  equals(v: DxView, flags = true) {
+    return v instanceof DxNestedScrollView && super.equals(v, flags);
+  }
+}
+
+export class DxToolbar extends DxView {
+  copy(): DxToolbar {
+    return new DxToolbar(this.props, this.extra);
+  }
+  equals(v: DxView, flags = true) {
+    return v instanceof DxToolbar && super.equals(v, flags);
   }
 }
 
@@ -535,6 +674,10 @@ export class ViewFinder extends ArrayTreeOp {
   /** Find the first view that satisfy the predicate */
   static findView(v: DxView, pred: (v: DxView) => boolean): N<DxView> {
     return ViewFinder.findFirst(v, pred);
+  }
+
+  static findViewById(v: DxView, id: string): N<DxView> {
+    return ViewFinder.findView(v, (w) => w.id == id);
   }
 
   /** Find a most detailed view by x, y coordinate, set visible to false
@@ -792,157 +935,6 @@ export class Views {
   static yCenter(v: DxView): number {
     return (Views.y0(v) + Views.y1(v)) / 2;
   }
-
-  static eq(a: DxView, b: DxView, flags = true): boolean {
-    let ret =
-      a.pkg == b.pkg &&
-      a.cls == b.cls &&
-      a.shown == b.shown &&
-      a.background == b.background &&
-      a.foreground == b.foreground &&
-      a.left == b.left &&
-      a.right == b.right &&
-      a.top == b.top &&
-      a.bottom == b.bottom &&
-      a.elevation == b.elevation &&
-      a.translationX == b.translationX &&
-      a.translationY == b.translationY &&
-      a.translationZ == b.translationZ &&
-      a.scrollX == b.scrollX &&
-      a.scrollY == b.scrollY &&
-      a.resId == b.resId &&
-      a.desc == b.desc &&
-      a.text == b.text &&
-      a.tag == b.tag &&
-      a.tip == b.tip &&
-      a.hint == b.hint;
-    if (flags) {
-      ret =
-        ret &&
-        a.flags.V == b.flags.V &&
-        a.flags.f == b.flags.f &&
-        a.flags.F == b.flags.F &&
-        a.flags.S == b.flags.S &&
-        a.flags.E == b.flags.E &&
-        a.flags.d == b.flags.d &&
-        a.flags.s.l == b.flags.s.l &&
-        a.flags.s.t == b.flags.s.t &&
-        a.flags.s.r == b.flags.s.r &&
-        a.flags.s.b == b.flags.s.b &&
-        a.flags.c == b.flags.c &&
-        a.flags.lc == b.flags.lc &&
-        a.flags.cc == b.flags.cc &&
-        a.flags.a == b.flags.a;
-    }
-    return ret;
-  }
-}
-
-export class DxActivity {
-  private decor: DxDecorView | null = null;
-
-  constructor(
-    public readonly app: string, // app package name
-    public readonly name: string // activity name
-  ) {}
-
-  get decorView(): DxDecorView | null {
-    return this.decor;
-  }
-
-  installDecor(
-    hash: string,
-    width: number,
-    height: number,
-    bgClass: string,
-    bgColor: number | null
-  ): void {
-    this.decor = new DxDecorView(
-      this.app,
-      hash,
-      width,
-      height,
-      bgClass,
-      bgColor
-    );
-  }
-
-  replaceDecor(decor: DxDecorView): void {
-    this.decor = decor;
-  }
-
-  findViewByXY(x: number, y: number, visible = true): N<DxView> {
-    return this.decor
-      ? ViewFinder.findViewByXY(this.decor, x, y, visible)
-      : null;
-  }
-
-  findViewByText(text: string): N<DxView> {
-    return this.decor ? ViewFinder.findViewByText(this.decor, text) : null;
-  }
-
-  findViewByDesc(desc: string): N<DxView> {
-    return this.decor ? ViewFinder.findViewByDesc(this.decor, desc) : null;
-  }
-
-  findViewByResource(type: string, entry: string): N<DxView> {
-    return this.decor
-      ? ViewFinder.findViewByResource(this.decor, type, entry)
-      : null;
-  }
-
-  findViews(pred: (v: DxView) => boolean): DxView[] {
-    return this.decor ? ViewFinder.findViews(this.decor, pred) : [];
-  }
-
-  /** Build the drawing level top-down. Views at each level are
-   * not overlapped, but views at adjacent levels are overlapped
-   * at least at one view. See more in source code of
-   * Android Studio Dynamic Layout Inspector:
-   * https://android.googlesource.com/platform/tools/adt/idea/+/refs/heads/studio-master-dev/layout-inspector/src/com/android/tools/idea/layoutinspector/ui/DeviceViewPanelModel.kt#175 */
-  buildDrawingLevelLists(): DxView[][] {
-    if (!this.decor) {
-      return [];
-    }
-
-    const levelLists: DxView[][] = [];
-
-    function doBuildForView(view: DxView, level: number) {
-      let viewLevel = level;
-      const viewBounds = Views.bounds(view);
-      if (view.shown) {
-        // Find how many levels we can step up from our base level
-        // (level), the levels we can step up are those where there
-        // are views inside overlapping with us. And the level where
-        // no views inside are overlapped with us is our level
-        const levelUp = levelLists
-          .slice(level, levelLists.length)
-          .findIndex(
-            (l) =>
-              l.filter((node) =>
-                XYInterval.overlap(Views.bounds(node), viewBounds)
-              ).length == 0
-          );
-        if (levelUp == -1) {
-          // as long as we are overlapped with all preceding
-          // levels, let's create a new level
-          viewLevel = levelLists.length;
-          levelLists.push([] as DxView[]);
-        } else {
-          // we've found our level up, add it
-          viewLevel += levelUp;
-        }
-        // set our level, and add us to the out level list
-        view.drawingLevel = viewLevel;
-        levelLists[viewLevel].push(view);
-      }
-      view.children.forEach((v) => doBuildForView(v, viewLevel));
-    }
-
-    this.decor.children.forEach((v) => doBuildForView(v, levelLists.length));
-
-    return levelLists;
-  }
 }
 
 export interface ViewProps extends BaseProps, ExtraProps {
@@ -954,6 +946,13 @@ export enum ViewType {
   VIEW_PAGER,
   TAB_HOST,
   WEB_VIEW,
+  RECYCLER_VIEW,
+  LIST_VIEW,
+  GRID_VIEW,
+  SCROLL_VIEW,
+  HORIZONTAL_SCROLL_VIEW,
+  NESTED_SCROLL_VIEW,
+  TOOLBAR,
   VIEW,
 }
 
@@ -973,6 +972,22 @@ export class ViewFactory {
         return new DxViewPager(props, extract(props, DefaultViewPagerProps));
       case ViewType.TAB_HOST:
         return new DxTabHost(props, extract(props, DefaultTabHostProps));
+      case ViewType.WEB_VIEW:
+        return new DxWebView(props, {});
+      case ViewType.RECYCLER_VIEW:
+        return new DxRecyclerView(props, {});
+      case ViewType.LIST_VIEW:
+        return new DxListView(props, {});
+      case ViewType.GRID_VIEW:
+        return new DxGridView(props, {});
+      case ViewType.SCROLL_VIEW:
+        return new DxScrollView(props, {});
+      case ViewType.HORIZONTAL_SCROLL_VIEW:
+        return new DxHorizontalScrollView(props, {});
+      case ViewType.NESTED_SCROLL_VIEW:
+        return new DxNestedScrollView(props, {});
+      case ViewType.TOOLBAR:
+        return new DxToolbar(props, {});
       default:
         return new DxView(props, {});
     }
@@ -987,6 +1002,20 @@ export class ViewFactory {
       return ViewType.TAB_HOST;
     } else if (v instanceof DxWebView) {
       return ViewType.WEB_VIEW;
+    } else if (v instanceof DxRecyclerView) {
+      return ViewType.RECYCLER_VIEW;
+    } else if (v instanceof DxListView) {
+      return ViewType.LIST_VIEW;
+    } else if (v instanceof DxGridView) {
+      return ViewType.GRID_VIEW;
+    } else if (v instanceof DxScrollView) {
+      return ViewType.SCROLL_VIEW;
+    } else if (v instanceof DxHorizontalScrollView) {
+      return ViewType.HORIZONTAL_SCROLL_VIEW;
+    } else if (v instanceof DxNestedScrollView) {
+      return ViewType.NESTED_SCROLL_VIEW;
+    } else if (v instanceof DxToolbar) {
+      return ViewType.TOOLBAR;
     } else {
       return ViewType.VIEW;
     }

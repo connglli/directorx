@@ -1,5 +1,10 @@
-import DxView, { DxActivity, Views, ViewFinder } from '../dxview.ts';
-import DxSegment, { Segments, DxHVESegSep, DxShrinkSegSep } from '../dxseg.ts';
+import DxView, { Views, ViewFinder } from '../ui/dxview.ts';
+import DxActivity from '../ui/dxact.ts';
+import DxSegment, {
+  Segments,
+  DxHVESegSep,
+  DxShrinkSegSep,
+} from '../ui/dxseg.ts';
 import { DevInfo } from '../dxdroid.ts';
 import DxLog from '../dxlog.ts';
 import { XYIntervalTree } from '../utils/interval_tree.ts';

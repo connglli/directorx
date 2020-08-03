@@ -1,11 +1,14 @@
 import DxView, {
   DxTabHost,
   DxViewPager,
-  DxActivity,
   Views,
   ViewFinder,
-} from '../dxview.ts';
-import DxSegment, { SegmentFinder, SegmentBottomUpFinder } from '../dxseg.ts';
+} from '../ui/dxview.ts';
+import DxActivity from '../ui/dxact.ts';
+import DxSegment, {
+  SegmentFinder,
+  SegmentBottomUpFinder,
+} from '../ui/dxseg.ts';
 import DxDroid, { DevInfo } from '../dxdroid.ts';
 import { NotImplementedError, IllegalStateError } from '../utils/error.ts';
 

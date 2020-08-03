@@ -1,10 +1,6 @@
 import DxAdb, { AdbResult, AdbError } from './dxadb.ts';
-import DxView, {
-  DxActivity,
-  ViewFactory,
-  ViewType,
-  ViewProps,
-} from './dxview.ts';
+import DxView, { ViewFactory, ViewType, ViewProps } from './ui/dxview.ts';
+import DxActivity from './ui/dxact.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
 
@@ -236,6 +232,7 @@ export class ActivityYotaBuilder {
       const props: ViewProps = {
         package: vhp.package,
         class: vhp.class,
+        id: '', // TODO: how to add id
         hash: '', // TODO: use dep-index to replace hash
         flags: {
           V: vhp.visible ? 'V' : 'I',

@@ -1,4 +1,4 @@
-import { gzip, gunzip } from 'https://deno.land/x/denoflate/mod.ts';
+import { gzip, gunzip } from './denoflate/mod.ts';
 
 export function zip(input: string): Uint8Array {
   return gzip(new TextEncoder().encode(input));

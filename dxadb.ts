@@ -5,12 +5,12 @@ import {
   LogcatBuffer,
   LogcatBufferSize,
 } from './base/adb.ts';
-import DxView, {
-  DxActivity,
-  ViewFlags,
-  ViewType,
-  ViewFactory,
-} from './dxview.ts';
+import DxView, { ViewFlags, ViewType, ViewFactory } from './ui/dxview.ts';
+import DxActivity, {
+  DxFragment,
+  FragmentOwner,
+  FragmentProps,
+} from './ui/dxact.ts';
 import * as base64 from './utils/base64.ts';
 import { IllegalStateError } from './utils/error.ts';
 
@@ -53,12 +53,27 @@ export class DevInfo {
 
 const PAT_AV_HEADER = /ACTIVITY\s(?<pkg>[\w.]+)\/(?<name>[\w.]+).*/;
 
-class DumpSysActivityInfo {
+export class DumpSysActivityInfo {
+  private header_ = -1;
+  // [start, end), local activity headers not included
+  private localActivity_: [number, number] = [-1, -1];
+  // [active start, active end), [added started, added end), fragments headers not included
+  private fragments_: [number, number, number, number] = [-1, -1, -1, -1];
+  // [start, end), view hierarchy headers not included
   private viewHierarchy_: [number, number] = [-1, -1];
+  // [start, end), local fragment activity headers not included
+  private localFragmentActivity_: [number, number] = [-1, -1];
+  // [active start, active end), [added started, added end), fragments headers not included
+  private supportFragments_: [number, number, number, number] = [
+    -1,
+    -1,
+    -1,
+    -1,
+  ];
   private name_ = '';
 
   constructor(private readonly pkg_: string, private readonly info: string[]) {
-    this.init();
+    this.parse();
   }
 
   get(): string[] {
@@ -73,18 +88,39 @@ class DumpSysActivityInfo {
     return this.name_;
   }
 
+  get localActivity() {
+    return this.localActivity_;
+  }
+
+  get fragments() {
+    return this.fragments_;
+  }
+
   get viewHierarchy(): [number, number] {
     return this.viewHierarchy_;
   }
 
-  private init() {
-    // parse head to pkg and name
-    this.initHeader();
-    // parse to find view hierarchy
-    this.initViewHierarchy(true);
+  get localFragmentActivity() {
+    return this.localFragmentActivity_;
   }
 
-  private initHeader() {
+  get supportFragments() {
+    return this.supportFragments_;
+  }
+
+  // Parse and initialize fields, don't change the parsing orders
+  private parse() {
+    // parse head to pkg and name
+    this.parseHeader();
+    // parse to find the fragments
+    this.parseLocalActivity();
+    // parse to find view hierarchy
+    this.parseViewHierarchy(true);
+    // parse to find the support fragments
+    this.parseLocalFragmentActivity();
+  }
+
+  private parseHeader() {
     const res = PAT_AV_HEADER.exec(this.info[0]);
     if (!res || !res.groups) {
       throw new IllegalStateError('Expect ACTIVITY header');
@@ -100,25 +136,84 @@ class DumpSysActivityInfo {
     if (name.startsWith('.')) {
       name = pkg + name;
     }
+    this.header_ = 0;
     this.name_ = name;
   }
 
-  private initViewHierarchy(rmNavSta = false) {
+  private parseLocalActivity() {
+    let localActivityStartLine = -1;
+    let localActivityEndLine = this.info.length;
+    const localActivityStartLinePrefix = '  Local Activity ';
+    for (let i = this.header_ + 1; i < this.info.length; i++) {
+      if (this.info[i].startsWith(localActivityStartLinePrefix)) {
+        localActivityStartLine = i + 1;
+        break;
+      }
+    }
+    if (localActivityStartLine == -1) {
+      throw new IllegalStateError('No Local Activity found');
+    }
+    let localActivityLinePrefix = '    ';
+    let activeFragmentsStartLine = -1;
+    const activeFragmentsStartLinePrefix = '    Active Fragments in ';
+    let addedFragmentsStartLine = -1;
+    const addedFragmentsStartLinePrefix = '    Added Fragments:';
+    for (let i = localActivityStartLine; i < this.info.length; i++) {
+      if (this.info[i].startsWith(activeFragmentsStartLinePrefix)) {
+        activeFragmentsStartLine = i + 1;
+      } else if (this.info[i].startsWith(addedFragmentsStartLinePrefix)) {
+        addedFragmentsStartLine = i + 1;
+      } else if (!this.info[i].startsWith(localActivityLinePrefix)) {
+        localActivityEndLine = i;
+        break;
+      }
+    }
+    let localActivityCompLinePrefix = '      ';
+    let activeFragmentsEndLine = localActivityEndLine;
+    if (activeFragmentsStartLine == -1) {
+      // no active fragments found
+      activeFragmentsStartLine = activeFragmentsEndLine = localActivityStartLine;
+    } else {
+      for (let i = activeFragmentsStartLine; i < localActivityEndLine; i++) {
+        if (!this.info[i].startsWith(localActivityCompLinePrefix)) {
+          activeFragmentsEndLine = i;
+          break;
+        }
+      }
+    }
+    let addedFragmentsEndLine = localActivityEndLine;
+    if (addedFragmentsStartLine == -1) {
+      // no added fragments found
+      addedFragmentsStartLine = addedFragmentsEndLine = localActivityStartLine;
+    } else {
+      for (let i = addedFragmentsStartLine; i < localActivityEndLine; i++) {
+        if (!this.info[i].startsWith(localActivityCompLinePrefix)) {
+          addedFragmentsEndLine = i;
+          break;
+        }
+      }
+    }
+    this.localActivity_ = [localActivityStartLine, localActivityEndLine];
+    this.fragments_ = [
+      activeFragmentsStartLine,
+      activeFragmentsEndLine,
+      addedFragmentsStartLine,
+      addedFragmentsEndLine,
+    ];
+  }
+
+  private parseViewHierarchy(rmNavSta = false) {
     // find the view hierarchy start line
     let viewHierarchyStartLine = -1;
     const viewHierarchyStartLinePrefix = '  View Hierarchy:';
-    for (let i = 0; i < this.info.length; i++) {
+    for (let i = this.localActivity_[1]; i < this.info.length; i++) {
       if (this.info[i].startsWith(viewHierarchyStartLinePrefix)) {
         viewHierarchyStartLine = i + 1;
         break;
       }
     }
     if (viewHierarchyStartLine == -1) {
-      throw new AdbError(
-        'dumpsys activity top',
-        0,
-        'No view hierarchies exist'
-      );
+      throw new IllegalStateError('No View Hierarchies found');
     }
     // find the view hierarchy end line
     let viewHierarchyEndLine = this.info.length;
@@ -186,18 +281,155 @@ class DumpSysActivityInfo {
       this.viewHierarchy_ = [viewHierarchyStartLine, viewHierarchyEndLine];
     }
   }
+
+  private parseLocalFragmentActivity() {
+    // this is a bug of androidx.fragment.app.FragmentManager (the output
+    // is in an incorrect format, we make it correct here)
+    this.fixIncorrectLine();
+    let localFragmentActivityStartLine = -1;
+    let localFragmentActivityEndLine = this.info.length;
+    const localFragmentActivityStartLinePrefix = '  Local FragmentActivity ';
+    for (let i = this.viewHierarchy[1]; i < this.info.length; i++) {
+      if (this.info[i].startsWith(localFragmentActivityStartLinePrefix)) {
+        localFragmentActivityStartLine = i + 1;
+        break;
+      }
+    }
+    if (localFragmentActivityStartLine == -1) {
+      // no LocalFragment Activity found
+      this.localFragmentActivity_ = [
+        this.viewHierarchy[1] - 1,
+        this.viewHierarchy[1] - 1,
+      ];
+      this.fragments_ = [
+        this.localFragmentActivity_[0],
+        this.localFragmentActivity_[0],
+        this.localFragmentActivity_[0],
+        this.localFragmentActivity_[0],
+      ];
+      return;
+    }
+    let localFragmentActivityLinePrefix = '    ';
+    let activeFragmentsStartLine = -1;
+    const activeFragmentsStartLinePrefix = '    Active Fragments:';
+    let addedFragmentsStartLine = -1;
+    const addedFragmentsStartLinePrefix = '    Added Fragments:';
+    for (let i = localFragmentActivityStartLine; i < this.info.length; i++) {
+      if (this.info[i].startsWith(activeFragmentsStartLinePrefix)) {
+        activeFragmentsStartLine = i + 1;
+      } else if (this.info[i].startsWith(addedFragmentsStartLinePrefix)) {
+        addedFragmentsStartLine = i + 1;
+      } else if (!this.info[i].startsWith(localFragmentActivityLinePrefix)) {
+        localFragmentActivityEndLine = i;
+        break;
+      }
+    }
+    let localFragmentActivityCompLinePrefix = '      ';
+    let activeFragmentsEndLine = localFragmentActivityEndLine;
+    if (activeFragmentsStartLine == -1) {
+      // no active fragments found
+      activeFragmentsStartLine = activeFragmentsEndLine = localFragmentActivityStartLine;
+    } else {
+      for (
+        let i = activeFragmentsStartLine;
+        i < localFragmentActivityEndLine;
+        i++
+      ) {
+        if (!this.info[i].startsWith(localFragmentActivityCompLinePrefix)) {
+          activeFragmentsEndLine = i;
+          break;
+        }
+      }
+    }
+    let addedFragmentsEndLine = localFragmentActivityEndLine;
+    if (addedFragmentsStartLine == -1) {
+      addedFragmentsStartLine = addedFragmentsEndLine = localFragmentActivityStartLine;
+    } else {
+      for (
+        let i = addedFragmentsStartLine;
+        i < localFragmentActivityEndLine;
+        i++
+      ) {
+        if (!this.info[i].startsWith(localFragmentActivityCompLinePrefix)) {
+          addedFragmentsEndLine = i;
+          break;
+        }
+      }
+    }
+    this.localFragmentActivity_ = [
+      localFragmentActivityStartLine,
+      localFragmentActivityEndLine,
+    ];
+    this.supportFragments_ = [
+      activeFragmentsStartLine,
+      activeFragmentsEndLine,
+      addedFragmentsStartLine,
+      addedFragmentsEndLine,
+    ];
+  }
+
+  private fixIncorrectLine() {
+    let localFragmentActivityStartLine = -1;
+    let localFragmentActivityEndLine = this.info.length;
+    let localFragmentActivityStartLinePrefix = '  Local FragmentActivity ';
+    for (let i = this.viewHierarchy[1]; i < this.info.length; i++) {
+      if (this.info[i].startsWith(localFragmentActivityStartLinePrefix)) {
+        localFragmentActivityStartLine = i + 1;
+        break;
+      }
+    }
+    if (localFragmentActivityStartLine == -1) {
+      return;
+    }
+    const activeFragmentsStartLineInfix = '    Active Fragments:';
+    const incorrectLine = localFragmentActivityStartLine;
+    const incorrectString = this.info[incorrectLine];
+    if (!incorrectString.includes(activeFragmentsStartLineInfix)) {
+      return;
+    }
+    // let's fix it by pre-pending spaces
+    const ind = incorrectString.indexOf(activeFragmentsStartLineInfix);
+    const stateString = incorrectString.slice(0, ind);
+    const activeString = activeFragmentsStartLineInfix.slice();
+    const nextString = incorrectString.slice(ind + activeString.length);
+    this.info.splice(incorrectLine, 1, stateString, activeString, nextString);
+    for (let i = incorrectLine + 2; i < localFragmentActivityEndLine; i++) {
+      if (this.info[i].includes('Added Fragments:')) {
+        this.info[i] = '  ' + this.info[i];
+      } else if (this.info[i].includes('Back Stack Index:')) {
+        this.info[i] = '  ' + this.info[i];
+      } else if (this.info[i].includes('FragmentManager misc state:')) {
+        this.info[i] = '  ' + this.info[i];
+      } else if (this.info[i].startsWith('    ')) {
+        this.info[i] = '  ' + this.info[i];
+      } else if (this.info[i].startsWith('  ')) {
+        this.info[i] = '    ' + this.info[i];
+      }
+    }
+  }
 }
 
 // FIX: some apps/devices often output non-standard attributes
 // for example aid=1073741824 following resource-id
+/** See DecorView#toString() */
 const PAT_AV_DECOR = /DecorView@(?<hash>[a-fA-F0-9]+)\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
+/** See View#toString() */
 const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-type=(?<type>[\w.]+)\sdx-scroll=(?<scroll>[\w.]{4})\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)\sdx-im-acc=(?<acc>true|false)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+)\sdx-tab-widget=(?<ttabs>[a-fA-F0-9]+)\sdx-tab-content=(?<tcont>[a-fA-F0-9]+))?\}/;
+/** See Fragment#toString() */
+const PAT_AV_FRAG_LINE = {
+  HEAD: /(#\d+:\s)?(?<cls>\w+)\{(?<hash>[a-fA-F0-9]+).*?\}/,
+  XID: /\s+mFragmentId=#(?<fid>[0-9a-fA-F]+)\smContainerId=#(?<cid>[0-9a-fA-F]+).*/,
+  VIS: /\s+mHidden=(?<hidden>true|false)\smDetached=(?<detached>true|false).*/,
+};
 
 export class ActivityDumpSysBuilder {
-  private pfxLen = 0;
   private step = 1;
   private decode = true;
   private viewHierarchy: string[] = [];
+  private activeFragments: string[] = [];
+  private addedFragments: string[] = [];
+  private activeSupportFragments: string[] = [];
+  private addedSupportFragments: string[] = [];
   private width = -1;
   private height = -1;
 
@@ -218,11 +450,6 @@ export class ActivityDumpSysBuilder {
     return this;
   }
 
-  withPrefixLength(len: number): ActivityDumpSysBuilder {
-    this.pfxLen = len;
-    return this;
-  }
-
   withStep(step: number): ActivityDumpSysBuilder {
     this.step = step;
     return this;
@@ -233,27 +460,122 @@ export class ActivityDumpSysBuilder {
     return this;
   }
 
+  withActiveFragments(activeFragments: string[]): ActivityDumpSysBuilder {
+    this.activeFragments = activeFragments;
+    return this;
+  }
+
+  withAddedFragments(addedFragments: string[]): ActivityDumpSysBuilder {
+    this.addedFragments = addedFragments;
+    return this;
+  }
+
+  withActiveSupportFragments(
+    activeSupportFragments: string[]
+  ): ActivityDumpSysBuilder {
+    this.activeSupportFragments = activeSupportFragments;
+    return this;
+  }
+
+  withAddedSupportFragments(
+    addedSupportFragments: string[]
+  ): ActivityDumpSysBuilder {
+    this.addedSupportFragments = addedSupportFragments;
+    return this;
+  }
+
   build(): DxActivity {
     this.checkRequiredOrThrow();
     const act = new DxActivity(this.app, this.name);
+    this.buildView(act);
+    this.buildFragments(act, act);
+    return act;
+  }
+
+  private buildView(act: DxActivity) {
     let cview: DxView | null = null; // current view
     let cdep = -1; // current depth
     // build views one by one
     for (let vhl of this.viewHierarchy) {
       vhl = vhl.trimEnd();
-      if (this.pfxLen != 0) {
-        vhl = vhl.substring(this.pfxLen);
-      }
       if (vhl.length == 0) {
         continue;
       }
       // build and update current view/depth
-      [cview, cdep] = this.buildView(vhl, act, cview, cdep);
+      [cview, cdep] = this.doBuildView(vhl, act, cview, cdep);
     }
-    return act;
   }
 
-  private buildView(
+  private buildFragments(act: DxActivity, owner: FragmentOwner) {
+    // build added fragments
+    const added = [...this.addedFragments, ...this.addedSupportFragments];
+    // each added takes up a single line
+    for (const fl of added) {
+      const res = PAT_AV_FRAG_LINE.HEAD.exec(fl);
+      if (!res || !res.groups) {
+        throw new IllegalStateError('Expect an Added Fragment');
+      }
+      const { cls, hash } = res.groups;
+      owner.fragmentManager.addFragment({
+        class: cls,
+        hash,
+      });
+    }
+    // build active fragments
+    const active = [...this.activeFragments, ...this.activeSupportFragments];
+    // first traverse to extract the header's indices
+    const headers = [];
+    for (let i = 0; i < active.length; i++) {
+      if (!active[i].startsWith(' ')) {
+        headers.push(i);
+      }
+    }
+    headers.push(active.length);
+    // second traverse to build the fragment
+    if (headers.length == 1) {
+      // no active fragments
+      return;
+    }
+    for (let i = 0; i < headers.length - 1; i++) {
+      const fragStartLine = headers[i];
+      const fragEndLine = headers[i + 1];
+      const fragString = active[fragStartLine];
+      const res = PAT_AV_FRAG_LINE.HEAD.exec(fragString);
+      if (!res || !res.groups) {
+        throw new IllegalStateError('Expect an Active Fragment');
+      }
+      const { cls, hash } = res.groups;
+      const props: FragmentProps = {
+        class: cls,
+        hash,
+      };
+      for (let j = fragStartLine + 1; j < fragEndLine; j++) {
+        const line = active[j];
+        let res = PAT_AV_FRAG_LINE.XID.exec(line);
+        if (res && res.groups) {
+          const { fid: fragmentId, cid: containerId } = res.groups;
+          props.containerId = containerId;
+          props.fragmentId = fragmentId;
+          continue;
+        }
+        res = PAT_AV_FRAG_LINE.VIS.exec(line);
+        if (res && res.groups) {
+          const { hidden: sHidden, detached: sDetached } = res.groups;
+          props.hidden = sHidden == 'true';
+          props.detached = sDetached == 'true';
+          break;
+        }
+        // TODO: build child fragments
+        // else if (PAT_AV_FRAG_CFRAG.test(line)) {
+        //   // child fragment manager
+        //   this.buildFragments(act, frag);
+        // }
+      }
+      owner.fragmentManager.activateFragment(props);
+    }
+  }
+
+  private doBuildView(
     line: string,
     act: DxActivity,
     cview: DxView | null,
@@ -294,6 +616,7 @@ export class ActivityDumpSysBuilder {
       dep: sDep,
       type,
       hash,
+      id,
       cls,
       flags: sFlags,
       pflags: sPflags,
@@ -427,6 +750,7 @@ export class ActivityDumpSysBuilder {
     const view = ViewFactory.create(this.typeOf(type), {
       package: parent.pkg,
       class: cls,
+      id,
       hash,
       flags,
       shown,
@@ -471,6 +795,20 @@ export class ActivityDumpSysBuilder {
         return ViewType.VIEW_PAGER;
       case 'WV':
         return ViewType.WEB_VIEW;
+      case 'RV':
+        return ViewType.RECYCLER_VIEW;
+      case 'LV':
+        return ViewType.LIST_VIEW;
+      case 'GV':
+        return ViewType.GRID_VIEW;
+      case 'VSV':
+        return ViewType.SCROLL_VIEW;
+      case 'HSV':
+        return ViewType.HORIZONTAL_SCROLL_VIEW;
+      case 'NSV':
+        return ViewType.NESTED_SCROLL_VIEW;
+      case 'TB':
+        return ViewType.TOOLBAR;
       default:
         return ViewType.VIEW;
     }
@@ -487,6 +825,49 @@ export class ActivityDumpSysBuilder {
       throw new IllegalStateError('No height exists');
     }
   }
+}
+
+export function buildActivityFromDumpSysInfo(
+  info: DumpSysActivityInfo,
+  dev: DevInfo,
+  decoding: boolean = true
+): DxActivity {
+  const vhIndex = info.viewHierarchy;
+  const frIndex = info.fragments;
+  const sfrIndex = info.supportFragments;
+  const activeFragments = info
+    .get()
+    .slice(frIndex[0], frIndex[1])
+    .map((s) => s.substring(6));
+  const addedFragments = info
+    .get()
+    .slice(frIndex[2], frIndex[3])
+    .map((s) => s.substring(6));
+  const viewHierarchy = info
+    .get()
+    .slice(vhIndex[0], vhIndex[1])
+    .map((s) => s.substring(4));
+  const activeSupportFragments = info
+    .get()
+    .slice(sfrIndex[0], sfrIndex[1])
+    .map((s) => s.substring(6));
+  const addedSupportFragments = info
+    .get()
+    .slice(sfrIndex[2], sfrIndex[3])
+    .map((s) => s.substring(6));
+  const act = new ActivityDumpSysBuilder(info.pkg, info.name)
+    .withHeight(dev.height)
+    .withWidth(dev.width)
+    .withDecoding(decoding)
+    .withStep(2) // hard code here
+    .withActiveFragments(activeFragments)
+    .withAddedFragments(addedFragments)
+    .withViewHierarchy(viewHierarchy)
+    .withActiveSupportFragments(activeSupportFragments)
+    .withAddedSupportFragments(addedSupportFragments)
+    .build();
+  act.buildDrawingLevelLists();
+  return act;
 }
 
 export default class DxAdb {
@@ -538,18 +919,7 @@ export default class DxAdb {
     dev: DevInfo
   ): Promise<DxActivity> {
     const info = await this.dumpTopActivity(pkg);
-    const vhIndex = info.viewHierarchy;
-    const viewHierarchy = info.get().slice(vhIndex[0], vhIndex[1]);
-    const act = new ActivityDumpSysBuilder(pkg, info.name)
-      .withHeight(dev.height)
-      .withWidth(dev.width)
-      .withDecoding(decoding)
-      .withPrefixLength(4) // hard code here
-      .withStep(2) // hard code here
-      .withViewHierarchy(viewHierarchy)
-      .build();
-    act.buildDrawingLevelLists();
-    return act;
+    return buildActivityFromDumpSysInfo(info, dev, decoding);
   }
 
   async fetchInfo(): Promise<DevInfo> {
@@ -594,10 +964,14 @@ export default class DxAdb {
   }
 
   private async dumpTopActivity(pkg: string): Promise<DumpSysActivityInfo> {
-    const out = (await this.unsafeExecOut('dumpsys activity top')).split('\n');
+    // TODO: what if there are multiple activities, is the
+    // first one the top activity
+    const out = (await this.unsafeExecOut(`dumpsys activity ${pkg}`)).split(
+      '\n'
+    );
     // find the task start line
     let taskStartLine = -1;
-    const taskStartLinePrefix = `TASK ${pkg} `;
+    const taskStartLinePrefix = `TASK `;
     for (let i = 0; i < out.length; i++) {
       if (out[i].startsWith(taskStartLinePrefix)) {
         taskStartLine = i;
@@ -648,4 +1022,13 @@ export default class DxAdb {
     }
     return new DumpSysActivityInfo(pkg, info);
   }
+}
+
+if (import.meta.main) {
+  const adb = new DxAdb({
+    serial: 'emulator-5554',
+  });
+  const dev = await adb.fetchInfo();
+  const act = await adb.topActivity('com.microsoft.todos', true, dev);
+  console.log(act);
 }

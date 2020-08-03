@@ -10,8 +10,9 @@ import DxEvent, {
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
-import DxView, { DxActivity, Views } from './dxview.ts';
-import DxSegment from './dxseg.ts';
+import DxView, { Views } from './ui/dxview.ts';
+import DxActivity from './ui/dxact.ts';
+import DxSegment from './ui/dxseg.ts';
 import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
 import segUi from './algo/ui_seg.ts';
 import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';

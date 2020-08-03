@@ -2,7 +2,8 @@ import { signal } from './deps.ts';
 import DxAdb, {
   DevInfo,
   ProcessError,
-  ActivityDumpSysBuilder,
+  DumpSysActivityInfo,
+  buildActivityFromDumpSysInfo,
 } from './dxadb.ts';
 import DxPacker from './dxpack.ts';
 import DxEvent, {
@@ -12,7 +13,7 @@ import DxEvent, {
   DxKeyEvent,
   DxSwipeEvent,
 } from './dxevent.ts';
-import { DxActivity } from './dxview.ts';
+import DxActivity from './ui/dxact.ts';
 import DxLog from './dxlog.ts';
 import * as base64 from './utils/base64.ts';
 import * as gzip from './utils/gzip.ts';
@@ -122,10 +123,8 @@ class DxRecParser {
   }
 
   private parseEvent(line: string): DxEvent {
-    const [pkg, type, ...args] = line.split(/\s+/);
-    if (pkg != this.app) {
-      throw new IllegalStateError(`Expected ${this.app}, got ${pkg}`);
-    }
+    // TYPE args...
+    const [type, ...args] = line.split(/\s+/);
 
     switch (type) {
       case 'TAP':
@@ -182,11 +181,8 @@ class DxRecParser {
   }
 
   private parseAvStart(line: string): string {
-    // pkg ACTIVITY_BEGIN act
-    const [pkg, verb, act] = line.split(/\s+/);
-    if (pkg != this.app) {
-      throw new IllegalStateError(`Expected ${this.app}, got ${pkg}`);
-    }
+    // ACTIVITY_BEGIN act
+    const [verb, act] = line.split(/\s+/);
     if (verb != 'ACTIVITY_BEGIN') {
       throw new IllegalStateError(`Expected ACTIVITY_BEGIN, got ${verb}`);
     }
@@ -194,18 +190,16 @@ class DxRecParser {
   }
 
   private parseAvEnd(line: string): DxActivity | null {
-    // pkg ACTIVITY_END act
-    const [pkg, verb, act] = line.split(/\s+/);
+    // ACTIVITY_END act
+    const [verb, act] = line.split(/\s+/);
     if (verb != 'ACTIVITY_END') {
       return null;
     }
 
     // build the view tree
     const currName = this.curr.name;
-    if (pkg != this.app || act != currName) {
-      throw new IllegalStateError(
-        `Expect ${this.app}/${currName}, got ${pkg}/${act}`
-      );
+    if (act != currName) {
+      throw new IllegalStateError(`Expect ${currName}, got ${act}`);
     }
 
     // decode the encoded entries and parse line by line
@@ -213,17 +207,20 @@ class DxRecParser {
     // ungzip the decoded entries
     const entries = gzip.unzip(new Uint8Array(decoded)).split('\n');
 
-    return new ActivityDumpSysBuilder(this.app, this.curr.name)
-      .withWidth(this.dev.width)
-      .withHeight(this.dev.height)
-      .withDecoding(this.decode)
-      .withPrefixLength(0)
-      .withStep(1)
-      .withViewHierarchy(entries)
-      .build();
+    // entries are dumpsys activity information, build the
+    // activity from this dumpsys information
+    return buildActivityFromDumpSysInfo(
+      new DumpSysActivityInfo(
+        this.app,
+        entries.map((e) => e.slice(2))
+      ),
+      this.dev,
+      this.decode
+    );
   }
 
   private parseAvEncoded(line: string): string {
+    // a base64 encoded entry
     if (DxRecParser.PAT_AV_ENCODED_LINE.test(line)) {
       return line;
     } else {

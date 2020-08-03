@@ -1,6 +1,6 @@
 import DxAdb, { DevInfo } from './dxadb.ts';
 import DxYota, { ViewInputOptions, SelectOptions, ViewMap } from './dxyota.ts';
-import { DxActivity } from './dxview.ts';
+import DxActivity from './ui/dxact.ts';
 
 export { DevInfo, ViewInputOptions, SelectOptions, ViewMap };
 
