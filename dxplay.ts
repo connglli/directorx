@@ -358,7 +358,7 @@ class ResPlayer extends DxPlayer {
   private findSegByView(v: DxView, segs: DxSegment[]): DxSegment {
     for (const s of segs) {
       for (const r of s.roots) {
-        if (Views.isChild(v, r)) {
+        if (r == v || Views.isChild(v, r)) {
           return s;
         }
       }

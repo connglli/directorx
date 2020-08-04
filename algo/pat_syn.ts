@@ -3,8 +3,10 @@ import DxView, {
   DxViewPager,
   Views,
   ViewFinder,
+  DxRecyclerView,
+  DxListView,
 } from '../ui/dxview.ts';
-import DxActivity from '../ui/dxact.ts';
+import DxActivity, { DxFragment } from '../ui/dxact.ts';
 import DxSegment, {
   SegmentFinder,
   SegmentBottomUpFinder,
@@ -806,6 +808,129 @@ class NewButton extends MergeButton {
   }
 }
 
+/** DualFragment is a merge pattern that handles the merge
+ * which has two fragments, one for descriptive preview, and
+ * another for detailed view. DualFragment assumes that
+ * there exists a *selected* descriptive preview, and it is
+ * this view that makes the detailed preview shown. */
+class DualFragment extends Merge {
+  // the detailed view fragment in playee
+  private vDetFrag: N<DxFragment> = null;
+
+  get name() {
+    return 'dual-fragment';
+  }
+
+  match(): boolean {
+    const recordee = this.args.r;
+    const v = this.args.v;
+    this.vDetFrag = recordee.a.fragmentManager.findFragment((f) => {
+      if (!f.active || !f.viewId) {
+        return false;
+      }
+      const fragView = recordee.a.findViewById(f.viewId);
+      if (fragView && (fragView == v || Views.isChild(v, fragView))) {
+        return true;
+      }
+      return false;
+    });
+    return !!this.vDetFrag;
+  }
+
+  async apply(droid: DxDroid) {
+    // let's firstly find the descriptive preview fragment
+    // and view in recordee; the desFrag must be added, active,
+    // not hidden, not detached and has valid view
+    const recordee = this.args.r;
+    const siblings = recordee.a.fragmentManager.active.filter(
+      (f) =>
+        f != this.vDetFrag && f.active && !f.hidden && !f.detached && !!f.viewId
+    );
+    // the descriptive preview are often embed an recycler
+    // or list view as a content to index the detailed view
+    let desFrag: N<DxFragment> = null;
+    let desView: N<DxView> = null;
+    let content: N<DxView> = null;
+    for (const frag of siblings) {
+      desView = recordee.a.findViewById(frag.viewId!);
+      if (desView) {
+        content = ViewFinder.findView(
+          desView,
+          (v) => v instanceof DxListView || v instanceof DxRecyclerView
+        );
+        if (content) {
+          desFrag = frag;
+          break;
+        }
+      }
+    }
+    if (!desFrag || !desView || !content) {
+      throw new NotImplementedError('Descriptive preview fragment not found');
+    }
+    // the let's find the selected one
+    let selected = content.children.find((v) => v.flags.S) ?? null;
+    if (!selected) {
+      throw new NotImplementedError('No selected item in the descriptive view');
+    }
+    selected = ViewFinder.findView(selected, (v) => Views.isText(v));
+    if (!selected) {
+      throw new NotImplementedError('The selected item has not valid text');
+    }
+    // for the same-versioned apk, the recordee and playee
+    // often uses the same fragment id ('cause the same view).
+    // so let's try to find the descriptive preview in playee
+    // by the descriptive view id of the recordee
+    const playee = this.args.p;
+    let pContent = playee.a.findViewById(content.id);
+    if (!pContent) {
+      // there are no content with same id in playee, then
+      // find the descriptive preview fragment in playee;
+      // try also firstly the fragment id
+      let pDesFrag = playee.a.fragmentManager.findFragmentById(
+        desFrag.fragmentId!
+      );
+      if (!pDesFrag) {
+        // no such fragment with the same id, try the same class
+        pDesFrag = playee.a.fragmentManager.findFragment(
+          (f) =>
+            f.active &&
+            !f.hidden &&
+            !f.detached &&
+            f.cls == desFrag?.cls &&
+            !!pDesFrag?.viewId
+        );
+      }
+      if (!pDesFrag) {
+        throw new NotImplementedError(
+          'Descriptive preview of playee does not found'
+        );
+      }
+      let pDesView = playee.a.findViewById(pDesFrag.viewId!);
+      if (!pDesView) {
+        throw new NotImplementedError(
+          'No view found on the descriptive preview fragment'
+        );
+      }
+      pContent = ViewFinder.findView(
+        pDesView,
+        (v) => v instanceof DxListView || v instanceof DxRecyclerView
+      );
+    }
+    if (!pContent) {
+      throw new NotImplementedError(
+        'No ListView or RecyclerView content on the descriptive view'
+      );
+    }
+    // then let's find the selected item on the content
+    let pSelected = ViewFinder.findViewByText(pContent, selected.text);
+    if (!pSelected) {
+      throw new NotImplementedError('Selected item does not found on playee');
+    }
+    // let's fire the selected item on playee
+    await droid.input.tap(Views.x0(pSelected) + 1, Views.y0(pSelected) + 1);
+  }
+}
+
 // The Pattern is sorted bottom-up, in order of
 // [None, Reflow, Expand, Merge, Reveal, Transform]
 const patterns = [
@@ -820,6 +945,7 @@ const patterns = [
   DoubleSideViewPager,
   SingleSideViewPager,
   // Merge
+  DualFragment,
   NewButton,
 ];
 

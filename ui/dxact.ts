@@ -141,6 +141,11 @@ export class FragmentManager {
     return this.added_.find(pred) ?? null;
   }
 
+  /** Find the fragment using id */
+  findFragmentById(id: string) {
+    return this.findFragment((f) => f.fragmentId == id);
+  }
+
   /** Find all fragments that satisfy the predicate */
   findFragments(pred: (f: DxFragment) => boolean) {
     return this.added_.filter(pred);
