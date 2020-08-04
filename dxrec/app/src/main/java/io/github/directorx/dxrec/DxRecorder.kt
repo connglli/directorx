@@ -19,6 +19,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
 
     companion object {
         const val LOG_TAG = "DxRecorder"
+        const val LOG_ETAG = "DxRecorderE"
         const val MEM_CAP = 5
         const val CONFIG = "/data/local/tmp/directorx/dxrec.config.json"
     }

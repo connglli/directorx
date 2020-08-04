@@ -17,11 +17,19 @@ object DxLogger {
         logger = value
     }
 
-    fun d(msg: String) = handler.post { logger.d(msg) }
+    fun d(msg: String) = handler.post { logger.d(DxRecorder.LOG_TAG, msg) }
 
-    fun i(msg: String) = handler.post { logger.i(msg) }
+    fun i(msg: String) = handler.post { logger.i(DxRecorder.LOG_TAG, msg) }
 
-    fun e(msg: String) = handler.post { logger.e(msg) }
+    fun e(msg: String) = handler.post { logger.e(DxRecorder.LOG_ETAG, msg) }
 
-    fun catchAndLog(block: () -> Unit) = handler.post { logger.catchAndLog(block) }
+    fun catchAndLog(block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            if (t.message != null) {
+                logger.e(DxRecorder.LOG_ETAG, t.message!!, t)
+            }
+        }
+    }
 }

@@ -20,11 +20,7 @@ import java.util.*
 private const val PREFIX = " "
 
 fun Activity.dump(buf: StringBuffer) {
-    // dump like dumpsys, however, this sometimes fails because of
-    // size of the logcat buffer, or unknown reasons, other dumps
-    // can also fail in such reasons, but in a low probability
-    // because their size is much smaller than the dumpsys one
-
+    // dump the activity like what dumpsys does
     // ACTIVITY com.microsoft.todos/.ui.TodoMainActivity 366132a pid=2954
     buf.append("  ACTIVITY ")
         .append(this.packageName)
