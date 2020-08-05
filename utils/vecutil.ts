@@ -1,5 +1,7 @@
 import { assertEquals } from 'https://deno.land/std@0.60.0/testing/asserts.ts';
 
+export class VecutilError extends Error {}
+
 type Vector = number[];
 
 export function sum(a: Vector): number {
@@ -33,6 +35,14 @@ export type WordVec = {
   words: string[];
   vector: Vector;
 };
+
+export function doc2freq(words: string[]): WordFreq {
+  const freq: WordFreq = {};
+  for (const w of words) {
+    freq[w] = freq[w] === undefined ? 1 : freq[w] + 1;
+  }
+  return freq;
+}
 
 export function freq2vec(freq: WordFreq, words = Object.keys(freq)): WordVec {
   return {
@@ -79,6 +89,17 @@ export function tfidf(docs: WordFreq[]): WordFreq[] {
     }
     return tfidf;
   });
+}
+
+export function nGramFeature<T>(doc: T[], n: number): T[][] {
+  if (n <= 0) {
+    throw new VecutilError('N cannot be non-positive');
+  }
+  const features = [];
+  for (let i = 0; i <= doc.length - n; i++) {
+    features.push(doc.slice(i, i + n));
+  }
+  return features;
 }
 
 export const similarity = {

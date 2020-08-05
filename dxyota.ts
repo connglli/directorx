@@ -3,11 +3,12 @@ import DxView, { ViewFactory, ViewType, ViewProps } from './ui/dxview.ts';
 import DxActivity from './ui/dxact.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
-import { enumerate } from './utils/pyalike.ts';
+import { doc2freq, freq2vec, similarity } from './utils/vecutil.ts';
+import { splitAsWords, filterStopwords } from './utils/strutil.ts';
 
 /** Quotes shell command string with "" */
 function q(s: string | number): string {
-  return `\\"${s}\\"`;
+  return `'"${s}"'`;
 }
 
 export type InputType =
@@ -394,38 +395,82 @@ export default class DxYota {
       compressed: compressed,
     };
     if (view.text.length != 0) {
+      // find the best one => the least length
       opt.textContains = view.text;
+      const vms = await this.select(opt);
+      // always choose the best match, because if a view has
+      // some text that presents to a user, it is probably
+      // not changed across devices
+      // TODO: what if there are multiple? (add context info)
+      // FIX: sometimes, yota returns the capitalized text (because
+      // of text view settings)
+      return (
+        (vms.find((vm) => vm.text == view.text) ||
+          vms.find((vm) => vm.text.toLowerCase() == view.text.toLowerCase())) ??
+        null
+      );
     } else if (view.resId.length != 0) {
       opt.resIdContains = view.resEntry;
+      let vms = await this.select(opt);
+      if (vms.length == 0) {
+        return null;
+      } else if (vms.length == 1) {
+        return vms[0];
+      }
+      // prefer same entries
+      const sameEntries = vms.filter(
+        (vm) => vm['resource-entry'] == view.resEntry
+      );
+      if (sameEntries.length == 1) {
+        return sameEntries[0];
+      }
+      // no same entries, or multiple same entries
+      vms = sameEntries.length == 0 ? vms : sameEntries;
+      if (view.desc.length == 0) {
+        // the view has no desc, choose the first one
+        return vms[0];
+      }
+      // for the rest, we prefer having the same desc
+      let best = vms.find((vm) => vm['content-desc'] == view.desc);
+      if (best) {
+        return best;
+      }
+      // or having similar desc (tfidf, 1-gram feature)
+      const frequents = [view, ...vms]
+        .map((w) => {
+          let desc = w instanceof DxView ? w.desc : w['content-desc'];
+          return filterStopwords(
+            splitAsWords(desc).map((w) => w.toLowerCase())
+          );
+        })
+        .map(doc2freq);
+      const words = Array.from(new Set(frequents.flatMap(Object.keys)));
+      const vectors = frequents.map((f) => freq2vec(f), words);
+      let min = Number.POSITIVE_INFINITY;
+      let minInd = -1;
+      // return the most similar one using cosine similarity
+      for (let i = 1; i < vectors.length; i++) {
+        const s = similarity.cosine(vectors[0].vector, vectors[i].vector);
+        if (s < min) {
+          min = s;
+          minInd = i;
+        }
+      }
+      return vms[minInd];
     } else if (view.desc.length != 0) {
       opt.descContains = view.desc;
-    }
-    if (!opt.resIdContains && !opt.textContains && !opt.descContains) {
+      let vms = await this.select(opt);
+      if (vms.length == 0) {
+        return null;
+      }
+      // prefer having similar desc (i.e., the least length),
+      // no doubt that same desc must have the least length
+      // TODO: what if there are multiple? (add context info)
+      vms.sort((a, b) => a['content-desc'].length - b['content-desc'].length);
+      return vms[0];
+    } else {
       throw new NotImplementedError('resId, text and desc are all empty');
     }
-    const vms = await this.select(opt);
-    if (vms.length == 0) {
-      return null;
-    } else if (vms.length == 1) {
-      return vms[0];
-    }
-    // adaptively select the best one
-    function getLen(v: ViewMap) {
-      return opt.textContains
-        ? v.text.length
-        : opt.descContains
-        ? v['content-desc'].length
-        : v['resource-entry'].length;
-    }
-    // the best one is the one which is least long
-    let min = Number.POSITIVE_INFINITY;
-    let minInd = -1;
-    for (const [i, vm] of enumerate(vms)) {
-      if (getLen(vm) < min) {
-        minInd = i;
-      }
-    }
-    return vms[minInd];
   }
 
   async dump(compressed = true): Promise<string> {

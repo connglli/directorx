@@ -7,10 +7,18 @@ import { filterStopwords, splitAsWords } from '../utils/strutil.ts';
 type WordFreq = vecutil.WordFreq;
 type WordVec = vecutil.WordVec;
 
+const DEFAULTS = {
+  GRAM: 1, // N-GRAM features the matching algorithm used, default is 1-gram
+};
+
+/** If a segment is matched to nobody, then it is matched to NO_MATCH */
 export const NO_MATCH: DxSegment = new DxSegment([], -1, -1, -1, -1, -1);
 
-type MatchItem = [DxSegment, DxSegment, number];
+/** Two matched segments and their match score */
+export type MatchItem = [DxSegment, DxSegment, number];
 
+/** DxSegmentMatch is the match result of two segments, one can
+ * fetch the global best match of a segment by #getMatch() */
 export class DxSegMatch {
   constructor(
     // seg, seg, score
@@ -33,20 +41,26 @@ export class DxSegMatch {
   }
 }
 
+/** Extract the n gram feature of a str */
+function extractNGramFeaturesOf(str: string, n: number): string[][] {
+  return vecutil.nGramFeature(
+    filterStopwords(splitAsWords(str).map((w) => w.toLowerCase())),
+    n
+  );
+}
+
 /** Collect the words and create a WordFreq from a segment */
 function newWordFreq(seg: DxSegment): WordFreq {
   const freq: WordFreq = {};
   function collect(view: DxView) {
     const ws = [
-      ...filterStopwords(
-        splitAsWords(view.resEntry).map((w) => w.toLowerCase())
-      ),
-      ...filterStopwords(splitAsWords(view.desc).map((w) => w.toLowerCase())),
-      ...filterStopwords(splitAsWords(view.text).map((w) => w.toLowerCase())),
-      ...filterStopwords(splitAsWords(view.tag).map((w) => w.toLowerCase())),
-      ...filterStopwords(splitAsWords(view.tip).map((w) => w.toLowerCase())),
-      ...filterStopwords(splitAsWords(view.hint).map((w) => w.toLowerCase())),
-    ];
+      ...extractNGramFeaturesOf(view.resEntry, DEFAULTS.GRAM),
+      ...extractNGramFeaturesOf(view.desc, DEFAULTS.GRAM),
+      ...extractNGramFeaturesOf(view.text, DEFAULTS.GRAM),
+      ...extractNGramFeaturesOf(view.tag, DEFAULTS.GRAM),
+      ...extractNGramFeaturesOf(view.tip, DEFAULTS.GRAM),
+      ...extractNGramFeaturesOf(view.hint, DEFAULTS.GRAM),
+    ].map((i) => i.join('')); // join n-gram feature as a single word
     for (const w of ws) {
       freq[w] = 1 + (freq[w] ?? 0);
     }
