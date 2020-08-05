@@ -156,7 +156,7 @@ class DXPK {
         state = DXPK.STATE_PSZ;
       } else if (state == DXPK.STATE_PSZ) {
         size = Number(l.trim());
-        state = DXPK.STATE_POL;
+        state = size != 0 ? DXPK.STATE_POL : DXPK.STATE_FPS;
       } else if (state == DXPK.STATE_POL) {
         const tokens = l.trim().split(';');
         const type = DXPK.str2type(tokens[0]);
@@ -224,7 +224,7 @@ class DXPK {
         }
       } else if (state == DXPK.STATE_FPS) {
         size = Number(l.trim());
-        state = DXPK.STATE_FPL;
+        state = size != 0 ? DXPK.STATE_FPL : DXPK.STATE_SSZ;
       } else if (state == DXPK.STATE_FPL) {
         const tokens = l.trim().split(';');
         const fr = new DxFragment(
@@ -245,7 +245,7 @@ class DXPK {
         }
       } else if (state == DXPK.STATE_SSZ) {
         size = Number(l.trim());
-        state = DXPK.STATE_SEQ;
+        state = size != 0 ? DXPK.STATE_SEQ : DXPK.STATE_DNE;
       } else if (state == DXPK.STATE_SEQ) {
         const tokens = l.trim().split(';');
         const app = tokens[0];
@@ -278,10 +278,11 @@ class DXPK {
         }
         const indices: number[] = [];
         const count = Number(tokens[i]);
+        i += 1;
         for (let j = 0; j < count; j++) {
-          indices.push(Number(tokens[i + 1 + j]));
+          indices.push(Number(tokens[i + j]));
         }
-        i += count + 1;
+        i += count == 0 ? 1 : count; // skip an empty ';' for count == 0
         const ap = new ActivityPack(app, name, tree, indices);
         let e: DxEvent;
         switch (tokens[i]) {
