@@ -195,7 +195,7 @@ class Scroll extends Expand {
         lastDir = currDir;
       } while (
         iteration < 3 &&
-        (await droid.input.select(this.args.v)).length == 0
+        (await droid.input.adaptiveSelect(this.args.v)) == null
       );
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
@@ -244,7 +244,7 @@ class Scroll extends Expand {
         lastDir = currDir;
       } while (
         iteration < 3 &&
-        (await droid.input.select(this.args.v)).length == 0
+        (await droid.input.adaptiveSelect(this.args.v)) == null
       );
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
@@ -739,7 +739,7 @@ class SingleSideViewPager extends Reveal {
     // until the target view shown
     for (const page of this.vPager.children) {
       await droid.input.tap(Views.x0(page) + 1, Views.y0(page) + 1);
-      if ((await droid.input.select(this.args.v)).length != 0) {
+      if ((await droid.input.adaptiveSelect(this.args.v)) != null) {
         return;
       }
     }

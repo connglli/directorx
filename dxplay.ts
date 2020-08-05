@@ -250,24 +250,26 @@ class ResPlayer extends DxPlayer {
     // if their next event can be fired directly on current ui
     // TODO: add more rules to check whether v can be skipped
     if (v.text.length == 0 && this.seq.size() > 0) {
-      let skipped = 0;
+      let found = -1;
       const nextK = this.seq.topN(this.K);
       for (let i = 0; i < nextK.length; i++) {
         const ne = nextK[i];
         if (!isXYEvent(ne)) {
-          skipped = i;
+          found = i;
           break;
         }
         const [, vm] = await this.find(ne);
         if (vm != null && vm.visible) {
-          skipped = i;
+          found = i;
           break;
         }
       }
       // found one that can be fired on current ui
-      if (skipped != 0) {
-        DxLog.info(`/* skip next ${skipped + 1} events */`);
-        this.seq.popN(skipped);
+      if (found != -1) {
+        const popped = found;
+        const skipped = popped + 1;
+        DxLog.info(`/* skip next ${skipped} events */`);
+        this.seq.popN(popped);
         return;
       }
     }
@@ -381,8 +383,7 @@ class ResPlayer extends DxPlayer {
       );
     }
     // try to select its corresponding view on playee
-    const vms = await DxDroid.get().input.select(v, visible);
-    return [v, vms.length == 0 ? null : vms[0]];
+    return [v, await DxDroid.get().input.adaptiveSelect(v, visible)];
   }
 
   private async fireOnViewMap(e: DxEvent, v: ViewMap) {

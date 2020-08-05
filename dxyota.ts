@@ -3,6 +3,7 @@ import DxView, { ViewFactory, ViewType, ViewProps } from './ui/dxview.ts';
 import DxActivity from './ui/dxact.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
+import { enumerate } from './utils/pyalike.ts';
 
 /** Quotes shell command string with "" */
 function q(s: string | number): string {
@@ -356,33 +357,7 @@ export default class DxYota {
     }
   }
 
-  async select(
-    optOrView: ViewOptions | DxView,
-    compressed = true // use this flag only when no compressed flag in optOrView
-  ): Promise<ViewMap[]> {
-    let opt: SelectOptions;
-    if (optOrView instanceof DxView) {
-      const v = optOrView;
-      opt = {
-        n: 1,
-      };
-      if (v.text.length != 0) {
-        opt.textContains = v.text;
-      } else if (v.resId.length != 0) {
-        opt.resIdContains = v.resEntry;
-      } else if (v.desc.length != 0) {
-        opt.descContains = v.desc;
-      }
-      if (!opt.resIdContains && !opt.textContains && !opt.descContains) {
-        throw new NotImplementedError('resId, text and desc are all empty');
-      }
-    } else {
-      opt = optOrView;
-    }
-    if (opt.compressed === undefined) {
-      opt.compressed = compressed;
-    }
-
+  async select(opt: ViewOptions): Promise<ViewMap[]> {
     const args = makeSelectOpts(opt);
     let retry = 3,
       status: AdbResult;
@@ -408,6 +383,49 @@ export default class DxYota {
   async info(cmd: string): Promise<string> {
     // TODO: info commands may fail on real devices
     return await this.adb.unsafeShell(`${DxYota.BIN} info ${cmd}`);
+  }
+
+  async adaptiveSelect(
+    view: DxView,
+    compressed = true // use this flag only when no compressed flag in optOrView
+  ): Promise<ViewMap | null> {
+    let opt: SelectOptions;
+    opt = {
+      compressed: compressed,
+    };
+    if (view.text.length != 0) {
+      opt.textContains = view.text;
+    } else if (view.resId.length != 0) {
+      opt.resIdContains = view.resEntry;
+    } else if (view.desc.length != 0) {
+      opt.descContains = view.desc;
+    }
+    if (!opt.resIdContains && !opt.textContains && !opt.descContains) {
+      throw new NotImplementedError('resId, text and desc are all empty');
+    }
+    const vms = await this.select(opt);
+    if (vms.length == 0) {
+      return null;
+    } else if (vms.length == 1) {
+      return vms[0];
+    }
+    // adaptively select the best one
+    function getLen(v: ViewMap) {
+      return opt.textContains
+        ? v.text.length
+        : opt.descContains
+        ? v['content-desc'].length
+        : v['resource-entry'].length;
+    }
+    // the best one is the one which is least long
+    let min = Number.POSITIVE_INFINITY;
+    let minInd = -1;
+    for (const [i, vm] of enumerate(vms)) {
+      if (getLen(vm) < min) {
+        minInd = i;
+      }
+    }
+    return vms[minInd];
   }
 
   async dump(compressed = true): Promise<string> {
