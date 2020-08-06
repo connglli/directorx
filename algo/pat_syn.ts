@@ -1,3 +1,4 @@
+import DxEvent, { DxSwipeEvent } from '../dxevent.ts';
 import DxView, {
   DxTabHost,
   DxViewPager,
@@ -12,7 +13,11 @@ import DxSegment, {
   SegmentBottomUpFinder,
 } from '../ui/dxseg.ts';
 import DxDroid, { DevInfo } from '../dxdroid.ts';
-import { NotImplementedError, IllegalStateError } from '../utils/error.ts';
+import {
+  NotImplementedError,
+  IllegalStateError,
+  CannotReachHereError,
+} from '../utils/error.ts';
 
 type N<T> = T | null;
 
@@ -20,9 +25,12 @@ export interface PatRecArgs {}
 
 export abstract class DxPat {
   constructor(protected readonly args: PatRecArgs) {}
+  /** Pattern name */
   abstract get name(): string;
+  /** Whether current circumstance match this pattern */
   abstract match(): boolean;
-  abstract async apply(droid: DxDroid): Promise<void>;
+  /** Apply the pattern and return whether the original event is consumed */
+  abstract async apply(droid: DxDroid): Promise<boolean>;
 }
 
 export interface InvisiblePatRecArgs extends PatRecArgs {
@@ -60,20 +68,23 @@ export class Invisible extends DxPat {
     return !!this.vParent;
   }
 
-  async apply(droid: DxDroid): Promise<void> {
+  async apply(droid: DxDroid): Promise<boolean> {
     // TODO: what if the view is not triggered by
     // tapping its visible parent?
     if (this.vParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    return await droid.input.tap(
+    await droid.input.tap(
       Views.x0(this.vParent) + 1,
       Views.y0(this.vParent) + 1
     );
+    return false;
   }
 }
 
 export interface BpPatRecArgs extends PatRecArgs {
+  // the fired event
+  e: DxEvent;
   // view on recordee
   v: DxView;
   // the recordee
@@ -108,6 +119,88 @@ abstract class Expand extends DxBpPat {
   }
 }
 
+/** When a view is resized, it's text is maybe expanded
+ * to become longer, or shrink to be shorter. VagueText
+ * takes care of such pattern by finding a most probable
+ * view that are text-similar */
+class VagueText extends Expand {
+  private static THRESHOLD = 10;
+
+  // founded views that are text-similar to target view
+  private vFound: DxView[] = [];
+
+  get name() {
+    return 'vague-text';
+  }
+
+  match(): boolean {
+    if (this.args.v.text.length < VagueText.THRESHOLD) {
+      return false;
+    }
+    const v = this.args.v;
+    const player = this.args.p;
+    const expand = this.isDevExpanded;
+    // currently, we only tackle prefix
+    // TODO: add more vague patterns
+    this.vFound = SegmentFinder.findViews(
+      player.s,
+      (w) =>
+        w.text.length > VagueText.THRESHOLD &&
+        ((expand && w.text.startsWith(v.text)) ||
+          (!expand && v.text.startsWith(w.text)))
+    );
+    return this.vFound.length > 0;
+  }
+
+  async apply(droid: DxDroid): Promise<boolean> {
+    if (this.vFound.length <= 0) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    const expand = this.isDevExpanded;
+    // let's sort the founded view by their distance
+    this.vFound.sort((a, b) => Math.abs(a.text.length - b.text.length));
+    const matched = expand
+      ? this.vFound[0]
+      : this.vFound[this.vFound.length - 1];
+    if (!matched) {
+      throw new IllegalStateError('vFound is empty');
+    }
+    switch (this.args.e.ty) {
+      case 'tap':
+        await droid.input.tap(Views.x0(matched) + 1, Views.y0(matched) + 1);
+        break;
+      case 'double-tap':
+        await droid.input.doubleTap(
+          Views.x0(matched) + 1,
+          Views.y0(matched) + 1
+        );
+        break;
+      case 'long-tap':
+        await droid.input.longTap(Views.x0(matched) + 1, Views.y0(matched) + 1);
+        break;
+      case 'swipe': {
+        const { dx, dy, t0, t1 } = this.args.e as DxSwipeEvent;
+        const duration = t1 - t0;
+        const rDev = this.args.r.d;
+        const pDev = this.args.p.d;
+        const fromX = dx >= 0 ? Views.x0(matched) + 1 : Views.x1(matched) - 1;
+        const fromY = dy >= 0 ? Views.y0(matched) + 1 : Views.y1(matched) - 1;
+        const realDx = (dx / rDev.width) * pDev.width;
+        const realDy = (dy / rDev.height) * pDev.height;
+        await droid.input.swipe(fromX, fromY, realDx, realDy, duration);
+        break;
+      }
+      default:
+        throw new CannotReachHereError();
+    }
+    return true;
+  }
+
+  private get isDevExpanded() {
+    return this.args.r.d.width <= this.args.p.d.width;
+  }
+}
+
 type ScrollDir = 'R2L' | 'L2R' | 'T2B' | 'B2T' | 'N';
 
 /** Scroll is the pattern that handles scrollable parent.
@@ -139,7 +232,7 @@ class Scroll extends Expand {
     return !!this.vHSParent || !!this.vVSParent;
   }
 
-  async apply(droid: DxDroid): Promise<void> {
+  async apply(droid: DxDroid): Promise<boolean> {
     if (this.vHSParent == null && this.vVSParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     } else if (this.vHSParent != null && this.vVSParent != null) {
@@ -200,6 +293,7 @@ class Scroll extends Expand {
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
       }
+      return false;
     } else if (this.vVSParent != null) {
       let iteration = 1;
       let lastDir: ScrollDir = 'N';
@@ -249,6 +343,9 @@ class Scroll extends Expand {
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
       }
+      return false;
+    } else {
+      throw new CannotReachHereError();
     }
   }
 
@@ -307,16 +404,17 @@ abstract class RevealButton extends Reveal {
     return false;
   }
 
-  async apply(droid: DxDroid): Promise<void> {
+  async apply(droid: DxDroid): Promise<boolean> {
     if (this.vButton == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
     // synthesize a tap event on the
     // more options button
-    return await droid.input.tap(
+    await droid.input.tap(
       Views.x0(this.vButton) + 1,
       Views.y0(this.vButton) + 1
     );
+    return false;
   }
 
   /** Find the special buttons in the given view of playee */
@@ -386,7 +484,7 @@ class TabHostTab extends Reveal {
     return !!found;
   }
 
-  async apply(droid: DxDroid): Promise<void> {
+  async apply(droid: DxDroid): Promise<boolean> {
     const playee = this.args.p;
     // vPath[0] is the direct parent of all tabs;
     const parent = this.vPath.shift();
@@ -422,6 +520,7 @@ class TabHostTab extends Reveal {
     }
     // tap found to reveal maybe the tab list
     await droid.input.tap(Views.x0(found) + 1, Views.y0(found) + 1);
+    return false;
   }
 
   /** Try to find an available one in the playee segment (if not found,
@@ -466,7 +565,7 @@ class TabHostContent extends Reveal {
     return !!this.vTabContent;
   }
 
-  async apply(droid: DxDroid): Promise<void> {
+  async apply(droid: DxDroid): Promise<boolean> {
     if (!this.vTabContent) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
@@ -542,6 +641,7 @@ class TabHostContent extends Reveal {
       }
       await droid.input.tap(vms[0].bounds.left + 1, vms[0].bounds.top + 1);
     }
+    return false;
   }
 }
 
@@ -575,7 +675,7 @@ class TabHost extends TabHostTab {
     return !!found;
   }
 
-  async apply(droid: DxDroid): Promise<void> {
+  async apply(droid: DxDroid): Promise<boolean> {
     // find all tabs in recordee
     if (this.vPath.length == 0) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
@@ -674,7 +774,7 @@ class DoubleSideViewPager extends Reveal {
     return true;
   }
 
-  async apply(droid: DxDroid): Promise<void> {
+  async apply(droid: DxDroid): Promise<boolean> {
     const v = this.args.v;
     if (!this.vRPager || !this.vPPager) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
@@ -703,10 +803,8 @@ class DoubleSideViewPager extends Reveal {
     if (!targetPage) {
       throw new NotImplementedError('Page containing v does not found');
     }
-    return await droid.input.tap(
-      Views.x0(targetPage) + 1,
-      Views.y0(targetPage) + 1
-    );
+    await droid.input.tap(Views.x0(targetPage) + 1, Views.y0(targetPage) + 1);
+    return false;
   }
 }
 
@@ -731,7 +829,7 @@ class SingleSideViewPager extends Reveal {
     return !!this.vPager;
   }
 
-  async apply(droid: DxDroid): Promise<void> {
+  async apply(droid: DxDroid): Promise<boolean> {
     if (!this.vPager) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
@@ -740,7 +838,7 @@ class SingleSideViewPager extends Reveal {
     for (const page of this.vPager.children) {
       await droid.input.tap(Views.x0(page) + 1, Views.y0(page) + 1);
       if ((await droid.input.adaptiveSelect(this.args.v)) != null) {
-        return;
+        return false;
       }
     }
     throw new NotImplementedError('No page contains the target view');
@@ -769,16 +867,17 @@ abstract class MergeButton extends Merge {
     return !!this.vButton;
   }
 
-  async apply(droid: DxDroid) {
+  async apply(droid: DxDroid): Promise<boolean> {
     if (this.vButton == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
     // synthesize a tap event on the
     // more options button
-    return await droid.input.tap(
+    await droid.input.tap(
       Views.x0(this.vButton) + 1,
       Views.y0(this.vButton) + 1
     );
+    return false;
   }
 
   protected abstract isMergeButton(v: DxView): boolean;
@@ -837,7 +936,7 @@ class DualFragment extends Merge {
     return !!this.vDetFrag;
   }
 
-  async apply(droid: DxDroid) {
+  async apply(droid: DxDroid): Promise<boolean> {
     // let's firstly find the descriptive preview fragment
     // and view in recordee; the desFrag must be added, active,
     // not hidden, not detached and has valid view
@@ -928,6 +1027,7 @@ class DualFragment extends Merge {
     }
     // let's fire the selected item on playee
     await droid.input.tap(Views.x0(pSelected) + 1, Views.y0(pSelected) + 1);
+    return false;
   }
 }
 
@@ -935,6 +1035,7 @@ class DualFragment extends Merge {
 // [None, Reflow, Expand, Merge, Reveal, Transform]
 const patterns = [
   // Expand
+  VagueText,
   Scroll,
   // Reveal
   MoreOptions,

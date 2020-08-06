@@ -239,10 +239,13 @@ class ResPlayer extends DxPlayer {
       return;
     }
 
+    const droid = DxDroid.get();
+    const pDev = droid.dev;
+
     // find the view in recordee and playee first
     const [v, vm] = await this.find(e);
     if (vm != null && vm.visible) {
-      return await this.fireOnViewMap(e, vm);
+      return await this.fireOnViewMap(e, vm, rDev, pDev);
     }
 
     // try to look ahead next K events, and skip several events.
@@ -277,9 +280,7 @@ class ResPlayer extends DxPlayer {
     // let's see if the view is invisible, and apply
     // the invisible pattern if possible
     const [, ivm] = await this.find(e, false);
-    const droid = DxDroid.get();
     const pAct = await this.top();
-    const pDev = droid.dev;
     if (ivm && !ivm.important) {
       // sometimes an important or invisible view may got,
       // even though it is not suitable to fire it, it provides
@@ -311,10 +312,11 @@ class ResPlayer extends DxPlayer {
       } else {
         DxLog.info(`pattern ${pattern.name}`);
       }
-      // push the raw event back to the sequence, and try again
-      this.seq.push(e);
       // apply the rules to get the synthesized event
-      await pattern.apply(droid);
+      if (!(await pattern.apply(droid))) {
+        // push the raw event back to the sequence, and try again
+        this.seq.push(e);
+      }
       return;
     }
 
@@ -342,6 +344,7 @@ class ResPlayer extends DxPlayer {
 
     // recognize the pattern
     const pattern = recBpPat({
+      e,
       v,
       r: { a: rAct, s: rSeg, d: rDev },
       p: { a: pAct, s: pSeg, d: pDev },
@@ -351,10 +354,11 @@ class ResPlayer extends DxPlayer {
     } else {
       DxLog.info(`pattern ${pattern.level}:${pattern.name}`);
     }
-    // push the raw event back to the sequence, and try again
-    this.seq.push(e);
     // apply the rules to get the synthesized event
-    await pattern.apply(droid);
+    if (!(await pattern.apply(droid))) {
+      // push the raw event back to the sequence, and try again
+      this.seq.push(e);
+    }
   }
 
   private findSegByView(v: DxView, segs: DxSegment[]): DxSegment {
@@ -386,22 +390,40 @@ class ResPlayer extends DxPlayer {
     return [v, await DxDroid.get().input.adaptiveSelect(v, visible)];
   }
 
-  private async fireOnViewMap(e: DxEvent, v: ViewMap) {
+  private async fireOnViewMap(
+    e: DxEvent,
+    v: ViewMap,
+    rDev: DevInfo,
+    pDev: DevInfo
+  ) {
     // fire on the top-left corner
     const {
       bounds: { left, right, top, bottom },
     } = v;
-    const x = Math.min(left + 1, right);
-    const y = Math.min(top + 1, bottom);
+    const realX = Math.min(left + 1, right);
+    const realY = Math.min(top + 1, bottom);
     switch (e.ty) {
       case 'tap':
-        return await DxDroid.get().input.tap(x, y);
+        return await DxDroid.get().input.tap(realX, realY);
       case 'double-tap':
-        return await DxDroid.get().input.doubleTap(x, y);
+        return await DxDroid.get().input.doubleTap(realX, realY);
       case 'long-tap':
-        return await DxDroid.get().input.longTap(x, y);
-      case 'swipe':
-        throw new NotImplementedError();
+        return await DxDroid.get().input.longTap(realX, realY);
+      case 'swipe': {
+        const { dx, dy, t0, t1 } = e as DxSwipeEvent;
+        const duration = t1 - t0;
+        const fromX = dx >= 0 ? left + 1 : right - 1;
+        const fromY = dy >= 0 ? top + 1 : bottom - 1;
+        const realDx = (dx / rDev.width) * pDev.width;
+        const realDy = (dy / rDev.height) * pDev.height;
+        return await DxDroid.get().input.swipe(
+          fromX,
+          fromY,
+          realDx,
+          realDy,
+          duration
+        );
+      }
       default:
         throw new CannotReachHereError();
     }
