@@ -1,8 +1,12 @@
 package io.github.directorx.dxrec
 
 import android.app.Activity
+import android.app.Application
+import android.text.Spannable
+import android.util.Base64
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.inputmethod.BaseInputConnection
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -10,6 +14,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.directorx.dxrec.ctx.DecorViewContext
 import io.github.directorx.dxrec.ctx.ViewContext
 import io.github.directorx.dxrec.log.AndroidLogger
+import io.github.directorx.dxrec.utils.accessors.TextEvent
 import io.github.directorx.dxrec.utils.accessors.contains
 import org.json.JSONArray
 import org.json.JSONObject
@@ -20,7 +25,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
     companion object {
         const val LOG_TAG = "DxRecorder"
         const val LOG_ETAG = "DxRecorderE"
-        const val MEM_CAP = 5
+        const val MEM_CAP = 100
         const val CONFIG = "/data/local/tmp/directorx/dxrec.config.json"
     }
 
@@ -49,24 +54,108 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
             prepare(pkgName, encode)
         }
 
-        DxLogger.catchAndLog {
-            val method = Activity::class.java.getMethod("dispatchTouchEvent", MotionEvent::class.java)
+        DxLogger.catchAndLog { // hook activity lifecycle
+            val method = Application::class.java.getMethod("onCreate")
+            XposedBridge.hookMethod(method, object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam?) {
+                    val app = param?.thisObject as? Application ?: return
+                    DxActivityStack.registerSelf(app)
+                }
+            })
+        }
+
+        DxLogger.catchAndLog { // hook activity touch event
+            val method =
+                Activity::class.java.getMethod("dispatchTouchEvent", MotionEvent::class.java)
             XposedBridge.hookMethod(method, object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam?) {
                     val act = param?.thisObject as? Activity ?: return
                     val evt = param.args[0] as? MotionEvent ?: return
+                    if (act != DxActivityStack.top) {
+                        DxLogger.e("Activity is not top")
+                    }
                     detector.next(act, evt)
                 }
             })
         }
 
-        DxLogger.catchAndLog {
+        DxLogger.catchAndLog { // hook activity key event
             val method = Activity::class.java.getMethod("dispatchKeyEvent", KeyEvent::class.java)
             XposedBridge.hookMethod(method, object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam?) {
                     val act = param?.thisObject as? Activity ?: return
                     val evt = param.args[0] as? KeyEvent ?: return
+                    if (act != DxActivityStack.top) {
+                        DxLogger.e("Activity is not top")
+                    }
                     detector.next(act, evt)
+                }
+            })
+        }
+
+        // TODO support spaces in text, and incontinuous editing
+        //   1. current when there are spaces in a text, the new text after spaces will replace the former
+        //   2. current incontinuous editting will produce text copies
+        DxLogger.catchAndLog { // hook editor text event
+            val commitText = BaseInputConnection::class.java.getMethod(
+                "commitText",
+                CharSequence::class.java,
+                Int::class.java
+            )
+            XposedBridge.hookMethod(commitText, object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam?) {
+                    if (param == null) {
+                        return
+                    }
+                    val txt = param.args[0] as? CharSequence ?: return
+                    detector.next(DxActivityStack.top, newEncodedTextEvent(txt, encode))
+                }
+            })
+        }
+
+        DxLogger.catchAndLog { // hook editor text event
+            val setComposingText = BaseInputConnection::class.java.getMethod(
+                "setComposingText",
+                CharSequence::class.java,
+                Int::class.java
+            )
+            XposedBridge.hookMethod(setComposingText, object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam?) {
+                    if (param == null) {
+                        return
+                    }
+                    val txt = param.args[0] as? CharSequence ?: return
+                    detector.next(DxActivityStack.top, newEncodedTextEvent(txt, encode))
+                }
+            })
+        }
+
+        DxLogger.catchAndLog { // hook editor text event
+            val setComposingSpans = BaseInputConnection::class.java.getMethod(
+                "setComposingSpans",
+                Spannable::class.java
+            )
+            XposedBridge.hookMethod(setComposingSpans, object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam?) {
+                    if (param == null) {
+                        return
+                    }
+                    val txt = param.args[0] as? Spannable ?: return
+                    detector.next(DxActivityStack.top, newEncodedTextEvent(txt, encode))
+                }
+            })
+        }
+
+        DxLogger.catchAndLog { // hook editor key event
+            val method =
+                BaseInputConnection::class.java.getMethod("sendKeyEvent", KeyEvent::class.java)
+            XposedBridge.hookMethod(method, object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam?) {
+                    if (param == null) {
+                        return
+                    }
+                    val evt = param.args[0] as? KeyEvent ?: return
+                    detector.next(DxActivityStack.top, evt)
                 }
             })
         }
@@ -132,6 +221,18 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         broker.commit()
     }
 
+    override fun onText(down: TextEvent, act: Activity) {
+        val last = broker.curr
+        // pending to dump until other event happens
+        if (last == null || last.evt !is DxTextEvent) {
+            val evt = DxTextEvent(down.text, down.downTime)
+            broker.addPair(act, evt)
+        } else {
+            val evt = DxTextEvent(down.text, last.evt.t)
+            broker.addEvent(evt)
+        }
+    }
+
     private fun prepare(pkgName: String, encode: Boolean) {
         // initialize components
         broker = DxBroker(MEM_CAP)
@@ -146,4 +247,12 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         // start the dump thread
         dumper.start()
     }
+
+    private fun newEncodedTextEvent(cs: CharSequence, encode: Boolean) = TextEvent(
+        if (encode) {
+            Base64.encodeToString(cs.toString().toByteArray(), Base64.NO_WRAP).trim()
+        } else {
+            cs.toString()
+        }
+    )
 }

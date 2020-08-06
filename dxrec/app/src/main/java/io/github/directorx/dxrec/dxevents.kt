@@ -35,4 +35,9 @@ data class DxKeyEvent(
     val t: Long    // down time
 ) : DxEvent()
 
+data class DxTextEvent(
+    val x: String, // text
+    val t: Long    // down time
+) : DxEvent()
+
 data class DxDummyEvent(val t: Long) : DxEvent()

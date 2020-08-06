@@ -5,6 +5,7 @@ import DxEvent, {
   DxDoubleTapEvent,
   DxSwipeEvent,
   DxKeyEvent,
+  DxTextEvent,
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxView, {
@@ -14,7 +15,6 @@ import DxView, {
   ViewFactory,
   ViewType,
   ViewFinder,
-  Views,
   ViewProps,
 } from './ui/dxview.ts';
 import DxActivity, { FragmentManager, DxFragment } from './ui/dxact.ts';
@@ -329,6 +329,13 @@ class DXPK {
               Number(tokens[i + 3])
             );
             break;
+          case 'text':
+            e = new DxTextEvent(
+              ap,
+              base64.decode(tokens[i + 1]),
+              Number(tokens[i + 2])
+            );
+            break;
           default:
             throw new IllegalStateError(`Unsupported event type: ${tokens[i]}`);
         }
@@ -486,6 +493,9 @@ class DXPK {
       } else if (ep.e.ty == 'key') {
         const e = ep.e as DxKeyEvent;
         await DXPK.writeString(buf, `${e.k};${e.c};${e.t}`);
+      } else if (ep.e.ty == 'text') {
+        const e = ep.e as DxTextEvent;
+        await DXPK.writeString(buf, `${base64.encode(e.x)};${e.t}`);
       } else {
         throw new IllegalStateError(`Unsupported event type: ${ep.e.ty}`);
       }
@@ -711,22 +721,22 @@ export default class DxPacker {
       case 'key':
         this.infoLogInner(e, null);
         break;
+
+      case 'text':
+        this.infoLogInner(e, null);
+        break;
     }
   }
 
   private infoLogInner(e: DxEvent, v: DxView | null) {
-    if (v) {
-      if (e.ty == 'key') {
-        DxLog.info(e.toString());
-      } else {
-        DxLog.info(
-          `${e.toString()} cls=${v.cls} id="${v.resId}" text="${
-            v.text
-          }" desc="${v.desc}" x=${v.x}-${v.x + v.width} y=${v.y}-${
-            v.y + v.height
-          } z=${v.z}`
-        );
-      }
+    if (e.ty == 'key' || e.ty == 'text') {
+      DxLog.info(e.toString());
+    } else if (v) {
+      DxLog.info(
+        `${e.toString()} cls=${v.cls} id="${v.resId}" text="${v.text}" desc="${
+          v.desc
+        }" x=${v.x}-${v.x + v.width} y=${v.y}-${v.y + v.height} z=${v.z}`
+      );
     }
   }
 }

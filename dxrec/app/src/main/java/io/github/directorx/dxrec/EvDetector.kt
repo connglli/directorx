@@ -1,10 +1,12 @@
 package io.github.directorx.dxrec
 
 import android.app.Activity
+import android.os.SystemClock
 import android.view.GestureDetector
 import android.view.InputEvent
 import android.view.KeyEvent
 import android.view.MotionEvent
+import io.github.directorx.dxrec.utils.accessors.TextEvent
 
 class EvDetector(
     private val listener: Listener = Listener(),
@@ -24,6 +26,7 @@ class EvDetector(
         ) = Unit
 
         open fun onKey(down: KeyEvent, act: Activity) = Unit
+        open fun onText(down: TextEvent, act: Activity) = Unit
     }
 
     private lateinit var activity: Activity
@@ -79,6 +82,11 @@ class EvDetector(
         }
     }
 
+    fun next(act: Activity, evt: TextEvent) {
+        updateActivity(act)
+        nextText(evt)
+    }
+
     private fun nextMotion(event: MotionEvent) {
         if (event.action == MotionEvent.ACTION_UP) {
             listener.onUp(event, activity)
@@ -90,6 +98,10 @@ class EvDetector(
         if (event.action == MotionEvent.ACTION_DOWN) {
             listener.onKey(event, activity)
         }
+    }
+
+    private fun nextText(event: TextEvent) {
+        listener.onText(event, activity)
     }
 
     private fun updateActivity(act: Activity) {

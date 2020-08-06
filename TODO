@@ -23,7 +23,7 @@ FEATURES:
     only by a width and height, Views.isVisibleToUser() cannot determine
     only by the dev width and height), maybe a DxWindow or ViewPort
     should be introduced
-11. set logging level
+12. support spaces and uncontinuous editing in text event
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 

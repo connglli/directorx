@@ -7,6 +7,7 @@ import DxEvent, {
   DxTapEvent,
   isXYEvent,
   DxEvSeq,
+  DxTextEvent,
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
@@ -91,6 +92,9 @@ class PxPlayer extends DxPlayer {
       case 'key':
         await input.key((e as DxKeyEvent).k);
         break;
+      case 'text':
+        await input.key((e as DxTextEvent).x);
+        break;
     }
   }
 }
@@ -129,6 +133,8 @@ class PtPlayer extends DxPlayer {
       );
     } else if (e.ty == 'key') {
       await input.key((e as DxKeyEvent).k);
+    } else if (e.ty == 'text') {
+      await input.text((e as DxTextEvent).x);
     }
   }
 
@@ -191,6 +197,8 @@ class WdgPlayer extends DxPlayer {
       await input.view('swipe', opt);
     } else if (e.ty == 'key') {
       await input.key((e as DxKeyEvent).k);
+    } else if (e.ty == 'text') {
+      await input.text((e as DxTextEvent).x);
     }
   }
 
@@ -233,6 +241,8 @@ class ResPlayer extends DxPlayer {
     if (!isXYEvent(e)) {
       if (e.ty == 'key') {
         await DxDroid.get().input.key((e as DxKeyEvent).k);
+      } else if (e.ty == 'text') {
+        await DxDroid.get().input.text((e as DxTextEvent).x);
       } else {
         throw new NotImplementedError();
       }

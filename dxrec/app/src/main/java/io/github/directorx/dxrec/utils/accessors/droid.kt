@@ -6,15 +6,12 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Process
+import android.os.SystemClock
 import android.util.SparseArray
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.iterator
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentActivity
-import io.github.directorx.dxrec.DxLogger
 import java.io.*
-import java.lang.IllegalStateException
 import java.util.*
 
 private const val PREFIX = " "
@@ -137,3 +134,5 @@ fun getForegroundColor(view: View): String? {
         fg.javaClass.simpleName
     }
 }
+
+data class TextEvent(val text: String, val downTime: Long = SystemClock.uptimeMillis())

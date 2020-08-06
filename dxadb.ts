@@ -396,7 +396,15 @@ export class DumpSysActivityInfo {
     for (let i = incorrectLine + 2; i < localFragmentActivityEndLine; i++) {
       if (this.info[i].includes('Added Fragments:')) {
         this.info[i] = '  ' + this.info[i];
+      } else if (this.info[i].includes('Fragments Created Menus:')) {
+        this.info[i] = '  ' + this.info[i];
+      } else if (this.info[i].includes('Back Stack:')) {
+        this.info[i] = '  ' + this.info[i];
       } else if (this.info[i].includes('Back Stack Index:')) {
+        this.info[i] = '  ' + this.info[i];
+      } else if (this.info[i].includes('Back Stack Indices:')) {
+        this.info[i] = '  ' + this.info[i];
+      } else if (this.info[i].includes('Pending Actions:')) {
         this.info[i] = '  ' + this.info[i];
       } else if (this.info[i].includes('FragmentManager misc state:')) {
         this.info[i] = '  ' + this.info[i];

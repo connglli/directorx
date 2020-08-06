@@ -12,6 +12,7 @@ import DxEvent, {
   DxDoubleTapEvent,
   DxKeyEvent,
   DxSwipeEvent,
+  DxTextEvent,
 } from './dxevent.ts';
 import DxActivity from './ui/dxact.ts';
 import DxLog from './dxlog.ts';
@@ -124,7 +125,7 @@ class DxRecParser {
 
   private parseEvent(line: string): DxEvent {
     // TYPE args...
-    const [type, ...args] = line.split(/\s+/);
+    const [type, ...args] = line.split(' ');
 
     switch (type) {
       case 'TAP':
@@ -172,6 +173,14 @@ class DxRecParser {
           this.curr.act!, // eslint-disable-line
           Number(args[2]),
           args[3],
+          Number(args[1])
+        );
+
+      case 'TEXT':
+        // TEXT act t x
+        return new DxTextEvent(
+          this.curr.act!,
+          base64.decode(args[2]),
           Number(args[1])
         );
 

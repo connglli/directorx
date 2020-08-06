@@ -1,7 +1,13 @@
 import DxActivity from './ui/dxact.ts';
 import Stack from './utils/stack.ts';
 
-export type DxEventType = 'tap' | 'long-tap' | 'double-tap' | 'swipe' | 'key';
+export type DxEventType =
+  | 'tap'
+  | 'long-tap'
+  | 'double-tap'
+  | 'swipe'
+  | 'key'
+  | 'text';
 
 export default DxEvent;
 interface DxEvent {
@@ -111,6 +117,21 @@ export class DxKeyEvent implements DxEvent {
   }
   toString(): string {
     return `key ${this.k}`;
+  }
+}
+
+export class DxTextEvent implements DxEvent {
+  public readonly ty = 'text';
+  constructor(
+    public readonly a: DxActivity,
+    public readonly x: string,
+    public readonly t: number
+  ) {}
+  copy(a: DxActivity = this.a): DxEvent {
+    return new DxTextEvent(a, this.x, this.t);
+  }
+  toString(): string {
+    return `text ${this.x}`;
   }
 }
 

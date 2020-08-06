@@ -10,8 +10,7 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
     override fun run() {
         try {
             while (true) {
-                val item = queue.take()
-                doDump(item)
+                doDump(queue.take())
             }
         } catch (ignored: InterruptedException) {}
     }
@@ -40,6 +39,9 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
             // KEY act down_time code key
             is DxKeyEvent ->
                 DxLogger.i("KEY $act ${evt.t} ${evt.c} ${evt.k}")
+            // TEXT act down_time text
+            is DxTextEvent ->
+                DxLogger.i("TEXT $act ${evt.t} ${evt.x}")
         }
     }
 
