@@ -7,7 +7,7 @@ import DxView, {
   DxRecyclerView,
   DxListView,
 } from '../ui/dxview.ts';
-import DxActivity, { DxFragment } from '../ui/dxact.ts';
+import DxCompatUi, { DxFragment } from '../ui/dxui.ts';
 import DxSegment, {
   SegmentFinder,
   SegmentBottomUpFinder,
@@ -36,8 +36,8 @@ export abstract class DxPat {
 export interface InvisiblePatRecArgs extends PatRecArgs {
   // view on playee
   v: DxView;
-  // playee activity
-  a: DxActivity;
+  // playee ui
+  u: DxCompatUi;
   // playee device
   d: DevInfo;
 }
@@ -60,7 +60,7 @@ export class Invisible extends DxPat {
 
   match(): boolean {
     // find its visible parent
-    const { v: view, a: act, d: dev } = this.args;
+    const { v: view, u: act, d: dev } = this.args;
     this.vParent = ViewFinder.findParent(
       view,
       (p) => Views.isViewImportantForA11y(p) && Views.isVisibleToUser(p, dev)
@@ -90,13 +90,13 @@ export interface BpPatRecArgs extends PatRecArgs {
   // the recordee
   r: {
     s: DxSegment;
-    a: DxActivity;
+    u: DxCompatUi;
     d: DevInfo;
   };
   // the playee
   p: {
     s: DxSegment;
-    a: DxActivity;
+    u: DxCompatUi;
     d: DevInfo;
   };
 }
@@ -572,11 +572,11 @@ class TabHostContent extends Reveal {
     const recordee = this.args.r;
     const playee = this.args.p;
     // find all available tab hosts on recordee
-    let tabHosts = recordee.a.findViews(
+    let tabHosts = recordee.u.findViews(
       (v) => TabHostTab.isTabHostTabs(v) && Views.isVisibleToUser(v, recordee.d)
     );
     if (tabHosts.length == 0) {
-      tabHosts = recordee.a.findViews(
+      tabHosts = recordee.u.findViews(
         (v) => TabHost.isTabHost(v) && Views.isVisibleToUser(v, recordee.d)
       );
       // remove all other views and return the
@@ -923,11 +923,11 @@ class DualFragment extends Merge {
   match(): boolean {
     const recordee = this.args.r;
     const v = this.args.v;
-    this.vDetFrag = recordee.a.fragmentManager.findFragment((f) => {
+    this.vDetFrag = recordee.u.fragmentManager.findFragment((f) => {
       if (!f.active || !f.viewId) {
         return false;
       }
-      const fragView = recordee.a.findViewById(f.viewId);
+      const fragView = recordee.u.findViewById(f.viewId);
       if (fragView && (fragView == v || Views.isChild(v, fragView))) {
         return true;
       }
@@ -941,7 +941,7 @@ class DualFragment extends Merge {
     // and view in recordee; the desFrag must be added, active,
     // not hidden, not detached and has valid view
     const recordee = this.args.r;
-    const siblings = recordee.a.fragmentManager.active.filter(
+    const siblings = recordee.u.fragmentManager.active.filter(
       (f) =>
         f != this.vDetFrag && f.active && !f.hidden && !f.detached && !!f.viewId
     );
@@ -951,7 +951,7 @@ class DualFragment extends Merge {
     let desView: N<DxView> = null;
     let content: N<DxView> = null;
     for (const frag of siblings) {
-      desView = recordee.a.findViewById(frag.viewId!);
+      desView = recordee.u.findViewById(frag.viewId!);
       if (desView) {
         content = ViewFinder.findView(
           desView,
@@ -980,17 +980,17 @@ class DualFragment extends Merge {
     // so let's try to find the descriptive preview in playee
     // by the descriptive view id of the recordee
     const playee = this.args.p;
-    let pContent = playee.a.findViewById(content.id);
+    let pContent = playee.u.findViewById(content.id);
     if (!pContent) {
       // there are no content with same id in playee, then
       // find the descriptive preview fragment in playee;
       // try also firstly the fragment id
-      let pDesFrag = playee.a.fragmentManager.findFragmentById(
+      let pDesFrag = playee.u.fragmentManager.findFragmentById(
         desFrag.fragmentId!
       );
       if (!pDesFrag) {
         // no such fragment with the same id, try the same class
-        pDesFrag = playee.a.fragmentManager.findFragment(
+        pDesFrag = playee.u.fragmentManager.findFragment(
           (f) =>
             f.active &&
             !f.hidden &&
@@ -1004,7 +1004,7 @@ class DualFragment extends Merge {
           'Descriptive preview of playee does not found'
         );
       }
-      let pDesView = playee.a.findViewById(pDesFrag.viewId!);
+      let pDesView = playee.u.findViewById(pDesFrag.viewId!);
       if (!pDesView) {
         throw new NotImplementedError(
           'No view found on the descriptive preview fragment'

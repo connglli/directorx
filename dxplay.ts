@@ -12,7 +12,7 @@ import DxEvent, {
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
 import DxView, { Views } from './ui/dxview.ts';
-import DxActivity from './ui/dxact.ts';
+import DxCompatUi from './ui/dxui.ts';
 import DxSegment from './ui/dxseg.ts';
 import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
 import segUi from './algo/ui_seg.ts';
@@ -165,20 +165,20 @@ class WdgPlayer extends DxPlayer {
     const dev = DxDroid.get().dev;
     if (e.ty == 'tap') {
       const { x, y } = e as DxTapEvent;
-      const [opt] = this.makeViewOptOrThrow(e.a, x, y);
+      const [opt] = this.makeViewOptOrThrow(e.ui, x, y);
       await input.view('tap', opt);
     } else if (e.ty == 'long-tap') {
       const { x, y } = e as DxLongTapEvent;
-      const [opt] = this.makeViewOptOrThrow(e.a, x, y);
+      const [opt] = this.makeViewOptOrThrow(e.ui, x, y);
       await input.view('longtap', opt);
     } else if (e.ty == 'double-tap') {
       const { x, y } = e as DxDoubleTapEvent;
-      const [opt] = this.makeViewOptOrThrow(e.a, x, y);
+      const [opt] = this.makeViewOptOrThrow(e.ui, x, y);
       await input.view('doubletap', opt);
     } else if (e.ty == 'swipe') {
       const { x, y } = e as DxSwipeEvent;
       let { dx, dy } = e as DxSwipeEvent;
-      const [opt, v] = this.makeViewOptOrThrow(e.a, x, y);
+      const [opt, v] = this.makeViewOptOrThrow(e.ui, x, y);
       // adjust so that does not swipe out of screen
       const hCenter = (v.left + v.right) / 2;
       const vCenter = (v.top + v.bottom) / 2;
@@ -203,11 +203,11 @@ class WdgPlayer extends DxPlayer {
   }
 
   private makeViewOptOrThrow(
-    a: DxActivity,
+    u: DxCompatUi,
     x: number,
     y: number
   ): [ViewInputOptions, DxView] {
-    const v = a.findViewByXY(x, y);
+    const v = u.findViewByXY(x, y);
     if (v == null) {
       throw new IllegalStateError(
         `No visible view found at (${x}, ${y}) on rec tree`
@@ -314,7 +314,7 @@ class ResPlayer extends DxPlayer {
       }
       const pattern = new Invisible({
         v,
-        a: pAct,
+        u: pAct,
         d: pDev,
       });
       if (!pattern.match()) {
@@ -333,7 +333,7 @@ class ResPlayer extends DxPlayer {
     // when lookahead fails, segment the ui,
     // find the matched segment, and synthesize
     // the equivalent event sequence
-    const rAct = e.a;
+    const rAct = e.ui;
 
     // segment the ui
     const [, rSegs] = segUi(rAct, rDev);
@@ -356,8 +356,8 @@ class ResPlayer extends DxPlayer {
     const pattern = recBpPat({
       e,
       v,
-      r: { a: rAct, s: rSeg, d: rDev },
-      p: { a: pAct, s: pSeg, d: pDev },
+      r: { u: rAct, s: rSeg, d: rDev },
+      p: { u: pAct, s: pSeg, d: pDev },
     });
     if (pattern == null) {
       throw new NotImplementedError('No pattern is recognized');
@@ -388,9 +388,9 @@ class ResPlayer extends DxPlayer {
     visible = true
   ): Promise<[DxView, N<ViewMap>]> {
     // TODO: what if multiple views with same text
-    const { a, x, y } = e;
+    const { ui, x, y } = e;
     // retrieve the view on recordee
-    const v = a.findViewByXY(x, y);
+    const v = ui.findViewByXY(x, y);
     if (v == null) {
       throw new IllegalStateError(
         `No visible view found on recordee tree at (${x}, ${y})`
@@ -439,7 +439,7 @@ class ResPlayer extends DxPlayer {
     }
   }
 
-  private async top(): Promise<DxActivity> {
+  private async top(): Promise<DxCompatUi> {
     return await DxDroid.get().topActivity(this.app, this.decode, 'dumpsys');
   }
 }

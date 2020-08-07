@@ -1,9 +1,6 @@
 FEATURES:
 ***1. intercept more events, e.g.,
-      1. ui events: dialog/popupwindow (modify DxActivity as DxWindow, 
-         use a proxy to proxy to that, see 
-         https://stackoverflow.com/questions/51865430/typescript-compiler-does-not-know-about-es6-proxy-trap-on-class), 
-         editor, ...
+      1. ui events: popupwindow, ...
       2. system events: orientation, gps, ...
       3. webview
 2. collect crash information by adding states
@@ -16,14 +13,20 @@ FEATURES:
 6. detect text using OCR, and add as a ocr-text attribute to each 
    leaf view
 7. consider rotation, scale, elevation in coordinate of view
-***8. segment similarity: (1) word bag (2) background
-***9. findViewByXY should not return the first, but (1) the first 
-      with text (2) if not 1, then first with desc, (3) the first
 10. support multi-window (activity decor thereby cannot be installed 
     only by a width and height, Views.isVisibleToUser() cannot determine
     only by the dev width and height), maybe a DxWindow or ViewPort
     should be introduced
-12. support spaces and uncontinuous editing in text event
+****12. support spaces and uncontinuous editing in text event
+****13. support text event in non-activity owner
+****14. support top activity to return non-activity
+15. add --specific option to allow custom patterns
+16. adaptively choose player according to dev information (api version,
+resolution, density, orientation, etc.)
+17. introduce type information when segmentation, which will preserve
+the block to the most extend (but affects uiautomator, 'cause there're
+no type information)
+
 
 BUGS:
 1. dxrec does not respond when record Calculator (does not respond only 
@@ -39,22 +42,6 @@ BUGS:
    One will see, at the very start, the above logs appear very quickly; 
    but after sufficient number of operations, the above log does not 
    appear any more
-***3. some views in an app are overlapped, which makes a single (x, y) points 
-      to multiple views;  and some app intercepts events that passes to its 
-      children, which makes the (x, y) points to the parent instead of the 
-      child; Calculator is such an app, the CalculatorPadViewPager intercepts 
-      the tap event that passes to pad_numeric/pad_operator (page1) and 
-      pad_avanced (page2), and if the the tap event occurs on the different 
-      page (mCurItem != tapped_item), it returns true to intercept the event 
-      and hanldes the event itself
-***4. overlapped views also makes ui segmentation fails
-**5. logs of logcat are often lost when the log is too large (even though 
-       we've already pre-truncated the log before logging), this makes the dump
-       incomplete and incorrect
-       + current partially fixed by gzip the view hierarchy then encode as base64,
-         but it can still fails when the output is large enough
-***6. some apps starts as a task with name different from package,
-       e.g., the Contact app
 ***7. some apps (e.g., MS Word) start other apps, and this makes the 
        package name of the activity different from that of the app, and
        task name different

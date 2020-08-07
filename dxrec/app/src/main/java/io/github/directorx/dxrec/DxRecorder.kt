@@ -1,15 +1,16 @@
 package io.github.directorx.dxrec
 
-import android.app.Activity
 import android.app.Application
 import android.text.Spannable
 import android.util.Base64
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.Window
 import android.view.inputmethod.BaseInputConnection
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
+import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.directorx.dxrec.ctx.DecorViewContext
 import io.github.directorx.dxrec.ctx.ViewContext
@@ -64,33 +65,42 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
             })
         }
 
-        DxLogger.catchAndLog { // hook activity touch event
-            val method =
-                Activity::class.java.getMethod("dispatchTouchEvent", MotionEvent::class.java)
-            XposedBridge.hookMethod(method, object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam?) {
-                    val act = param?.thisObject as? Activity ?: return
-                    val evt = param.args[0] as? MotionEvent ?: return
-                    if (act != DxActivityStack.top) {
-                        DxLogger.e("Activity is not top")
+        DxLogger.catchAndLog { // hook window touch event
+            XposedHelpers.findAndHookMethod(
+                "com.android.internal.policy.PhoneWindow",
+                Window::class.java.classLoader,
+                "superDispatchTouchEvent",
+                MotionEvent::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam?) {
+                        val window = param?.thisObject as? Window ?: return
+                        val event = param.args[0] as? MotionEvent ?: return
+                        if (DxActivityStack.top.window == window) {
+                            detector.next(DxActivity(DxActivityStack.top), event)
+                        } else {
+                            detector.next(DxWindow(window), event)
+                        }
                     }
-                    detector.next(act, evt)
-                }
-            })
+                })
         }
 
-        DxLogger.catchAndLog { // hook activity key event
-            val method = Activity::class.java.getMethod("dispatchKeyEvent", KeyEvent::class.java)
-            XposedBridge.hookMethod(method, object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam?) {
-                    val act = param?.thisObject as? Activity ?: return
-                    val evt = param.args[0] as? KeyEvent ?: return
-                    if (act != DxActivityStack.top) {
-                        DxLogger.e("Activity is not top")
+        DxLogger.catchAndLog { // hook window key event
+            XposedHelpers.findAndHookMethod(
+                "com.android.internal.policy.PhoneWindow",
+                Window::class.java.classLoader,
+                "superDispatchKeyEvent",
+                KeyEvent::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam?) {
+                        val window = param?.thisObject as? Window ?: return
+                        val event = param.args[0] as? KeyEvent ?: return
+                        if (DxActivityStack.top.window == window) {
+                            detector.next(DxActivity(DxActivityStack.top), event)
+                        } else {
+                            detector.next(DxWindow(window), event)
+                        }
                     }
-                    detector.next(act, evt)
-                }
-            })
+                })
         }
 
         // TODO support spaces in text, and incontinuous editing
@@ -108,7 +118,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         return
                     }
                     val txt = param.args[0] as? CharSequence ?: return
-                    detector.next(DxActivityStack.top, newEncodedTextEvent(txt, encode))
+                    detector.next(DxActivity(DxActivityStack.top), newEncodedTextEvent(txt, encode))
                 }
             })
         }
@@ -125,7 +135,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         return
                     }
                     val txt = param.args[0] as? CharSequence ?: return
-                    detector.next(DxActivityStack.top, newEncodedTextEvent(txt, encode))
+                    detector.next(DxActivity(DxActivityStack.top), newEncodedTextEvent(txt, encode))
                 }
             })
         }
@@ -141,7 +151,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         return
                     }
                     val txt = param.args[0] as? Spannable ?: return
-                    detector.next(DxActivityStack.top, newEncodedTextEvent(txt, encode))
+                    detector.next(DxActivity(DxActivityStack.top), newEncodedTextEvent(txt, encode))
                 }
             })
         }
@@ -154,8 +164,8 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                     if (param == null) {
                         return
                     }
-                    val evt = param.args[0] as? KeyEvent ?: return
-                    detector.next(DxActivityStack.top, evt)
+                    val event = param.args[0] as? KeyEvent ?: return
+                    detector.next(DxActivity(DxActivityStack.top), event)
                 }
             })
         }
@@ -168,21 +178,21 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
     // Considering each event starts very from a down event, and
     // onDown() is run synchronously, we dump the hierarchy each time
     // a down is detected
-    override fun onDown(down: MotionEvent, act: Activity) {
-        broker.addActivity(act)
+    override fun onDown(down: MotionEvent, owner: DxViewOwner) {
+        broker.addOwner(owner)
     }
 
-    override fun onTap(down: MotionEvent, act: Activity) {
+    override fun onTap(down: MotionEvent, owner: DxViewOwner) {
         broker.addEvent(DxTapEvent(down.x, down.y, down.downTime))
         broker.commit()
     }
 
-    override fun onLongTap(down: MotionEvent, act: Activity) {
+    override fun onLongTap(down: MotionEvent, owner: DxViewOwner) {
         broker.addEvent(DxLongTapEvent(down.x, down.y, down.downTime))
         broker.commit()
     }
 
-    override fun onDoubleTap(down: MotionEvent, act: Activity) {
+    override fun onDoubleTap(down: MotionEvent, owner: DxViewOwner) {
         broker.addEvent(DxDoubleTapEvent(down.x, down.y, down.downTime))
         broker.commit()
     }
@@ -192,43 +202,43 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         move: MotionEvent,
         deltaX: Float,
         deltaY: Float,
-        act: Activity
+        owner: DxViewOwner
     ) {
         val last = broker.curr
         // pending to dump until the corresponding UP event happens
-        val evt = if (last == null || last.evt !is DxSwipeEvent || last.evt.t0 != down.downTime) {
+        val evt = if (last == null || last.event !is DxSwipeEvent || last.event.t0 != down.downTime) {
             DxSwipeEvent(down.x, down.y, deltaX, deltaY, down.downTime, move.eventTime)
         } else {
             DxSwipeEvent(
                 down.x, down.y,
-                last.evt.dx + deltaX,
-                last.evt.dy + deltaY,
+                last.event.dx + deltaX,
+                last.event.dy + deltaY,
                 down.downTime, move.eventTime)
         }
         broker.addEvent(evt)
     }
 
-    override fun onUp(up: MotionEvent, act: Activity) {
+    override fun onUp(up: MotionEvent, owner: DxViewOwner) {
         val last = broker.curr ?: return
         // dump the pending swipe event
-        if (last.evt is DxSwipeEvent) {
+        if (last.event is DxSwipeEvent) {
             broker.commit()
         }
     }
 
-    override fun onKey(down: KeyEvent, act: Activity) {
-        broker.addPair(act, DxKeyEvent(down.keyCode, KeyEvent.keyCodeToString(down.keyCode), down.downTime))
+    override fun onKey(down: KeyEvent, owner: DxViewOwner) {
+        broker.addPair(owner, DxKeyEvent(down.keyCode, KeyEvent.keyCodeToString(down.keyCode), down.downTime))
         broker.commit()
     }
 
-    override fun onText(down: TextEvent, act: Activity) {
+    override fun onText(down: TextEvent, owner: DxViewOwner) {
         val last = broker.curr
         // pending to dump until other event happens
-        if (last == null || last.evt !is DxTextEvent) {
+        if (last == null || last.event !is DxTextEvent) {
             val evt = DxTextEvent(down.text, down.downTime)
-            broker.addPair(act, evt)
+            broker.addPair(owner, evt)
         } else {
-            val evt = DxTextEvent(down.text, last.evt.t)
+            val evt = DxTextEvent(down.text, last.event.t)
             broker.addEvent(evt)
         }
     }

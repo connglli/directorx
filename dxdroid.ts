@@ -1,6 +1,6 @@
 import DxAdb, { DevInfo } from './dxadb.ts';
 import DxYota, { ViewInputOptions, SelectOptions, ViewMap } from './dxyota.ts';
-import DxActivity from './ui/dxact.ts';
+import DxCompatUi from './ui/dxui.ts';
 
 export { DevInfo, ViewInputOptions, SelectOptions, ViewMap };
 
@@ -39,7 +39,9 @@ export default class DxDroid {
     pkg: string,
     decoding = true,
     tool: 'uiautomator' | 'dumpsys' = 'dumpsys'
-  ): Promise<DxActivity> {
+  ): Promise<DxCompatUi> {
+    // TODO: recognize window count, and use uiautomator
+    // if there are multiple windows
     if (tool == 'dumpsys') {
       return await this.adb_.topActivity(pkg, decoding, this.dev);
     } else {

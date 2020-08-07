@@ -1,4 +1,4 @@
-import DxActivity from './ui/dxact.ts';
+import DxCompatUi from './ui/dxui.ts';
 import Stack from './utils/stack.ts';
 
 export type DxEventType =
@@ -11,10 +11,10 @@ export type DxEventType =
 
 export default DxEvent;
 interface DxEvent {
-  readonly a: DxActivity;
+  readonly ui: DxCompatUi;
   readonly ty: DxEventType;
   readonly t: number;
-  copy(a: DxActivity): DxEvent;
+  copy(ui: DxCompatUi): DxEvent;
 }
 
 export interface DxXYEvent extends DxEvent {
@@ -29,13 +29,13 @@ export function isXYEvent(e: DxEvent): e is DxXYEvent {
 export class DxTapEvent implements DxXYEvent {
   public readonly ty = 'tap';
   constructor(
-    public readonly a: DxActivity,
+    public readonly ui: DxCompatUi,
     public readonly x: number,
     public readonly y: number,
     public readonly t: number
   ) {}
-  copy(a: DxActivity = this.a): DxEvent {
-    return new DxTapEvent(a, this.x, this.y, this.t);
+  copy(ui: DxCompatUi = this.ui): DxEvent {
+    return new DxTapEvent(ui, this.x, this.y, this.t);
   }
   toString(): string {
     return `tap (${this.x}, ${this.y})`;
@@ -45,13 +45,13 @@ export class DxTapEvent implements DxXYEvent {
 export class DxLongTapEvent implements DxXYEvent {
   public readonly ty = 'long-tap';
   constructor(
-    public readonly a: DxActivity,
+    public readonly ui: DxCompatUi,
     public readonly x: number,
     public readonly y: number,
     public readonly t: number
   ) {}
-  copy(a: DxActivity = this.a): DxEvent {
-    return new DxLongTapEvent(a, this.x, this.y, this.t);
+  copy(ui: DxCompatUi = this.ui): DxEvent {
+    return new DxLongTapEvent(ui, this.x, this.y, this.t);
   }
   toString(): string {
     return `long-tap (${this.x}, ${this.y})`;
@@ -61,13 +61,13 @@ export class DxLongTapEvent implements DxXYEvent {
 export class DxDoubleTapEvent implements DxXYEvent {
   public readonly ty = 'double-tap';
   constructor(
-    public readonly a: DxActivity,
+    public readonly ui: DxCompatUi,
     public readonly x: number,
     public readonly y: number,
     public readonly t: number
   ) {}
-  copy(a: DxActivity = this.a): DxEvent {
-    return new DxDoubleTapEvent(a, this.x, this.y, this.t);
+  copy(ui: DxCompatUi = this.ui): DxEvent {
+    return new DxDoubleTapEvent(ui, this.x, this.y, this.t);
   }
   toString(): string {
     return `double-tap (${this.x}, ${this.y})`;
@@ -78,7 +78,7 @@ export class DxSwipeEvent implements DxXYEvent {
   public readonly ty = 'swipe';
   public readonly t: number;
   constructor(
-    public readonly a: DxActivity,
+    public readonly ui: DxCompatUi,
     public readonly x: number,
     public readonly y: number,
     public readonly dx: number,
@@ -88,9 +88,9 @@ export class DxSwipeEvent implements DxXYEvent {
   ) {
     this.t = t0;
   }
-  copy(a: DxActivity = this.a): DxEvent {
+  copy(ui: DxCompatUi = this.ui): DxEvent {
     return new DxSwipeEvent(
-      a,
+      ui,
       this.x,
       this.y,
       this.dx,
@@ -107,13 +107,13 @@ export class DxSwipeEvent implements DxXYEvent {
 export class DxKeyEvent implements DxEvent {
   public readonly ty = 'key';
   constructor(
-    public readonly a: DxActivity,
+    public readonly ui: DxCompatUi,
     public readonly c: number,
     public readonly k: string,
     public readonly t: number
   ) {}
-  copy(a: DxActivity = this.a): DxEvent {
-    return new DxKeyEvent(a, this.c, this.k, this.t);
+  copy(ui: DxCompatUi = this.ui): DxEvent {
+    return new DxKeyEvent(ui, this.c, this.k, this.t);
   }
   toString(): string {
     return `key ${this.k}`;
@@ -123,12 +123,12 @@ export class DxKeyEvent implements DxEvent {
 export class DxTextEvent implements DxEvent {
   public readonly ty = 'text';
   constructor(
-    public readonly a: DxActivity,
+    public readonly ui: DxCompatUi,
     public readonly x: string,
     public readonly t: number
   ) {}
-  copy(a: DxActivity = this.a): DxEvent {
-    return new DxTextEvent(a, this.x, this.t);
+  copy(ui: DxCompatUi = this.ui): DxEvent {
+    return new DxTextEvent(ui, this.x, this.t);
   }
   toString(): string {
     return `text ${this.x}`;

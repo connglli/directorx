@@ -1,6 +1,6 @@
 import DxAdb, { AdbResult, AdbError } from './dxadb.ts';
 import DxView, { ViewFactory, ViewType, ViewProps } from './ui/dxview.ts';
-import DxActivity from './ui/dxact.ts';
+import DxCompatUi from './ui/dxui.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
 import { doc2freq, freq2vec, similarity } from './utils/vecutil.ts';
@@ -201,15 +201,15 @@ export class ActivityYotaBuilder {
     return this;
   }
 
-  build(): DxActivity {
-    const a = new DxActivity(this.app, this.name);
+  build(): DxCompatUi {
+    const a = new DxCompatUi(this.app, this.name);
     const obj = JSON.parse(this.dump);
     const vhm = obj['hierarchy'] as DumpViewHierarchyProps;
     this.buildView(vhm, a);
     return a;
   }
 
-  private buildView(vhp: DumpViewHierarchyProps, a: DxActivity): DxView {
+  private buildView(vhp: DumpViewHierarchyProps, a: DxCompatUi): DxView {
     let v: DxView;
     if (a.decorView == null) {
       const decor = vhp;
@@ -479,7 +479,7 @@ export default class DxYota {
     );
   }
 
-  async topActivity(pkg: string, dev: DevInfo): Promise<DxActivity> {
+  async topActivity(pkg: string, dev: DevInfo): Promise<DxCompatUi> {
     const info = await this.info('topactivity');
     const tokens = info.split('/');
     if (tokens[1].startsWith('.')) {

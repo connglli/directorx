@@ -10,6 +10,7 @@ import android.os.SystemClock
 import android.util.SparseArray
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import androidx.core.view.iterator
 import java.io.*
 import java.util.*
@@ -18,7 +19,7 @@ private const val PREFIX = " "
 
 fun Activity.dump(buf: StringBuffer) {
     // dump the activity like what dumpsys does
-    // ACTIVITY com.microsoft.todos/.ui.TodoMainActivity 366132a pid=2954
+    // ACTIVITY package/class hash pid=2954
     buf.append("  ACTIVITY ")
         .append(this.packageName)
         .append("/")
@@ -31,7 +32,7 @@ fun Activity.dump(buf: StringBuffer) {
         .append("\n")
     ByteArrayOutputStream(4096).apply {
         val writer = PrintWriter(this)
-        dump(PREFIX.repeat(4), null, writer, null)
+        dump("    ", null, writer, null)
         writer.flush()
         buf.append(this.toString(Charsets.UTF_8.name()))
         close()
@@ -88,12 +89,28 @@ fun Activity.dump(buf: StringBuffer) {
     }
 }
 
+fun Window.dump(buf: StringBuffer) {
+    // WINDOW package/class hash pid=2954
+    buf.append("  WINDOW")
+        .append(" ${this.context.packageName}/${this.javaClass.name}")
+        .append(" ")
+        .append(Integer.toHexString(System.identityHashCode(this)))
+        .append(" ")
+        .append("pid=")
+        .append(Process.myPid())
+        .append("\n")
+        .append("\n")
+    buf.append("    View Hierarchy:")
+        .append("\n")
+    this.decorView.dump(buf)
+}
+
 fun View.dump(buf: StringBuffer) {
-    dumpInner(0, buf)
+    dumpInner(3, buf)
 }
 
 private fun View.dumpInner(repeat: Int, buf: StringBuffer) {
-    buf.append(PREFIX.repeat(repeat)).append(this).append("\n")
+    buf.append("  ".repeat(repeat)).append(this).append("\n")
     if (this is ViewGroup) {
         for (v in this) {
             v.dumpInner(repeat+1, buf)

@@ -1,5 +1,5 @@
 import DxView, { Views, ViewFinder } from '../ui/dxview.ts';
-import DxActivity from '../ui/dxact.ts';
+import DxCompatUi from '../ui/dxui.ts';
 import DxSegment, {
   Segments,
   DxHVESegSep,
@@ -564,7 +564,7 @@ function segSeg(seg: DxSegment, dev: DevInfo): N<DxShrinkSegSep | DxHVESegSep> {
 /** Segment the Ui, return the root segment and all accepted segments,
  * which is equivalent of Segments.acceptsOf(root) */
 export default function segUi(
-  a: DxActivity,
+  a: DxCompatUi,
   dev: DevInfo
 ): [DxSegment, DxSegment[]] {
   // firstly, we segment the ui but reserve the low-level

@@ -153,7 +153,7 @@ export default class DxView<T extends ExtraProps = ExtraProps>
   // each view. Views at each level are not overlapped, but
   // views at adjacent levels are overlapped at least at one
   // view. To construct the drawing level, invoke method
-  // DxActivity#buildDrawingLevel()
+  // DxCompatUi#buildDrawingLevel()
   public drawingLevel: number = -1;
 
   protected props: Required<BaseProps>;

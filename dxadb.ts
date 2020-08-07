@@ -6,11 +6,7 @@ import {
   LogcatBufferSize,
 } from './base/adb.ts';
 import DxView, { ViewFlags, ViewType, ViewFactory } from './ui/dxview.ts';
-import DxActivity, {
-  DxFragment,
-  FragmentOwner,
-  FragmentProps,
-} from './ui/dxact.ts';
+import DxCompatUi, { FragmentOwner, FragmentProps } from './ui/dxui.ts';
 import * as base64 from './utils/base64.ts';
 import { IllegalStateError } from './utils/error.ts';
 
@@ -151,7 +147,15 @@ export class DumpSysActivityInfo {
       }
     }
     if (localActivityStartLine == -1) {
-      throw new IllegalStateError('No Local Activity found');
+      // no LocalFragment Activity found
+      this.localActivity_ = [this.header_, this.header_];
+      this.fragments_ = [
+        this.localActivity_[0],
+        this.localActivity_[0],
+        this.localActivity_[0],
+        this.localActivity_[0],
+      ];
+      return;
     }
     let localActivityLinePrefix = '    ';
     let activeFragmentsStartLine = -1;
@@ -420,7 +424,7 @@ export class DumpSysActivityInfo {
 // FIX: some apps/devices often output non-standard attributes
 // for example aid=1073741824 following resource-id
 /** See DecorView#toString() */
-const PAT_AV_DECOR = /DecorView@(?<hash>[a-fA-F0-9]+)\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
+const PAT_AV_DECOR = /DecorView@(?<hash>[a-fA-F0-9]+)\[.*?\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
 /** See View#toString() */
 const PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-type=(?<type>[\w.]+)\sdx-scroll=(?<scroll>[\w.]{4})\sdx-e=(?<e>[+-]?[\d.]+)\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-shown=(?<shown>true|false)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-tag="(?<tag>.*?)"\sdx-tip="(?<tip>.*?)"\sdx-hint="(?<hint>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\sdx-fg=(?<fg>[#\w.]+)\sdx-im-acc=(?<acc>true|false)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+)\sdx-tab-widget=(?<ttabs>[a-fA-F0-9]+)\sdx-tab-content=(?<tcont>[a-fA-F0-9]+))?\}/;
 /** See Fragment#toString() */
@@ -492,15 +496,15 @@ export class ActivityDumpSysBuilder {
     return this;
   }
 
-  build(): DxActivity {
+  build(): DxCompatUi {
     this.checkRequiredOrThrow();
-    const act = new DxActivity(this.app, this.name);
-    this.buildView(act);
-    this.buildFragments(act, act);
-    return act;
+    const ui = new DxCompatUi(this.app, this.name);
+    this.buildView(ui);
+    this.buildFragments(ui, ui);
+    return ui;
   }
 
-  private buildView(act: DxActivity) {
+  private buildView(ui: DxCompatUi) {
     let cview: DxView | null = null; // current view
     let cdep = -1; // current depth
     // build views one by one
@@ -510,11 +514,11 @@ export class ActivityDumpSysBuilder {
         continue;
       }
       // build and update current view/depth
-      [cview, cdep] = this.doBuildView(vhl, act, cview, cdep);
+      [cview, cdep] = this.doBuildView(vhl, ui, cview, cdep);
     }
   }
 
-  private buildFragments(act: DxActivity, owner: FragmentOwner) {
+  private buildFragments(ui: DxCompatUi, owner: FragmentOwner) {
     // build added fragments
     const added = [...this.addedFragments, ...this.addedSupportFragments];
     // each added takes up a single line
@@ -585,12 +589,12 @@ export class ActivityDumpSysBuilder {
 
   private doBuildView(
     line: string,
-    act: DxActivity,
+    ui: DxCompatUi,
     cview: DxView | null,
     cdep: number
   ): [DxView, number] {
     // check and install decor if necessary
-    if (!act.decorView || !cview) {
+    if (!ui.decorView || !cview) {
       const res = PAT_AV_DECOR.exec(line);
       if (!res || !res.groups) {
         throw new IllegalStateError('Expect DecorView');
@@ -603,7 +607,7 @@ export class ActivityDumpSysBuilder {
         );
       }
 
-      act.installDecor(
+      ui.installDecor(
         hash,
         this.width,
         this.height,
@@ -611,7 +615,7 @@ export class ActivityDumpSysBuilder {
         sBgColor == '.' ? null : Number(sBgColor)
       );
 
-      return [act.decorView!, 0]; // eslint-disable-line
+      return [ui.decorView!, 0]; // eslint-disable-line
     }
 
     // parse view line by line
@@ -839,7 +843,7 @@ export function buildActivityFromDumpSysInfo(
   info: DumpSysActivityInfo,
   dev: DevInfo,
   decoding: boolean = true
-): DxActivity {
+): DxCompatUi {
   const vhIndex = info.viewHierarchy;
   const frIndex = info.fragments;
   const sfrIndex = info.supportFragments;
@@ -863,7 +867,7 @@ export function buildActivityFromDumpSysInfo(
     .get()
     .slice(sfrIndex[2], sfrIndex[3])
     .map((s) => s.substring(6));
-  const act = new ActivityDumpSysBuilder(info.pkg, info.name)
+  const ui = new ActivityDumpSysBuilder(info.pkg, info.name)
     .withHeight(dev.height)
     .withWidth(dev.width)
     .withDecoding(decoding)
@@ -874,8 +878,8 @@ export function buildActivityFromDumpSysInfo(
     .withActiveSupportFragments(activeSupportFragments)
     .withAddedSupportFragments(addedSupportFragments)
     .build();
-  act.buildDrawingLevelLists();
-  return act;
+  ui.buildDrawingLevelLists();
+  return ui;
 }
 
 export default class DxAdb {
@@ -925,7 +929,7 @@ export default class DxAdb {
     pkg: string,
     decoding: boolean,
     dev: DevInfo
-  ): Promise<DxActivity> {
+  ): Promise<DxCompatUi> {
     const info = await this.dumpTopActivity(pkg);
     return buildActivityFromDumpSysInfo(info, dev, decoding);
   }

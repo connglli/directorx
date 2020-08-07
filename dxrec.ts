@@ -14,7 +14,7 @@ import DxEvent, {
   DxSwipeEvent,
   DxTextEvent,
 } from './dxevent.ts';
-import DxActivity from './ui/dxact.ts';
+import DxCompatUi from './ui/dxui.ts';
 import DxLog from './dxlog.ts';
 import * as base64 from './utils/base64.ts';
 import * as gzip from './utils/gzip.ts';
@@ -22,22 +22,18 @@ import { IllegalStateError } from './utils/error.ts';
 
 class DxRecParser {
   private static readonly PAT_DROID = /--------- beginning of (?<type>\w+)/;
-  // FIX: some apps/devices often output non-standard attributes
-  // for example aid=1073741824 following resource-id
-  private static readonly PAT_AV_DECOR = /DecorView@[a-fA-F0-9]+\[\w+\]\{dx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)\}/;
-  private static readonly PAT_AV_VIEW = /(?<dep>\s*)(?<cls>[\w$.]+)\{(?<hash>[a-fA-F0-9]+)\s(?<flags>[\w.]{9})\s(?<pflags>[\w.]{8})\s(?<left>[+-]?\d+),(?<top>[+-]?\d+)-(?<right>[+-]?\d+),(?<bottom>[+-]?\d+)(?:\s#(?<id>[a-fA-F0-9]+))?(?:\s(?<rpkg>[\w.]+):(?<rtype>\w+)\/(?<rentry>\w+).*?)?\sdx-tx=(?<tx>[+-]?[\d.]+)\sdx-ty=(?<ty>[+-]?[\d.]+)\sdx-tz=(?<tz>[+-]?[\d.]+)\sdx-sx=(?<sx>[+-]?[\d.]+)\sdx-sy=(?<sy>[+-]?[\d.]+)\sdx-desc="(?<desc>.*?)"\sdx-text="(?<text>.*?)"\sdx-bg-class=(?<bgclass>[\w.]+)\sdx-bg-color=(?<bgcolor>[+-]?[\d.]+)(:?\sdx-pgr-curr=(?<pcurr>[+-]?\d+))?(:?\sdx-tab-curr=(?<tcurr>[+-]?\d+))?\}/;
   private static readonly PAT_AV_ENCODED_LINE = /[a-zA-Z0-9+/=]{1,76}/;
 
   private static readonly STATE_NEV = 0; // next is event
-  private static readonly STATE_NAV = 1; // next is activity
-  private static readonly STATE_IAV = 2; // next is activity entry
+  private static readonly STATE_NUI = 1; // next is ui
+  private static readonly STATE_IUI = 2; // next is ui entry
 
   private curr: {
     name: string;
     entries: string;
-    act: DxActivity | null;
-  } = { name: '', entries: '', act: null };
-  private state = DxRecParser.STATE_NAV;
+    ui: DxCompatUi | null;
+  } = { name: '', entries: '', ui: null };
+  private state = DxRecParser.STATE_NUI;
 
   constructor(
     private readonly app: string,
@@ -56,7 +52,7 @@ class DxRecParser {
     switch (this.state) {
       case DxRecParser.STATE_NEV: {
         if (
-          this.curr.act == null ||
+          this.curr.ui == null ||
           this.curr.name.length == 0 ||
           this.curr.entries.length == 0
         ) {
@@ -64,42 +60,42 @@ class DxRecParser {
         }
         const e = this.parseEvent(line);
         this.packer.append(e); // pack it
-        this.state = DxRecParser.STATE_NAV;
-        // reset curr activity info
-        this.curr = { name: '', entries: '', act: null };
+        this.state = DxRecParser.STATE_NUI;
+        // reset curr ui info
+        this.curr = { name: '', entries: '', ui: null };
         break;
       }
 
-      case DxRecParser.STATE_NAV: {
+      case DxRecParser.STATE_NUI: {
         if (
-          this.curr.act ||
+          this.curr.ui ||
           this.curr.name.length != 0 ||
           this.curr.entries.length != 0
         ) {
           throw new IllegalStateError('Expect this.curr.a to be null');
         }
-        const name = this.parseAvStart(line);
-        this.state = DxRecParser.STATE_IAV;
-        // update activity name, reset entries and act
-        this.curr = { name, entries: '', act: null };
+        const name = this.parseUiStart(line);
+        this.state = DxRecParser.STATE_IUI;
+        // update ui name, reset entries and ui
+        this.curr = { name, entries: '', ui: null };
         break;
       }
 
-      case DxRecParser.STATE_IAV: {
+      case DxRecParser.STATE_IUI: {
         if (this.curr.name.length == 0) {
           throw new IllegalStateError('Expect this.curr.a to be non-null');
         }
-        // no longer activity entry
-        const act = this.parseAvEnd(line);
-        if (act != null) {
+        // no longer ui entry
+        const ui = this.parseUiEnd(line);
+        if (ui != null) {
           this.state = DxRecParser.STATE_NEV;
-          // update curr activity
-          this.curr.act = act;
+          // update curr ui
+          this.curr.ui = ui;
         }
-        // parse encoded activity entries
+        // parse encoded ui entries
         else {
-          const nextEntry = this.parseAvEncoded(line);
-          // update curr activity entries
+          const nextEntry = this.parseUiEncoded(line);
+          // update curr ui entries
           this.curr.entries += nextEntry;
         }
         break;
@@ -129,36 +125,36 @@ class DxRecParser {
 
     switch (type) {
       case 'TAP':
-        // TAP act t x y
+        // TAP ui t x y
         return new DxTapEvent(
-          this.curr.act!, // eslint-disable-line
+          this.curr.ui!, // eslint-disable-line
           Number(args[2]),
           Number(args[3]),
           Number(args[1])
         );
 
       case 'LONG_TAP':
-        // LONG_TAP act t x y
+        // LONG_TAP ui t x y
         return new DxLongTapEvent(
-          this.curr.act!, // eslint-disable-line
+          this.curr.ui!, // eslint-disable-line
           Number(args[2]),
           Number(args[3]),
           Number(args[1])
         );
 
       case 'DOUBLE_TAP':
-        // LONG_TAP act t x y
+        // LONG_TAP ui t x y
         return new DxDoubleTapEvent(
-          this.curr.act!, // eslint-disable-line
+          this.curr.ui!, // eslint-disable-line
           Number(args[2]),
           Number(args[3]),
           Number(args[1])
         );
 
       case 'SWIPE':
-        // SWIPE act t0 x y dx dy t1
+        // SWIPE ui t0 x y dx dy t1
         return new DxSwipeEvent(
-          this.curr.act!, // eslint-disable-line
+          this.curr.ui!, // eslint-disable-line
           Number(args[2]),
           Number(args[3]),
           Number(args[4]),
@@ -168,18 +164,18 @@ class DxRecParser {
         );
 
       case 'KEY':
-        // KEY act t c k
+        // KEY ui t c k
         return new DxKeyEvent(
-          this.curr.act!, // eslint-disable-line
+          this.curr.ui!, // eslint-disable-line
           Number(args[2]),
           args[3],
           Number(args[1])
         );
 
       case 'TEXT':
-        // TEXT act t x
+        // TEXT ui t x
         return new DxTextEvent(
-          this.curr.act!,
+          this.curr.ui!,
           base64.decode(args[2]),
           Number(args[1])
         );
@@ -189,26 +185,26 @@ class DxRecParser {
     }
   }
 
-  private parseAvStart(line: string): string {
-    // ACTIVITY_BEGIN act
-    const [verb, act] = line.split(/\s+/);
-    if (verb != 'ACTIVITY_BEGIN') {
-      throw new IllegalStateError(`Expected ACTIVITY_BEGIN, got ${verb}`);
+  private parseUiStart(line: string): string {
+    // GUI_BEGIN ui
+    const [verb, ui] = line.split(/\s+/);
+    if (verb != 'GUI_BEGIN') {
+      throw new IllegalStateError(`Expected GUI_BEGIN, got ${verb}`);
     }
-    return act;
+    return ui;
   }
 
-  private parseAvEnd(line: string): DxActivity | null {
-    // ACTIVITY_END act
-    const [verb, act] = line.split(/\s+/);
-    if (verb != 'ACTIVITY_END') {
+  private parseUiEnd(line: string): DxCompatUi | null {
+    // GUI_END ui
+    const [verb, ui] = line.split(/\s+/);
+    if (verb != 'GUI_END') {
       return null;
     }
 
     // build the view tree
     const currName = this.curr.name;
-    if (act != currName) {
-      throw new IllegalStateError(`Expect ${currName}, got ${act}`);
+    if (ui != currName) {
+      throw new IllegalStateError(`Expect ${currName}, got ${ui}`);
     }
 
     // decode the encoded entries and parse line by line
@@ -216,9 +212,16 @@ class DxRecParser {
     // ungzip the decoded entries
     const entries = gzip.unzip(new Uint8Array(decoded)).split('\n');
 
-    // entries are dumpsys activity information, build the
-    // activity from this dumpsys information
-    return buildActivityFromDumpSysInfo(
+    // entries are dumpsys ui information, build the
+    // ui from this dumpsys information, let's reuse
+    // activity builder to build the compat ui that
+    // are not activity (maybe dialog, popupwindow)
+    let isActivity = true;
+    if (entries[0].startsWith('  WINDOW')) {
+      entries[0] = '  ACTIVITY' + entries[0].slice('  WINDOW'.length);
+      isActivity = false;
+    }
+    const compatUi = buildActivityFromDumpSysInfo(
       new DumpSysActivityInfo(
         this.app,
         entries.map((e) => e.slice(2))
@@ -226,9 +229,11 @@ class DxRecParser {
       this.dev,
       this.decode
     );
+    compatUi.isActivity = isActivity;
+    return compatUi;
   }
 
-  private parseAvEncoded(line: string): string {
+  private parseUiEncoded(line: string): string {
     // a base64 encoded entry
     if (DxRecParser.PAT_AV_ENCODED_LINE.test(line)) {
       return line;

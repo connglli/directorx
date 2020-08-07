@@ -16,32 +16,31 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
     }
 
     private fun doDump(item: DxBroker.Item) {
-        val (act, evt, dump) = item
+        val (owner, event, dump) = item
         val eDump = gzipThenBase64(dump)
 
-        // ACTIVITY act
-        DxLogger.i("ACTIVITY_BEGIN $act")
+        DxLogger.i("GUI_BEGIN $owner")
         DxLogger.i(eDump)
-        DxLogger.i("ACTIVITY_END $act")
-        when (evt) {
+        DxLogger.i("GUI_END $owner")
+        when (event) {
             // TAP act down_time x y
             is DxTapEvent ->
-                DxLogger.i("TAP $act ${evt.t} ${evt.x} ${evt.y}")
+                DxLogger.i("TAP $owner ${event.t} ${event.x} ${event.y}")
             // LONG_TAP act down_time x y
             is DxLongTapEvent ->
-                DxLogger.i("LONG_TAP $act ${evt.t} ${evt.x} ${evt.y}")
+                DxLogger.i("LONG_TAP $owner ${event.t} ${event.x} ${event.y}")
             // DOUBLE_TAP act down_time x y
             is DxDoubleTapEvent ->
-                DxLogger.i("DOUBLE_TAP $act ${evt.t} ${evt.x} ${evt.y}")
+                DxLogger.i("DOUBLE_TAP $owner ${event.t} ${event.x} ${event.y}")
             // SWIPE act down_time x y delta_x delta_y up_time
             is DxSwipeEvent ->
-                DxLogger.i("SWIPE $act ${evt.t0} ${evt.x} ${evt.y} ${evt.dx} ${evt.dy} ${evt.t1}")
+                DxLogger.i("SWIPE $owner ${event.t0} ${event.x} ${event.y} ${event.dx} ${event.dy} ${event.t1}")
             // KEY act down_time code key
             is DxKeyEvent ->
-                DxLogger.i("KEY $act ${evt.t} ${evt.c} ${evt.k}")
+                DxLogger.i("KEY $owner ${event.t} ${event.c} ${event.k}")
             // TEXT act down_time text
             is DxTextEvent ->
-                DxLogger.i("TEXT $act ${evt.t} ${evt.x}")
+                DxLogger.i("TEXT $owner ${event.t} ${event.x}")
         }
     }
 

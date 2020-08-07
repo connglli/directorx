@@ -1,7 +1,5 @@
 package io.github.directorx.dxrec
 
-import android.app.Activity
-import android.os.SystemClock
 import android.view.GestureDetector
 import android.view.InputEvent
 import android.view.KeyEvent
@@ -14,25 +12,25 @@ class EvDetector(
 ) {
 
     open class Listener {
-        open fun onDown(down: MotionEvent, act: Activity) = Unit
-        open fun onUp(up: MotionEvent, act: Activity) = Unit
-        open fun onTap(down: MotionEvent, act: Activity) = Unit
-        open fun onLongTap(down: MotionEvent, act: Activity) = Unit
-        open fun onDoubleTap(down: MotionEvent, act: Activity) = Unit
+        open fun onDown(down: MotionEvent, owner: DxViewOwner) = Unit
+        open fun onUp(up: MotionEvent, owner: DxViewOwner) = Unit
+        open fun onTap(down: MotionEvent, owner: DxViewOwner) = Unit
+        open fun onLongTap(down: MotionEvent, owner: DxViewOwner) = Unit
+        open fun onDoubleTap(down: MotionEvent, owner: DxViewOwner) = Unit
         open fun onSwipeMove(
             down: MotionEvent, move: MotionEvent,
             deltaX: Float, deltaY: Float,
-            act: Activity
+            owner: DxViewOwner
         ) = Unit
 
-        open fun onKey(down: KeyEvent, act: Activity) = Unit
-        open fun onText(down: TextEvent, act: Activity) = Unit
+        open fun onKey(down: KeyEvent, owner: DxViewOwner) = Unit
+        open fun onText(down: TextEvent, owner: DxViewOwner) = Unit
     }
 
-    private lateinit var activity: Activity
+    private lateinit var owner: DxViewOwner
     private val detector: GestureDetector = GestureDetector(null, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(down: MotionEvent): Boolean {
-            listener.onDown(down, activity)
+            listener.onDown(down, owner)
             return false
         }
 
@@ -41,7 +39,7 @@ class EvDetector(
         // is invoked in the handler thread of GestureDetector instead
         // of the thread which invokes GestureDetector#onTouchEvent()
         override fun onSingleTapConfirmed(down: MotionEvent): Boolean {
-            listener.onTap(down, activity)
+            listener.onTap(down, owner)
             return false
         }
 
@@ -56,25 +54,25 @@ class EvDetector(
         // GestureDetector instead of the thread which invokes
         // GestureDetector#onTouchEvent()
         override fun onLongPress(down: MotionEvent) {
-            listener.onLongTap(down, activity)
+            listener.onLongTap(down, owner)
         }
 
         override fun onScroll(
             down: MotionEvent, move: MotionEvent,
             deltaX: Float, deltaY: Float // delta since last call to onScroll
         ): Boolean {
-            listener.onSwipeMove(down, move, -deltaX, -deltaY, activity)
+            listener.onSwipeMove(down, move, -deltaX, -deltaY, owner)
             return false
         }
 
         override fun onDoubleTap(down: MotionEvent): Boolean {
-            listener.onDoubleTap(down, activity)
+            listener.onDoubleTap(down, owner)
             return false
         }
     })
 
-    fun next(act: Activity, evt: InputEvent) {
-        updateActivity(act)
+    fun next(owner: DxViewOwner, evt: InputEvent) {
+        updateOwner(owner)
         when (evt) {
             is MotionEvent -> nextMotion(evt)
             is KeyEvent -> nextKey(evt)
@@ -82,31 +80,31 @@ class EvDetector(
         }
     }
 
-    fun next(act: Activity, evt: TextEvent) {
-        updateActivity(act)
+    fun next(owner: DxViewOwner, evt: TextEvent) {
+        updateOwner(owner)
         nextText(evt)
     }
 
     private fun nextMotion(event: MotionEvent) {
         if (event.action == MotionEvent.ACTION_UP) {
-            listener.onUp(event, activity)
+            listener.onUp(event, owner)
         }
         detector.onTouchEvent(event)
     }
 
     private fun nextKey(event: KeyEvent) {
         if (event.action == MotionEvent.ACTION_DOWN) {
-            listener.onKey(event, activity)
+            listener.onKey(event, owner)
         }
     }
 
     private fun nextText(event: TextEvent) {
-        listener.onText(event, activity)
+        listener.onText(event, owner)
     }
 
-    private fun updateActivity(act: Activity) {
-        if (!::activity.isInitialized || activity != act) {
-            activity = act
+    private fun updateOwner(owner: DxViewOwner) {
+        if (!this::owner.isInitialized || this.owner != owner) {
+            this.owner = owner
         }
     }
 }

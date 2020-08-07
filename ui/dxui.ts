@@ -152,9 +152,12 @@ export class FragmentManager {
   }
 }
 
-/** A DxActivity is an owner of a window, which manages a view hierarchy,
- * can have multiple fragments, which are managed by its fragment manager */
-export default class DxActivity extends WindowOwner implements FragmentOwner {
+/** A DxCompatUi is an owner of a window, which manages a view hierarchy,
+ * can have multiple fragments, which are managed by its fragment manager.
+ * Actually, it can be an Activity, a Dialog, or a PopupWindow of Android.
+ * We treat them all as a DxCompatUi, and unify their operations */
+export default class DxCompatUi extends WindowOwner implements FragmentOwner {
+  public isActivity = true;
   public readonly fragmentManager: FragmentManager = new FragmentManager(this);
   public constructor(app: string, public readonly name: string) {
     super(app);

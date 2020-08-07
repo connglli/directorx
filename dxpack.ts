@@ -17,13 +17,13 @@ import DxView, {
   ViewFinder,
   ViewProps,
 } from './ui/dxview.ts';
-import DxActivity, { FragmentManager, DxFragment } from './ui/dxact.ts';
+import DxCompatUi, { FragmentManager, DxFragment } from './ui/dxui.ts';
 import { DevInfo } from './dxadb.ts';
 import * as base64 from './utils/base64.ts';
 import KnaryTree from './utils/knary_tree.ts';
 import { IllegalStateError, CannotReachHereError } from './utils/error.ts';
 
-class ActivityPack extends DxActivity {
+class CompatUiPack extends DxCompatUi {
   constructor(
     app: string,
     name: string,
@@ -35,7 +35,7 @@ class ActivityPack extends DxActivity {
 }
 
 class EventPack {
-  constructor(public readonly e: DxEvent, public readonly ap: ActivityPack) {}
+  constructor(public readonly e: DxEvent, public readonly up: CompatUiPack) {}
 }
 
 type DxpkFields = {
@@ -283,7 +283,7 @@ class DXPK {
           indices.push(Number(tokens[i + j]));
         }
         i += count == 0 ? 1 : count; // skip an empty ';' for count == 0
-        const ap = new ActivityPack(app, name, tree, indices);
+        const ap = new CompatUiPack(app, name, tree, indices);
         let e: DxEvent;
         switch (tokens[i]) {
           case 'tap':
@@ -466,14 +466,14 @@ class DXPK {
     }
     await DXPK.writeNumber(buf, dxpk.eseq.length);
     for (const ep of dxpk.eseq) {
-      await DXPK.writeString(buf, `${ep.ap.app};${ep.ap.name};`, false);
-      await ep.ap.vTree.accept(
+      await DXPK.writeString(buf, `${ep.up.app};${ep.up.name};`, false);
+      await ep.up.vTree.accept(
         async (n: KnaryTree<number>): Promise<void> => {
           await DXPK.writeString(buf, `${n.value},${n.childrenCount};`, false);
         }
       );
-      await DXPK.writeString(buf, `${ep.ap.fInd.length};`, false);
-      await DXPK.writeString(buf, `${ep.ap.fInd.join(';')};`, false);
+      await DXPK.writeString(buf, `${ep.up.fInd.length};`, false);
+      await DXPK.writeString(buf, `${ep.up.fInd.join(';')};`, false);
       await DXPK.writeString(buf, ep.e.ty + ';', false);
       if (ep.e.ty == 'tap') {
         const e = ep.e as DxTapEvent;
@@ -541,23 +541,23 @@ export default class DxPacker {
   }
 
   pack(e: DxEvent): EventPack {
-    if (e.a.app != this.app) {
+    if (e.ui.app != this.app) {
       throw new IllegalStateError(
         `Cannot pack events from other apps, the expected app is ${this.app}`
       );
     }
-    const ap = this.packAct(e.a);
+    const ap = this.packUi(e.ui);
     return new EventPack(e, ap);
   }
 
   unpack(ep: EventPack): DxEvent {
-    if (ep.ap.app != this.app) {
+    if (ep.up.app != this.app) {
       throw new IllegalStateError(
         `Cannot unpack events from other apps, the expected app is ${this.app}`
       );
     }
-    const a = this.unpackActP(ep.ap);
-    return ep.e.copy(a);
+    const ui = this.unpackUi(ep.up);
+    return ep.e.copy(ui);
   }
 
   async save(path: string): Promise<void> {
@@ -585,11 +585,11 @@ export default class DxPacker {
     return packer;
   }
 
-  private packAct(a: DxActivity): ActivityPack {
+  private packUi(a: DxCompatUi): CompatUiPack {
     const { app, name, decorView, fragmentManager } = a;
     const vTree = this.packView(decorView!); // eslint-disable-line
     const fInd = this.packFragmentManager(fragmentManager);
-    const pack = new ActivityPack(app, name, vTree, fInd);
+    const pack = new CompatUiPack(app, name, vTree, fInd);
     return pack;
   }
 
@@ -639,34 +639,34 @@ export default class DxPacker {
     return indices;
   }
 
-  private unpackActP(ap: ActivityPack): DxActivity {
-    const a = new DxActivity(ap.app, ap.name);
-    const v = this.unpackViewP(ap.vTree);
+  private unpackUi(ap: CompatUiPack): DxCompatUi {
+    const ui = new DxCompatUi(ap.app, ap.name);
+    const v = this.unpackView(ap.vTree);
     if (!(v instanceof DxDecorView)) {
       throw new IllegalStateError('Expect a DxDecorView as root');
     }
-    a.replaceDecor(v as DxDecorView);
-    a.buildDrawingLevelLists();
-    this.unpackFragmentP(a, ap.fInd);
-    return a;
+    ui.replaceDecor(v as DxDecorView);
+    ui.buildDrawingLevelLists();
+    this.unpackFragment(ui, ap.fInd);
+    return ui;
   }
 
-  private unpackViewP(ci: KnaryTree<number>): DxView {
+  private unpackView(ci: KnaryTree<number>): DxView {
     const v = this.vpool[ci.value];
     const cv: DxView = v.copy();
     for (const cci of ci.children()) {
-      cv.addView(this.unpackViewP(cci));
+      cv.addView(this.unpackView(cci));
     }
     return cv;
   }
 
-  private unpackFragmentP(act: DxActivity, indices: number[]) {
+  private unpackFragment(ui: DxCompatUi, indices: number[]) {
     for (const ind of indices) {
       const fr = this.fpool[ind];
       if (fr.active) {
-        act.fragmentManager.activateFragment(this.fpool[ind].props);
+        ui.fragmentManager.activateFragment(this.fpool[ind].props);
       } else {
-        act.fragmentManager.addFragment(this.fpool[ind].props);
+        ui.fragmentManager.addFragment(this.fpool[ind].props);
       }
     }
   }
@@ -678,7 +678,7 @@ export default class DxPacker {
         this.infoLogInner(
           e,
           ViewFinder.findViewByXY(
-            e.a.decorView!,
+            e.ui.decorView!,
             (e as DxTapEvent).x,
             (e as DxTapEvent).y
           )
@@ -689,7 +689,7 @@ export default class DxPacker {
         this.infoLogInner(
           e,
           ViewFinder.findViewByXY(
-            e.a.decorView!,
+            e.ui.decorView!,
             (e as DxDoubleTapEvent).x,
             (e as DxDoubleTapEvent).y
           )
@@ -700,7 +700,7 @@ export default class DxPacker {
         this.infoLogInner(
           e,
           ViewFinder.findViewByXY(
-            e.a.decorView!,
+            e.ui.decorView!,
             (e as DxLongTapEvent).x,
             (e as DxLongTapEvent).y
           )
@@ -711,7 +711,7 @@ export default class DxPacker {
         this.infoLogInner(
           e,
           ViewFinder.findViewByXY(
-            e.a.decorView!,
+            e.ui.decorView!,
             (e as DxSwipeEvent).x,
             (e as DxSwipeEvent).y
           )
