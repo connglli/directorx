@@ -14,6 +14,7 @@ import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.directorx.dxrec.ctx.DecorViewContext
 import io.github.directorx.dxrec.ctx.ViewContext
+import io.github.directorx.dxrec.ctx.WindowManagerGlobalContext
 import io.github.directorx.dxrec.log.AndroidLogger
 import io.github.directorx.dxrec.utils.accessors.TextEvent
 import io.github.directorx.dxrec.utils.accessors.contains
@@ -105,7 +106,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
 
         // TODO support spaces in text, and incontinuous editing
         //   1. current when there are spaces in a text, the new text after spaces will replace the former
-        //   2. current incontinuous editting will produce text copies
+        //   2. current incontinuous editing will produce text copies
         DxLogger.catchAndLog { // hook editor text event
             val commitText = BaseInputConnection::class.java.getMethod(
                 "commitText",
@@ -118,7 +119,14 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         return
                     }
                     val txt = param.args[0] as? CharSequence ?: return
-                    detector.next(DxActivity(DxActivityStack.top), newEncodedTextEvent(txt, encode))
+                    val last = broker.curr
+                    // text has no capability to detect current owner, however, almost every text
+                    // is preceded by a tap event, so it reuses previous event's owner (if the text
+                    // is preceded by nothing, it assumes that current owner is the top activity)
+                    detector.next(
+                        last?.ownerRef ?: DxActivity(DxActivityStack.top),
+                        newEncodedTextEvent(txt, encode)
+                    )
                 }
             })
         }
@@ -135,7 +143,11 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         return
                     }
                     val txt = param.args[0] as? CharSequence ?: return
-                    detector.next(DxActivity(DxActivityStack.top), newEncodedTextEvent(txt, encode))
+                    val last = broker.curr
+                    detector.next(
+                        last?.ownerRef ?: DxActivity(DxActivityStack.top),
+                        newEncodedTextEvent(txt, encode)
+                    )
                 }
             })
         }
@@ -151,7 +163,11 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         return
                     }
                     val txt = param.args[0] as? Spannable ?: return
-                    detector.next(DxActivity(DxActivityStack.top), newEncodedTextEvent(txt, encode))
+                    val last = broker.curr
+                    detector.next(
+                        last?.ownerRef ?: DxActivity(DxActivityStack.top),
+                        newEncodedTextEvent(txt, encode)
+                    )
                 }
             })
         }
@@ -252,6 +268,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
         try { // initialize hooking context
             ViewContext(encode).prepare()
             DecorViewContext().prepare()
+            WindowManagerGlobalContext.prepare()
         } catch (ignored: Throwable) {}
 
         // start the dump thread

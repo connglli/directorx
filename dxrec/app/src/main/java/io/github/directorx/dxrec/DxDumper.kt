@@ -16,7 +16,7 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
     }
 
     private fun doDump(item: DxBroker.Item) {
-        val (owner, event, dump) = item
+        val (owner, _, event, dump) = item
         val eDump = gzipThenBase64(dump)
 
         DxLogger.i("GUI_BEGIN $owner")

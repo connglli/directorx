@@ -32,7 +32,7 @@ class DxBroker(private val capacity: Int) {
         if (staged.size >= capacity) {
             staged.removeAt(0)
         }
-        staged.add(Item(owner.name(), evt, buffer.toString()))
+        staged.add(Item(owner.name(), owner, evt, buffer.toString()))
     }
 
     fun commit() {
@@ -44,5 +44,5 @@ class DxBroker(private val capacity: Int) {
         }
     }
 
-    data class Item(val owner: String, val event: DxEvent, val dump: String, var committed: Boolean = false)
+    data class Item(val owner: String, val ownerRef: DxViewOwner, val event: DxEvent, val dump: String, var committed: Boolean = false)
 }
