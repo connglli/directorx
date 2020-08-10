@@ -217,8 +217,11 @@ class DxRecParser {
     // activity builder to build the compat ui that
     // are not activity (maybe dialog, popupwindow)
     let isActivity = true;
-    if (entries[0].startsWith('  WINDOW')) {
-      entries[0] = '  ACTIVITY' + entries[0].slice('  WINDOW'.length);
+    if (
+      entries[0].startsWith('  PHONE_WINDOW') ||
+      entries[0].startsWith('  POPUP_WINDOW')
+    ) {
+      entries[0] = '  ACTIVITY' + entries[0].slice('  POPUP_WINDOW'.length);
       isActivity = false;
     }
     const compatUi = buildActivityFromDumpSysInfo(

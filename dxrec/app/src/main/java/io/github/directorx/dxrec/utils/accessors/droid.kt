@@ -1,21 +1,24 @@
 package io.github.directorx.dxrec.utils.accessors
 
 import android.app.Activity
+import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Process
 import android.os.SystemClock
-import android.util.SparseArray
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.widget.PopupWindow
 import androidx.core.view.iterator
 import java.io.*
-import java.util.*
 
-private const val PREFIX = " "
+class FakePopupWindow(val context: Context, val view: View) {
+    val name: String
+    get() = PopupWindow::class.java.name
+}
 
 fun Activity.dump(buf: StringBuffer) {
     // dump the activity like what dumpsys does
@@ -37,61 +40,11 @@ fun Activity.dump(buf: StringBuffer) {
         buf.append(this.toString(Charsets.UTF_8.name()))
         close()
     }
-
-    // dump using reflection
-    if (false) {
-        val decor = window.decorView
-        val fm = this.fragmentManager
-        val getSupportFragmentManager = try {
-            this.javaClass.getDeclaredMethodIncludingParent("getSupportFragmentManager")
-        } catch (x: NoSuchMethodException) {
-            null
-        }
-        val sfm = getSupportFragmentManager?.invoke(this)
-
-        buf.append("View Hierarchy:\n")
-        decor.dump(buf)
-
-        buf.append("Added Fragments:\n")
-        val added = fm.javaClass.getFieldValue<ArrayList<Any>>(fm, "mAdded")
-        if (added != null) {
-            for (f in added) {
-                buf.append(f.toString()).append("\n")
-            }
-        }
-
-        buf.append("Active Fragments:\n")
-        val active = fm.javaClass.getFieldValue<SparseArray<Any>>(fm, "mActive")
-        if (active != null) {
-            val size = active.size()
-            for (i in 0 until size) {
-                val f = active.valueAt(i)
-                val mFragmentId = f.javaClass.getFieldValue<Int>(f, "mFragmentId") ?: 0
-                val mContainerId = f.javaClass.getFieldValue<Int>(f, "mContainerId") ?: 0
-                val mTag = f.javaClass.getFieldValue<String>(f, "mTag") ?: ""
-                buf.append(f.toString()).append("\n")
-                buf.append(PREFIX).append("mFragmentId=#").append(Integer.toHexString(mFragmentId))
-                    .append(" ").append("mContainerId=#").append(Integer.toHexString(mContainerId))
-                    .append(" ").append("mTag=").append(mTag)
-                    .append("\n")
-            }
-        }
-
-        if (sfm != null) {
-            buf.append("Added Support Fragments:").append("\n")
-            buf.append(PREFIX).append("Not null: TODO: add added support fragments").append("\n")
-            buf.append("Active Support Fragments:").append("\n")
-            buf.append(PREFIX).append("Not null: TODO: add active support fragments").append("\n")
-        } else {
-            buf.append("Added Support Fragments:").append("\n")
-            buf.append("Active Support Fragments:").append("\n")
-        }
-    }
 }
 
 fun Window.dump(buf: StringBuffer) {
-    // WINDOW package/class hash pid=2954
-    buf.append("  WINDOW")
+    // PHONE_WINDOW package/class hash pid=2954
+    buf.append("  PHONE_WINDOW")
         .append(" ${this.context.packageName}/${this.javaClass.name}")
         .append(" ")
         .append(Integer.toHexString(System.identityHashCode(this)))
@@ -102,18 +55,37 @@ fun Window.dump(buf: StringBuffer) {
         .append("\n")
     buf.append("    View Hierarchy:")
         .append("\n")
-    this.decorView.dump(buf)
+    this.decorView.dump(buf, "  ", 3)
 }
 
-fun View.dump(buf: StringBuffer) {
-    dumpInner(3, buf)
+fun FakePopupWindow.dump(buf: StringBuffer) {
+    // POPUP_WINDOW package/class hash pid=2954
+    buf.append("  POPUP_WINDOW")
+        .append(" ${this.context.packageName}/${this.name}")
+        .append(" ")
+        .append(Integer.toHexString(System.identityHashCode(this.view)))
+        .append(" ")
+        .append("pid=")
+        .append(Process.myPid())
+        .append("\n")
+        .append("\n")
+    buf.append("    View Hierarchy:")
+        .append("\n")
+    // let's wrap it with a decor view, to simulate a phone window
+    buf.append("      DecorView@fffff[PopupWindow]{dx-bg-class=ColorDrawable dx-bg-color=-1}")
+        .append("\n")
+    this.view.dump(buf, "  ", 4)
 }
 
-private fun View.dumpInner(repeat: Int, buf: StringBuffer) {
-    buf.append("  ".repeat(repeat)).append(this).append("\n")
+fun View.dump(buf: StringBuffer, prefix: String, repeat: Int) {
+    dumpInner(prefix, repeat, buf)
+}
+
+private fun View.dumpInner(prefix: String, repeat: Int, buf: StringBuffer) {
+    buf.append(prefix.repeat(repeat)).append(this).append("\n")
     if (this is ViewGroup) {
         for (v in this) {
-            v.dumpInner(repeat+1, buf)
+            v.dumpInner(prefix,repeat+1, buf)
         }
     }
 }

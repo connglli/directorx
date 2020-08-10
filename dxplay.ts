@@ -299,6 +299,10 @@ class ResPlayer extends DxPlayer {
       // TODO: what if multiple views with same text
       if (ivm.text.length > 0) {
         v = pAct.findViewByText(ivm.text);
+        // FIX: view's text given by droid are often capitalized
+        if (!v) {
+          v = pAct.findViewByText(ivm.text, true);
+        }
       } else if (ivm['resource-id'].length > 0) {
         v = pAct.findViewByResource(
           ivm['resource-type'],

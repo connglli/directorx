@@ -1,12 +1,14 @@
 package io.github.directorx.dxrec
 
 import android.app.Application
+import android.graphics.Rect
+import android.os.Build
+import android.os.SystemClock
 import android.text.Spannable
 import android.util.Base64
-import android.view.KeyEvent
-import android.view.MotionEvent
-import android.view.Window
+import android.view.*
 import android.view.inputmethod.BaseInputConnection
+import android.widget.PopupWindow
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
@@ -18,6 +20,7 @@ import io.github.directorx.dxrec.ctx.WindowManagerGlobalContext
 import io.github.directorx.dxrec.log.AndroidLogger
 import io.github.directorx.dxrec.utils.accessors.TextEvent
 import io.github.directorx.dxrec.utils.accessors.contains
+import io.github.directorx.dxrec.utils.accessors.instanceof
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -77,9 +80,9 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         val window = param?.thisObject as? Window ?: return
                         val event = param.args[0] as? MotionEvent ?: return
                         if (DxActivityStack.top.window == window) {
-                            detector.next(DxActivity(DxActivityStack.top), event)
+                            detector.next(ActivityOwner(DxActivityStack.top), event)
                         } else {
-                            detector.next(DxWindow(window), event)
+                            detector.next(PhoneWindowOwner(window), event)
                         }
                     }
                 })
@@ -96,9 +99,9 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         val window = param?.thisObject as? Window ?: return
                         val event = param.args[0] as? KeyEvent ?: return
                         if (DxActivityStack.top.window == window) {
-                            detector.next(DxActivity(DxActivityStack.top), event)
+                            detector.next(ActivityOwner(DxActivityStack.top), event)
                         } else {
-                            detector.next(DxWindow(window), event)
+                            detector.next(PhoneWindowOwner(window), event)
                         }
                     }
                 })
@@ -124,7 +127,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                     // is preceded by a tap event, so it reuses previous event's owner (if the text
                     // is preceded by nothing, it assumes that current owner is the top activity)
                     detector.next(
-                        last?.ownerRef ?: DxActivity(DxActivityStack.top),
+                        last?.ownerRef ?: ActivityOwner(DxActivityStack.top),
                         newEncodedTextEvent(txt, encode)
                     )
                 }
@@ -145,7 +148,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                     val txt = param.args[0] as? CharSequence ?: return
                     val last = broker.curr
                     detector.next(
-                        last?.ownerRef ?: DxActivity(DxActivityStack.top),
+                        last?.ownerRef ?: ActivityOwner(DxActivityStack.top),
                         newEncodedTextEvent(txt, encode)
                     )
                 }
@@ -165,7 +168,7 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                     val txt = param.args[0] as? Spannable ?: return
                     val last = broker.curr
                     detector.next(
-                        last?.ownerRef ?: DxActivity(DxActivityStack.top),
+                        last?.ownerRef ?: ActivityOwner(DxActivityStack.top),
                         newEncodedTextEvent(txt, encode)
                     )
                 }
@@ -181,9 +184,112 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         return
                     }
                     val event = param.args[0] as? KeyEvent ?: return
-                    detector.next(DxActivity(DxActivityStack.top), event)
+                    detector.next(ActivityOwner(DxActivityStack.top), event)
                 }
             })
+        }
+
+        DxLogger.catchAndLog { // hook popup window touch event
+            XposedHelpers.findAndHookMethod(
+                "android.widget.PopupWindow\$PopupDecorView",
+                PopupWindow::class.java.classLoader,
+                "dispatchTouchEvent",
+                MotionEvent::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam?) {
+                        val decor = param?.thisObject as? View ?: return
+                        val event = param.args[0] as? MotionEvent ?: return
+                        detector.next(PopupWindowOwner(decor), event)
+                    }
+                })
+        }
+
+        DxLogger.catchAndLog { // hook popup window key event
+            XposedHelpers.findAndHookMethod(
+                "android.widget.PopupWindow\$PopupDecorView",
+                PopupWindow::class.java.classLoader,
+                "dispatchKeyEvent",
+                KeyEvent::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam?) {
+                        val decor = param?.thisObject as? View ?: return
+                        val event = param.args[0] as? KeyEvent ?: return
+                        detector.next(PopupWindowOwner(decor), event)
+                    }
+                })
+        }
+
+        if (false) {
+            DxLogger.catchAndLog { // hook popup window touch event
+                // we use MenuItemImpl#getItemId() because Xposed cannot hook overridden method
+                // TODO: what if #getItemId() is invoked multiple times within one invocation of onOptionsItemSelected
+                XposedHelpers.findAndHookMethod(
+                    "com.android.internal.view.menu.MenuItemImpl",
+                    MenuItem::class.java.classLoader,
+                    "getItemId",
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam?) {
+                            // we expect that we are in onOptionsItemSelected, which is a popup window
+                            val item = param?.thisObject as? MenuItem ?: return
+                            // The stack trace is:
+                            //   0: dalvik.system.VMStack.getThreadStackTrace
+                            //   1: java.lang.Thread.getStackTrace
+                            //   2: io.github.directorx.dxrec.DxRecorder$handleLoadPackage$3$2.beforeHookedMethod
+                            //   3: de.robv.android.xposed.XposedBridge.handleHookedMethod
+                            //   4: com.android.internal.view.menu.MenuItemImpl.getItemId
+                            //   5: com.example.MainActivity.onOptionsItemSelected
+                            //   6: ...
+                            val trace = Thread.currentThread().stackTrace
+                            if (trace.size < 6 || trace[5].methodName != "onOptionsItemSelected") {
+                                return
+                            }
+                            val names = WindowManagerGlobalContext.viewRootNames ?: return
+                            var popupDecorView: View? = null
+                            for (n in names) {
+                                val view = WindowManagerGlobalContext.getRootView(n) ?: continue
+                                if (view instanceof "android.widget.PopupWindow\$PopupDecorView") {
+                                    popupDecorView = view
+                                    break
+                                }
+                            }
+                            if (popupDecorView != null) {
+                                // let's find the tapped view
+                                val found = ArrayList<View>()
+                                popupDecorView.findViewsWithText(
+                                    found,
+                                    item.title,
+                                    View.FIND_VIEWS_WITH_TEXT
+                                )
+                                if (found.size == 0) {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        popupDecorView.findViewsWithText(
+                                            found,
+                                            item.contentDescription,
+                                            View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION
+                                        )
+                                    }
+                                }
+                                // let's simulate a tap event
+                                if (found.size != 0) {
+                                    val tappedView = found[0]
+                                    val rect = Rect()
+                                    tappedView.getGlobalVisibleRect(rect)
+                                    val now = SystemClock.uptimeMillis()
+                                    val x = (rect.left + rect.right).toFloat() / 2
+                                    val y = (rect.top + rect.bottom).toFloat() / 2
+                                    detector.next(
+                                        PopupWindowOwner(popupDecorView),
+                                        MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 1)
+                                    )
+                                    detector.next(
+                                        PopupWindowOwner(popupDecorView),
+                                        MotionEvent.obtain(now, now + 15, MotionEvent.ACTION_UP, x, y, 1)
+                                    )
+                                }
+                            }
+                        }
+                    })
+            }
         }
     }
 

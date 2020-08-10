@@ -26,13 +26,13 @@ class DxBroker(private val capacity: Int) {
         staged.add(item.copy(event = event))
     }
 
-    fun addPair(owner: DxViewOwner, evt: DxEvent) {
+    fun addPair(owner: DxViewOwner, event: DxEvent) {
         buffer.setLength(0)
         owner.dump(buffer)
         if (staged.size >= capacity) {
             staged.removeAt(0)
         }
-        staged.add(Item(owner.name(), owner, evt, buffer.toString()))
+        staged.add(Item(owner.name(), owner, event, buffer.toString()))
     }
 
     fun commit() {

@@ -704,8 +704,19 @@ export class ViewFinder extends ArrayTreeOp {
   }
 
   /** Find the first met view with text t */
-  static findViewByText(v: DxView, text: string): N<DxView> {
-    return ViewFinder.findView(v, (w) => w.text == text);
+  static findViewByText(
+    v: DxView,
+    text: string,
+    caseInsensitive = false
+  ): N<DxView> {
+    if (caseInsensitive) {
+      return ViewFinder.findView(
+        v,
+        (w) => w.text.toLowerCase() == text.toLowerCase()
+      );
+    } else {
+      return ViewFinder.findView(v, (w) => w.text == text);
+    }
   }
 
   /** Find the first met view with desc t */

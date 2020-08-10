@@ -1,7 +1,9 @@
 package io.github.directorx.dxrec
 
 import android.app.Activity
+import android.view.View
 import android.view.Window
+import io.github.directorx.dxrec.utils.accessors.FakePopupWindow
 import io.github.directorx.dxrec.utils.accessors.dump
 
 sealed class DxViewOwner {
@@ -15,7 +17,7 @@ sealed class DxViewOwner {
 }
 
 @Suppress("MemberVisibilityCanBePrivate")
-class DxActivity(val activity: Activity) : DxViewOwner() {
+class ActivityOwner(val activity: Activity) : DxViewOwner() {
     override fun dump(buf: StringBuffer) {
         activity.dump(buf)
     }
@@ -26,12 +28,25 @@ class DxActivity(val activity: Activity) : DxViewOwner() {
 }
 
 @Suppress("MemberVisibilityCanBePrivate")
-class DxWindow(val window: Window) : DxViewOwner() {
+class PhoneWindowOwner(val window: Window) : DxViewOwner() {
     override fun dump(buf: StringBuffer) {
         window.dump(buf)
     }
 
     override fun name(): String {
         return window.javaClass.name
+    }
+}
+
+@Suppress("MemberVisibilityCanBePrivate")
+class PopupWindowOwner(view: View) : DxViewOwner() {
+    val window = FakePopupWindow(view.context, view)
+
+    override fun dump(buf: StringBuffer) {
+        window.dump(buf)
+    }
+
+    override fun name(): String {
+        return window.name
     }
 }

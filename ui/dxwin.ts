@@ -56,9 +56,9 @@ export class WindowOwner {
       : null;
   }
 
-  findViewByText(text: string): N<DxView> {
+  findViewByText(text: string, caseInsensitive = false): N<DxView> {
     return this.decorView
-      ? ViewFinder.findViewByText(this.decorView, text)
+      ? ViewFinder.findViewByText(this.decorView, text, caseInsensitive)
       : null;
   }
 
