@@ -391,13 +391,42 @@ export default class DxYota {
     compressed = true // use this flag only when no compressed flag in optOrView
   ): Promise<ViewMap | null> {
     let opt: SelectOptions;
+    let vms: ViewMap[];
     opt = {
       compressed: compressed,
     };
+    // let's try the most comprehensive selection, i.e., use both text
+    // and another property to select our target view
+    opt.textContains = view.text.length > 0 ? view.text : undefined;
+    opt.resIdContains = view.resId.length > 0 ? view.resEntry : undefined;
+    opt.descContains = view.desc.length > 0 ? view.desc : undefined;
+    // if there is only text, then use the less comprehensive selection
+    if (opt.textContains && (opt.resIdContains || opt.descContains)) {
+      vms = await this.select(opt);
+      // choose the best match: text is complete same
+      if (vms.length >= 1) {
+        let found =
+          (vms.find((vm) => vm.text == view.text) ||
+            vms.find(
+              (vm) => vm.text.toLowerCase() == view.text.toLowerCase()
+            )) ??
+          null;
+        if (found) {
+          return found;
+        }
+      }
+    }
+    // clear the opt
+    opt.textContains = undefined;
+    opt.resIdContains = undefined;
+    opt.descContains = undefined;
+    // let's try some less comprehensive selection: we always treat the
+    // visual information (the text) as the most important, then the
+    // resource-id, and last is the content description
     if (view.text.length != 0) {
       // find the best one => the least length
       opt.textContains = view.text;
-      const vms = await this.select(opt);
+      vms = await this.select(opt);
       // always choose the best match, because if a view has
       // some text that presents to a user, it is probably
       // not changed across devices
@@ -411,7 +440,7 @@ export default class DxYota {
       );
     } else if (view.resId.length != 0) {
       opt.resIdContains = view.resEntry;
-      let vms = await this.select(opt);
+      vms = await this.select(opt);
       if (vms.length == 0) {
         return null;
       } else if (vms.length == 1) {
@@ -459,7 +488,7 @@ export default class DxYota {
       return vms[minInd];
     } else if (view.desc.length != 0) {
       opt.descContains = view.desc;
-      let vms = await this.select(opt);
+      vms = await this.select(opt);
       if (vms.length == 0) {
         return null;
       }
