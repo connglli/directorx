@@ -124,19 +124,14 @@ abstract class Expand extends DxBpPat {
  * takes care of such pattern by finding a most probable
  * view that are text-similar */
 class VagueText extends Expand {
-  private static THRESHOLD = 10;
-
   // founded views that are text-similar to target view
-  private vFound: DxView[] = [];
+  protected vFound: DxView[] = [];
 
   get name() {
     return 'vague-text';
   }
 
   match(): boolean {
-    if (this.args.v.text.length < VagueText.THRESHOLD) {
-      return false;
-    }
     const v = this.args.v;
     const player = this.args.p;
     const expand = this.isDevExpanded;
@@ -145,7 +140,8 @@ class VagueText extends Expand {
     this.vFound = SegmentFinder.findViews(
       player.s,
       (w) =>
-        w.text.length > VagueText.THRESHOLD &&
+        w.shown &&
+        w.text.length > 0 &&
         ((expand && w.text.startsWith(v.text)) ||
           (!expand && v.text.startsWith(w.text)))
     );
@@ -196,8 +192,36 @@ class VagueText extends Expand {
     return true;
   }
 
-  private get isDevExpanded() {
+  protected get isDevExpanded() {
     return this.args.r.d.width <= this.args.p.d.width;
+  }
+}
+
+/** VagueTextExt differs from VagueText that it finds the
+ * view bottom-up along the segment tree */
+class VagueTextExt extends VagueText {
+  get name() {
+    return 'vague-text-ext';
+  }
+
+  match(): boolean {
+    const v = this.args.v;
+    const player = this.args.p;
+    const expand = this.isDevExpanded;
+    // currently, we only tackle prefix
+    // TODO: add more vague patterns
+    let found = SegmentBottomUpFinder.findView(
+      player.s,
+      (w) =>
+        w.shown &&
+        w.text.length > 0 &&
+        ((expand && w.text.startsWith(v.text)) ||
+          (!expand && v.text.startsWith(w.text)))
+    );
+    if (found) {
+      this.vFound.push(found);
+    }
+    return this.vFound.length > 0;
   }
 }
 
@@ -894,12 +918,12 @@ class NewButton extends MergeButton {
 
   protected isMergeButton(v: DxView) {
     for (const w of NewButton.WORDS) {
-      if (v.text.startsWith(w)) {
+      if (v.text.startsWith(w) && v.flags.c) {
         return true;
       }
     }
     for (const w of NewButton.WORDS) {
-      if (v.desc.startsWith(w)) {
+      if (v.desc.startsWith(w) && v.flags.c) {
         return true;
       }
     }
@@ -1036,6 +1060,7 @@ class DualFragment extends Merge {
 const patterns = [
   // Expand
   VagueText,
+  VagueTextExt,
   Scroll,
   // Reveal
   MoreOptions,
@@ -1057,11 +1082,5 @@ const patterns = [
  * condition passes, or test next pattern
  */
 export default function recBpPat(args: BpPatRecArgs): N<DxBpPat> {
-  for (const Pat of patterns) {
-    const pat = new Pat(args);
-    if (pat.match()) {
-      return pat;
-    }
-  }
-  return null;
+  return patterns.map((P) => new P(args)).find((p) => p.match()) ?? null;
 }

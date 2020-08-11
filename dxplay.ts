@@ -347,13 +347,22 @@ class ResPlayer extends DxPlayer {
     const match = matchSeg(pSegs, rSegs);
     // find the segment where the w resides
     const rSeg = this.findSegByView(v, rSegs);
-    const pSeg = match.getMatch(rSeg);
+    let pSeg = match.getPerfectMatch(rSeg);
     if (!pSeg) {
       throw new IllegalStateError(
         'Does not find any matched segment, even NO_MATCH'
       );
     } else if (pSeg == NO_MATCH) {
-      throw new NotImplementedError('Matched segment is NO_MATCH');
+      DxLog.info('Perfect Match does not found, tune to Best Matches');
+      const [score, matched] = match.getBestMatches(rSeg);
+      if (matched.length == 0) {
+        throw new IllegalStateError('Best Matches do not found');
+      } else if (matched.length != 1) {
+        throw new NotImplementedError(
+          `Multiple best matched segments with score ${score}`
+        );
+      }
+      pSeg = matched[0];
     }
 
     // recognize the pattern
@@ -444,6 +453,7 @@ class ResPlayer extends DxPlayer {
   }
 
   private async top(): Promise<DxCompatUi> {
+    // TODO: check windows count, and invoke uiautomator at time
     return await DxDroid.get().topActivity(this.app, this.decode, 'dumpsys');
   }
 }

@@ -421,8 +421,12 @@ export default class DxYota {
     opt.resIdContains = undefined;
     opt.descContains = undefined;
     // let's try some less comprehensive selection: we always treat the
-    // visual information (the text) as the most important, then the
-    // resource-id, and last is the content description
+    // visual information (the text) as the most important because the
+    // text is shown to users. we also think that, if a view is shown
+    // to users using its text on one device, it must shown to users on
+    // others using similar text, and thereby, if there are text in a view,
+    // then we use the text to find the view, and if no views found, we
+    // never try other props like res-id and content description
     if (view.text.length != 0) {
       // find the best one => the least length
       opt.textContains = view.text;
@@ -438,55 +442,58 @@ export default class DxYota {
           vms.find((vm) => vm.text.toLowerCase() == view.text.toLowerCase())) ??
         null
       );
-    } else if (view.resId.length != 0) {
+    }
+    // no text, let's try resource-id and content-desc
+    if (view.resId.length != 0) {
       opt.resIdContains = view.resEntry;
       vms = await this.select(opt);
-      if (vms.length == 0) {
-        return null;
-      } else if (vms.length == 1) {
+      if (vms.length == 1) {
         return vms[0];
-      }
-      // prefer same entries
-      const sameEntries = vms.filter(
-        (vm) => vm['resource-entry'] == view.resEntry
-      );
-      if (sameEntries.length == 1) {
-        return sameEntries[0];
-      }
-      // no same entries, or multiple same entries
-      vms = sameEntries.length == 0 ? vms : sameEntries;
-      if (view.desc.length == 0) {
-        // the view has no desc, choose the first one
-        return vms[0];
-      }
-      // for the rest, we prefer having the same desc
-      let best = vms.find((vm) => vm['content-desc'] == view.desc);
-      if (best) {
-        return best;
-      }
-      // or having similar desc (tfidf, 1-gram feature)
-      const frequents = [view, ...vms]
-        .map((w) => {
-          let desc = w instanceof DxView ? w.desc : w['content-desc'];
-          return filterStopwords(
-            splitAsWords(desc).map((w) => w.toLowerCase())
-          );
-        })
-        .map(doc2freq);
-      const words = Array.from(new Set(frequents.flatMap(Object.keys)));
-      const vectors = frequents.map((f) => freq2vec(f), words);
-      let min = Number.POSITIVE_INFINITY;
-      let minInd = -1;
-      // return the most similar one using cosine similarity
-      for (let i = 1; i < vectors.length; i++) {
-        const s = similarity.cosine(vectors[0].vector, vectors[i].vector);
-        if (s < min) {
-          min = s;
-          minInd = i;
+      } else if (vms.length > 1) {
+        // prefer same entries
+        const sameEntries = vms.filter(
+          (vm) => vm['resource-entry'] == view.resEntry
+        );
+        if (sameEntries.length == 1) {
+          return sameEntries[0];
         }
+        // no same entries, or multiple same entries
+        vms = sameEntries.length == 0 ? vms : sameEntries;
+        if (view.desc.length == 0) {
+          // the view has no desc, choose the first one
+          return vms[0];
+        }
+        // for the rest, we prefer having the same desc
+        let best = vms.find((vm) => vm['content-desc'] == view.desc);
+        if (best) {
+          return best;
+        }
+        // or having similar desc (tfidf, 1-gram feature)
+        const frequents = [view, ...vms]
+          .map((w) => {
+            let desc = w instanceof DxView ? w.desc : w['content-desc'];
+            return filterStopwords(
+              splitAsWords(desc).map((w) => w.toLowerCase())
+            );
+          })
+          .map(doc2freq);
+        const words = Array.from(new Set(frequents.flatMap(Object.keys)));
+        const vectors = frequents.map((f) => freq2vec(f), words);
+        let min = Number.POSITIVE_INFINITY;
+        let minInd = -1;
+        // return the most similar one using cosine similarity
+        for (let i = 1; i < vectors.length; i++) {
+          const s = similarity.cosine(vectors[0].vector, vectors[i].vector);
+          if (s < min) {
+            min = s;
+            minInd = i;
+          }
+        }
+        return vms[minInd];
       }
-      return vms[minInd];
-    } else if (view.desc.length != 0) {
+    }
+    // no text, and does not find any by resource-id, let's try content-desc
+    if (view.desc.length != 0) {
       opt.descContains = view.desc;
       vms = await this.select(opt);
       if (vms.length == 0) {
