@@ -133,6 +133,9 @@ class VagueText extends Expand {
 
   match(): boolean {
     const v = this.args.v;
+    if (v.text.length == 0) {
+      return false;
+    }
     const player = this.args.p;
     const expand = this.isDevExpanded;
     // currently, we only tackle prefix
@@ -140,7 +143,7 @@ class VagueText extends Expand {
     this.vFound = SegmentFinder.findViews(
       player.s,
       (w) =>
-        w.shown &&
+        Views.isVisibleToUser(w, player.d) &&
         w.text.length > 0 &&
         ((expand && w.text.startsWith(v.text)) ||
           (!expand && v.text.startsWith(w.text)))
@@ -206,6 +209,9 @@ class VagueTextExt extends VagueText {
 
   match(): boolean {
     const v = this.args.v;
+    if (v.text.length == 0) {
+      return false;
+    }
     const player = this.args.p;
     const expand = this.isDevExpanded;
     // currently, we only tackle prefix
@@ -213,7 +219,7 @@ class VagueTextExt extends VagueText {
     let found = SegmentBottomUpFinder.findView(
       player.s,
       (w) =>
-        w.shown &&
+        Views.isVisibleToUser(w, player.d) &&
         w.text.length > 0 &&
         ((expand && w.text.startsWith(v.text)) ||
           (!expand && v.text.startsWith(w.text)))
@@ -456,7 +462,12 @@ class MoreOptions extends RevealButton {
   }
 
   findButton(v: DxView): N<DxView> {
-    return ViewFinder.findViewByDesc(v, MoreOptions.DESC);
+    const moreOptions = ViewFinder.findViewByDesc(v, MoreOptions.DESC);
+    return moreOptions &&
+      Views.isVisibleToUser(moreOptions, this.args.p.d) &&
+      moreOptions.flags.c
+      ? moreOptions
+      : null;
   }
 }
 
@@ -471,7 +482,12 @@ class DrawerMenu extends RevealButton {
   }
 
   findButton(v: DxView): N<DxView> {
-    return ViewFinder.findViewByDesc(v, DrawerMenu.DESC);
+    const drawerMenu = ViewFinder.findViewByDesc(v, DrawerMenu.DESC);
+    return drawerMenu &&
+      Views.isVisibleToUser(drawerMenu, this.args.p.d) &&
+      drawerMenu.flags.c
+      ? drawerMenu
+      : null;
   }
 }
 
@@ -887,7 +903,11 @@ abstract class MergeButton extends Merge {
 
   match(): boolean {
     const playee = this.args.p;
-    this.vButton = SegmentBottomUpFinder.findView(playee.s, this.isMergeButton);
+    this.vButton = SegmentBottomUpFinder.findView(
+      playee.s,
+      (v) =>
+        Views.isVisibleToUser(v, playee.d) && v.flags.c && this.isMergeButton(v)
+    );
     return !!this.vButton;
   }
 
@@ -918,12 +938,12 @@ class NewButton extends MergeButton {
 
   protected isMergeButton(v: DxView) {
     for (const w of NewButton.WORDS) {
-      if (v.text.startsWith(w) && v.flags.c) {
+      if (v.text.startsWith(w)) {
         return true;
       }
     }
     for (const w of NewButton.WORDS) {
-      if (v.desc.startsWith(w) && v.flags.c) {
+      if (v.desc.startsWith(w)) {
         return true;
       }
     }

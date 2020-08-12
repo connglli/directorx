@@ -49,6 +49,10 @@ export default class DxDroid {
     }
   }
 
+  async isSoftKeyboardPresent(): Promise<boolean> {
+    return await this.adb_.isSoftKeyboardPresent();
+  }
+
   private inited = false;
   private dev_: DevInfo = (null as any) as DevInfo; // eslint-disable-line
   private constructor(

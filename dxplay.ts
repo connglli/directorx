@@ -258,10 +258,14 @@ class ResPlayer extends DxPlayer {
       return;
     }
 
+    // let's hide the soft keyboard firstly
     const droid = DxDroid.get();
-    const pDev = droid.dev;
+    if (await droid.isSoftKeyboardPresent()) {
+      await droid.input.hideSoftKeyboard();
+    }
 
     // find the view in recordee and playee first
+    const pDev = droid.dev;
     const [v, vm] = await this.find(e);
     if (vm != null && vm.visible) {
       return await this.fireOnViewMap(e, vm, rDev, pDev);
@@ -276,8 +280,9 @@ class ResPlayer extends DxPlayer {
       const nextK = this.seq.topN(this.K);
       for (let i = 0; i < nextK.length; i++) {
         const ne = nextK[i];
+        // we come across an non-xy event, fail
         if (!isXYEvent(ne)) {
-          found = i;
+          found = -1;
           break;
         }
         const [, vm] = await this.find(ne);
@@ -299,7 +304,7 @@ class ResPlayer extends DxPlayer {
     // let's see if the view is invisible, and apply
     // the invisible pattern if possible
     const [, ivm] = await this.find(e, false);
-    const pAct = await this.top();
+    const pUi = await this.top();
     if (ivm && !ivm.important) {
       // sometimes an important or invisible view may got,
       // even though it is not suitable to fire it, it provides
@@ -307,27 +312,24 @@ class ResPlayer extends DxPlayer {
       let v: DxView | null = null;
       // TODO: what if multiple views with same text
       if (ivm.text.length > 0) {
-        v = pAct.findViewByText(ivm.text);
+        v = pUi.findViewByText(ivm.text);
         // FIX: view's text given by droid are often capitalized
         if (!v) {
-          v = pAct.findViewByText(ivm.text, true);
+          v = pUi.findViewByText(ivm.text, true);
         }
       } else if (ivm['resource-id'].length > 0) {
-        v = pAct.findViewByResource(
-          ivm['resource-type'],
-          ivm['resource-entry']
-        );
+        v = pUi.findViewByResource(ivm['resource-type'], ivm['resource-entry']);
       } else if (ivm['content-desc'].length > 0) {
-        v = pAct.findViewByDesc(ivm['content-desc']);
+        v = pUi.findViewByDesc(ivm['content-desc']);
       } else {
-        v = pAct.findViewByXY(ivm.bounds.left + 1, ivm.bounds.top + 1);
+        v = pUi.findViewByXY(ivm.bounds.left + 1, ivm.bounds.top + 1);
       }
       if (v == null) {
         throw new IllegalStateError('Cannot find view on playee tree');
       }
       const pattern = new Invisible({
         v,
-        u: pAct,
+        u: pUi,
         d: pDev,
       });
       if (!pattern.match()) {
@@ -346,11 +348,11 @@ class ResPlayer extends DxPlayer {
     // when lookahead fails, segment the ui,
     // find the matched segment, and synthesize
     // the equivalent event sequence
-    const rAct = e.ui;
+    const rUi = e.ui;
 
     // segment the ui
-    const [, rSegs] = segUi(rAct, rDev);
-    const [, pSegs] = segUi(pAct, pDev);
+    const [, rSegs] = segUi(rUi, rDev);
+    const [, pSegs] = segUi(pUi, pDev);
 
     // match segment and find the target segment
     const match = matchSeg(pSegs, rSegs);
@@ -378,8 +380,8 @@ class ResPlayer extends DxPlayer {
     const pattern = recBpPat({
       e,
       v,
-      r: { u: rAct, s: rSeg, d: rDev },
-      p: { u: pAct, s: pSeg, d: pDev },
+      r: { u: rUi, s: rSeg, d: rDev },
+      p: { u: pUi, s: pSeg, d: pDev },
     });
     if (pattern == null) {
       throw new NotImplementedError('No pattern is recognized');
@@ -406,13 +408,13 @@ class ResPlayer extends DxPlayer {
 
   /** Return then view on recordee and view map on playee */
   private async find(
-    e: DxXYEvent,
+    event: DxXYEvent,
     visible = true
   ): Promise<[DxView, N<ViewMap>]> {
     // TODO: what if multiple views with same text
-    const { ui, x, y } = e;
+    const { ui: rUi, x, y } = event;
     // retrieve the view on recordee
-    const v = ui.findViewByXY(x, y);
+    const v = rUi.findViewByXY(x, y);
     if (v == null) {
       throw new IllegalStateError(
         `No visible view found on recordee tree at (${x}, ${y})`

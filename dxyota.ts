@@ -1,5 +1,10 @@
 import DxAdb, { AdbResult, AdbError } from './dxadb.ts';
-import DxView, { ViewFactory, ViewType, ViewProps } from './ui/dxview.ts';
+import DxView, {
+  ViewFactory,
+  ViewType,
+  ViewProps,
+  Views,
+} from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
@@ -184,6 +189,42 @@ function splitResourceId(resId: string): [string, string, string] {
     resId.substring(colon + 1, slash),
     resId.substring(slash + 1),
   ];
+}
+
+export function asViewMap(v: DxView, d: DevInfo): ViewMap {
+  const [resPkg, resType, resEntry] = splitResourceId(v.resId);
+  return {
+    index: v.parent?.children.indexOf(v) ?? -1,
+    package: v.pkg,
+    class: v.cls,
+    'resource-id': v.resId,
+    'resource-pkg': resPkg,
+    'resource-type': resType,
+    'resource-entry': resEntry,
+    visible: Views.isVisibleToUser(v, d),
+    text: v.text,
+    'content-desc': v.desc,
+    clickable: v.flags.c,
+    'context-clickable': v.flags.cc,
+    'long-clickable': v.flags.lc,
+    scrollable: v.flags.s.b || v.flags.s.t || v.flags.s.l || v.flags.s.r,
+    checkable: false, // TODO: add checkable
+    checked: false, // TODO: add checked
+    focusable: v.flags.f,
+    focused: v.flags.F,
+    selected: v.flags.S,
+    password: false, // TODO: add password
+    enabled: v.flags.E,
+    important: v.flags.a,
+    background: v.bgColor,
+    bounds: {
+      // the visible and drawing bounds
+      left: Views.x0(v),
+      right: Views.x1(v),
+      top: Views.y0(v),
+      bottom: Views.y1(v),
+    },
+  } as ViewMap;
 }
 
 export class ActivityYotaBuilder {
@@ -402,6 +443,16 @@ export default class DxYota {
     view: DxView,
     compressed = true // use this flag only when no compressed flag in optOrView
   ): Promise<ViewMap | null> {
+    if (
+      view.text.length == 0 &&
+      view.resId.length == 0 &&
+      view.desc.length == 0
+    ) {
+      throw new NotImplementedError(
+        'text, resource-id and content-desc are all empty'
+      );
+    }
+
     let opt: SelectOptions;
     let vms: ViewMap[];
     opt = {
@@ -440,7 +491,6 @@ export default class DxYota {
     // then we use the text to find the view, and if no views found, we
     // never try other props like res-id and content description
     if (view.text.length != 0) {
-      // find the best one => the least length
       opt.textContains = view.text;
       vms = await this.select(opt);
       // always choose the best match, because if a view has
@@ -455,7 +505,25 @@ export default class DxYota {
         null
       );
     }
-    // no text, let's try resource-id and content-desc
+    // no text, let's try resource-id and content-desc.
+    // like text, let's firstly try a strict content-desc selection
+    if (view.desc.length != 0) {
+      opt.descContains = view.desc;
+      vms = await this.select(opt);
+      let found =
+        (vms.find((vm) => vm['content-desc'] == view.desc) ||
+          vms.find(
+            (vm) => vm['content-desc'].toLowerCase() == view.text.toLowerCase()
+          )) ??
+        null;
+      if (found) {
+        return found;
+      }
+    }
+    // let's resort to non-strict resource-id and content-desc selection
+    opt.textContains = undefined;
+    opt.descContains = undefined;
+    opt.resIdContains = undefined;
     if (view.resId.length != 0) {
       opt.resIdContains = view.resEntry;
       vms = await this.select(opt);
@@ -490,7 +558,7 @@ export default class DxYota {
           })
           .map(doc2freq);
         const words = Array.from(new Set(frequents.flatMap(Object.keys)));
-        const vectors = frequents.map((f) => freq2vec(f), words);
+        const vectors = frequents.map((f) => freq2vec(f, words));
         let min = Number.POSITIVE_INFINITY;
         let minInd = -1;
         // return the most similar one using cosine similarity
@@ -505,6 +573,10 @@ export default class DxYota {
       }
     }
     // no text, and does not find any by resource-id, let's try content-desc
+    // clear opt firstly
+    opt.textContains = undefined;
+    opt.resIdContains = undefined;
+    opt.descContains = undefined;
     if (view.desc.length != 0) {
       opt.descContains = view.desc;
       vms = await this.select(opt);
@@ -514,11 +586,24 @@ export default class DxYota {
       // prefer having similar desc (i.e., the least length),
       // no doubt that same desc must have the least length
       // TODO: what if there are multiple? (add context info)
-      vms.sort((a, b) => a['content-desc'].length - b['content-desc'].length);
-      return vms[0];
-    } else {
-      throw new NotImplementedError('resId, text and desc are all empty');
+      const words = splitAsWords(view.desc);
+      // if the desc has only one word, it is probable that
+      // the view is an image-view button, and let's restrict
+      // that the target view must contain this word instead
+      // of contain its letters, e.g., both "Newsletter" and
+      // "New Document" contain "New", but "Newsletter" is
+      // apparently invalid compared to "New Document"
+      if (words.length == 1) {
+        vms = vms.filter(
+          (vm) => splitAsWords(vm['content-desc']).indexOf(words[0]) != -1
+        );
+      } else {
+        vms.sort((a, b) => a['content-desc'].length - b['content-desc'].length);
+      }
+      return vms[0] ?? null;
     }
+
+    return null;
   }
 
   async dump(compressed = true): Promise<string> {
