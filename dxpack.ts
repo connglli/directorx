@@ -6,6 +6,7 @@ import DxEvent, {
   DxSwipeEvent,
   DxKeyEvent,
   DxTextEvent,
+  DxHideSoftKeyboardEvent,
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxView, {
@@ -336,6 +337,9 @@ class DXPK {
               Number(tokens[i + 2])
             );
             break;
+          case 'hsk':
+            e = new DxHideSoftKeyboardEvent(ap, Number(tokens[i + 1]));
+            break;
           default:
             throw new IllegalStateError(`Unsupported event type: ${tokens[i]}`);
         }
@@ -496,6 +500,9 @@ class DXPK {
       } else if (ep.e.ty == 'text') {
         const e = ep.e as DxTextEvent;
         await DXPK.writeString(buf, `${base64.encode(e.x)};${e.t}`);
+      } else if (ep.e.ty == 'hsk') {
+        const e = ep.e as DxHideSoftKeyboardEvent;
+        await DXPK.writeString(buf, `${e.t}`);
       } else {
         throw new IllegalStateError(`Unsupported event type: ${ep.e.ty}`);
       }
@@ -719,17 +726,15 @@ export default class DxPacker {
         break;
 
       case 'key':
-        this.infoLogInner(e, null);
-        break;
-
       case 'text':
+      case 'hsk':
         this.infoLogInner(e, null);
         break;
     }
   }
 
   private infoLogInner(e: DxEvent, v: DxView | null) {
-    if (e.ty == 'key' || e.ty == 'text') {
+    if (e.ty == 'key' || e.ty == 'text' || e.ty == 'hsk') {
       DxLog.info(e.toString());
     } else if (v) {
       DxLog.info(

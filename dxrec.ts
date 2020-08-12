@@ -13,6 +13,7 @@ import DxEvent, {
   DxKeyEvent,
   DxSwipeEvent,
   DxTextEvent,
+  DxHideSoftKeyboardEvent,
 } from './dxevent.ts';
 import DxCompatUi from './ui/dxui.ts';
 import DxLog from './dxlog.ts';
@@ -179,6 +180,10 @@ class DxRecParser {
           base64.decode(args[2]),
           Number(args[1])
         );
+
+      case 'HIDE_SIME':
+        // HIDE_SIME ui t
+        return new DxHideSoftKeyboardEvent(this.curr.ui!, Number(args[1]));
 
       default:
         throw new IllegalStateError(`Unexpected event type ${type}`);

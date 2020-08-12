@@ -41,7 +41,9 @@ class DxDumper(private val queue: BlockingQueue<DxBroker.Item>) : Thread() {
             // TEXT act down_time text
             is DxTextEvent ->
                 DxLogger.i("TEXT $owner ${event.t} ${event.x}")
-            else -> DxLogger.d("????? $event")
+            // HIDE_SIME act down_time
+            is DxHideSoftKeyboardEvent ->
+                DxLogger.i("HIDE_SIME $owner ${event.t}")
         }
     }
 

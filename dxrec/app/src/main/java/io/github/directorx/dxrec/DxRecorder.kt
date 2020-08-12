@@ -18,6 +18,7 @@ import io.github.directorx.dxrec.ctx.DecorViewContext
 import io.github.directorx.dxrec.ctx.ViewContext
 import io.github.directorx.dxrec.ctx.WindowManagerGlobalContext
 import io.github.directorx.dxrec.log.AndroidLogger
+import io.github.directorx.dxrec.utils.accessors.HideSoftKeyboardEvent
 import io.github.directorx.dxrec.utils.accessors.TextEvent
 import io.github.directorx.dxrec.utils.accessors.contains
 import io.github.directorx.dxrec.utils.accessors.instanceof
@@ -105,6 +106,28 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
                         }
                     }
                 })
+        }
+
+        DxLogger.catchAndLog { // hook hide soft keyboard event
+            val onKeyPreIme = View::class.java.getMethod(
+                "onKeyPreIme",
+                Int::class.java,
+                KeyEvent::class.java
+            )
+            XposedBridge.hookMethod(onKeyPreIme, object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam?) {
+                    if (param == null) {
+                        return
+                    }
+                    val view = param.thisObject as? View ?: return
+                    val key = param.args[0] as? Int ?: return
+                    val event = param.args[1] as? KeyEvent ?: return
+                    if (event.action == KeyEvent.ACTION_DOWN && key == KeyEvent.KEYCODE_BACK) {
+                        val last = broker.curr
+                        detector.next(last?.ownerRef ?: ActivityOwner(DxActivityStack.top), HideSoftKeyboardEvent())
+                    }
+                }
+            })
         }
 
         // TODO support spaces in text, and incontinuous editing
@@ -363,6 +386,11 @@ class DxRecorder : IXposedHookLoadPackage, EvDetector.Listener() {
             val evt = DxTextEvent(down.text, last.event.t)
             broker.addEvent(evt)
         }
+    }
+
+    override fun onHideSoftKeyboard(down: HideSoftKeyboardEvent, owner: DxViewOwner) {
+        broker.addPair(owner, DxHideSoftKeyboardEvent(down.downTime))
+        broker.commit()
     }
 
     private fun prepare(pkgName: String, encode: Boolean) {

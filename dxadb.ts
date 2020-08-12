@@ -975,6 +975,22 @@ export default class DxAdb {
     );
   }
 
+  async isSoftKeyboardPresent(): Promise<boolean> {
+    const out = await this.unsafeExecOut(`dumpsys input_method`);
+    const res = /mInputShown=(?<is>\w+)[^]*?mIsInputViewShown=(?<iivs>\w+)/.exec(
+      out
+    );
+    if (!res || !res.groups) {
+      throw new AdbError(
+        'dumpsys input_method',
+        0,
+        'Match input method failed'
+      );
+    }
+    const { is, iivs } = res.groups;
+    return is == 'true' && iivs == 'true';
+  }
+
   private async dumpTopActivity(pkg: string): Promise<DumpSysActivityInfo> {
     // TODO: what if there are multiple activities, is the
     // first one the top activity

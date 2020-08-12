@@ -95,6 +95,9 @@ class PxPlayer extends DxPlayer {
       case 'text':
         await input.key((e as DxTextEvent).x);
         break;
+      case 'hsk':
+        await DxDroid.get().input.hideSoftKeyboard();
+        break;
     }
   }
 }
@@ -135,6 +138,8 @@ class PtPlayer extends DxPlayer {
       await input.key((e as DxKeyEvent).k);
     } else if (e.ty == 'text') {
       await input.text((e as DxTextEvent).x);
+    } else if (e.ty == 'hsk') {
+      await DxDroid.get().input.hideSoftKeyboard();
     }
   }
 
@@ -199,6 +204,8 @@ class WdgPlayer extends DxPlayer {
       await input.key((e as DxKeyEvent).k);
     } else if (e.ty == 'text') {
       await input.text((e as DxTextEvent).x);
+    } else if (e.ty == 'hsk') {
+      await DxDroid.get().input.hideSoftKeyboard();
     }
   }
 
@@ -243,6 +250,8 @@ class ResPlayer extends DxPlayer {
         await DxDroid.get().input.key((e as DxKeyEvent).k);
       } else if (e.ty == 'text') {
         await DxDroid.get().input.text((e as DxTextEvent).x);
+      } else if (e.ty == 'hsk') {
+        await DxDroid.get().input.hideSoftKeyboard();
       } else {
         throw new NotImplementedError();
       }

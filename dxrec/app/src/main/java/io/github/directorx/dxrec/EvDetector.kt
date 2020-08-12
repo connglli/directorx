@@ -4,6 +4,7 @@ import android.view.GestureDetector
 import android.view.InputEvent
 import android.view.KeyEvent
 import android.view.MotionEvent
+import io.github.directorx.dxrec.utils.accessors.HideSoftKeyboardEvent
 import io.github.directorx.dxrec.utils.accessors.TextEvent
 
 class EvDetector(
@@ -25,6 +26,7 @@ class EvDetector(
 
         open fun onKey(down: KeyEvent, owner: DxViewOwner) = Unit
         open fun onText(down: TextEvent, owner: DxViewOwner) = Unit
+        open fun onHideSoftKeyboard(down: HideSoftKeyboardEvent, owner: DxViewOwner) = Unit
     }
 
     private lateinit var owner: DxViewOwner
@@ -85,6 +87,11 @@ class EvDetector(
         nextText(evt)
     }
 
+    fun next(owner: DxViewOwner, evt: HideSoftKeyboardEvent) {
+        updateOwner(owner)
+        nextHideSoftKeyboard(evt)
+    }
+
     private fun nextMotion(event: MotionEvent) {
         if (event.action == MotionEvent.ACTION_UP) {
             listener.onUp(event, owner)
@@ -100,6 +107,10 @@ class EvDetector(
 
     private fun nextText(event: TextEvent) {
         listener.onText(event, owner)
+    }
+
+    private fun nextHideSoftKeyboard(event: HideSoftKeyboardEvent) {
+        listener.onHideSoftKeyboard(event, owner)
     }
 
     private fun updateOwner(owner: DxViewOwner) {

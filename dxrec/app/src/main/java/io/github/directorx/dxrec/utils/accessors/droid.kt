@@ -125,3 +125,4 @@ fun getForegroundColor(view: View): String? {
 }
 
 data class TextEvent(val text: String, val downTime: Long = SystemClock.uptimeMillis())
+data class HideSoftKeyboardEvent(val downTime: Long = SystemClock.uptimeMillis())

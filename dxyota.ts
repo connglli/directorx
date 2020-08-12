@@ -386,6 +386,18 @@ export default class DxYota {
     return await this.adb.unsafeShell(`${DxYota.BIN} info ${cmd}`);
   }
 
+  async hideSoftKeyboard(): Promise<void> {
+    if (!(await this.adb.isSoftKeyboardPresent())) {
+      return;
+    }
+    // try ESC, then BACK
+    try {
+      await this.key('KEYCODE_ESC');
+    } catch (ignored) {
+      await this.key('KEYCODE_BACK');
+    }
+  }
+
   async adaptiveSelect(
     view: DxView,
     compressed = true // use this flag only when no compressed flag in optOrView

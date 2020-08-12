@@ -7,7 +7,8 @@ export type DxEventType =
   | 'double-tap'
   | 'swipe'
   | 'key'
-  | 'text';
+  | 'text'
+  | 'hsk';
 
 export default DxEvent;
 interface DxEvent {
@@ -132,6 +133,17 @@ export class DxTextEvent implements DxEvent {
   }
   toString(): string {
     return `text ${this.x}`;
+  }
+}
+
+export class DxHideSoftKeyboardEvent implements DxEvent {
+  public readonly ty = 'hsk';
+  constructor(public readonly ui: DxCompatUi, public readonly t: number) {}
+  copy(ui: DxCompatUi = this.ui): DxEvent {
+    return new DxHideSoftKeyboardEvent(ui, this.t);
+  }
+  toString(): string {
+    return `hide-soft-keyboard`;
   }
 }
 

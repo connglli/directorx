@@ -40,4 +40,8 @@ data class DxTextEvent(
     val t: Long    // down time
 ) : DxEvent()
 
+data class DxHideSoftKeyboardEvent(
+    val t: Long // down time
+) : DxEvent()
+
 data class DxDummyEvent(val t: Long) : DxEvent()
