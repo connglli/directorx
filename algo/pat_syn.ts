@@ -403,6 +403,29 @@ class Scroll extends Expand {
   }
 }
 
+class NavigationUp extends Expand {
+  private static DESC = ['Back', 'Navigation Up', 'Close', 'Dismiss'];
+
+  get name() {
+    return 'navigation-up';
+  }
+
+  match() {
+    const desc = this.args.v.desc;
+    for (const d of NavigationUp.DESC) {
+      if (desc == d) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async apply(droid: DxDroid): Promise<boolean> {
+    await droid.input.pressBack();
+    return true;
+  }
+}
+
 abstract class Reveal extends DxBpPat {
   get level() {
     return 'reveal';
@@ -1082,6 +1105,7 @@ const patterns = [
   VagueText,
   VagueTextExt,
   Scroll,
+  NavigationUp,
   // Reveal
   MoreOptions,
   DrawerMenu,

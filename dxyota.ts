@@ -8,7 +8,7 @@ import DxView, {
 import DxCompatUi from './ui/dxui.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
-import { doc2freq, freq2vec, similarity } from './utils/vecutil.ts';
+import { doc2freq, freq2vec, similarity, WordFreq } from './utils/vecutil.ts';
 import { splitAsWords, filterStopwords } from './utils/strutil.ts';
 
 /** Quotes shell command string with "" */
@@ -341,6 +341,23 @@ export class YotaNoSuchViewError extends AdbError {
   }
 }
 
+function tfIdfMostSimilar(self: WordFreq, others: WordFreq[]) {
+  const frequents = [self, ...others];
+  const words = Array.from(new Set(frequents.flatMap(Object.keys)));
+  const vectors = frequents.map((f) => freq2vec(f, words));
+  let min = Number.POSITIVE_INFINITY;
+  let minInd = -1;
+  // return the most similar one using cosine similarity
+  for (let i = 1; i < vectors.length; i++) {
+    const s = similarity.cosine(vectors[0].vector, vectors[i].vector);
+    if (s < min) {
+      min = s;
+      minInd = i;
+    }
+  }
+  return minInd - 1;
+}
+
 export default class DxYota {
   public static readonly BIN = '/data/local/tmp/yota';
   constructor(public readonly adb: DxAdb) {}
@@ -427,6 +444,10 @@ export default class DxYota {
     return await this.adb.unsafeShell(`${DxYota.BIN} info ${cmd}`);
   }
 
+  async pressBack(): Promise<void> {
+    return await this.key('BACK');
+  }
+
   async hideSoftKeyboard(): Promise<void> {
     if (!(await this.adb.isSoftKeyboardPresent())) {
       return;
@@ -499,11 +520,32 @@ export default class DxYota {
       // TODO: what if there are multiple? (add context info)
       // FIX: sometimes, yota returns the capitalized text (because
       // of text view settings)
-      return (
-        (vms.find((vm) => vm.text == view.text) ||
-          vms.find((vm) => vm.text.toLowerCase() == view.text.toLowerCase())) ??
-        null
-      );
+      vms = vms.filter((vm) => vm.text == view.text);
+      if (vms.length == 0) {
+        vms = vms.filter(
+          (vm) => vm.text.toLowerCase() == view.text.toLowerCase()
+        );
+      }
+      if (vms.length == 0) {
+        return null;
+      } else if (vms.length == 1) {
+        return vms[0];
+      } else {
+        // choose the most similar best
+        const frequents = [view, ...vms]
+          .map((w) => [
+            ...filterStopwords(
+              splitAsWords(w.text).map((w) => w.toLowerCase())
+            ),
+            ...filterStopwords(
+              splitAsWords(
+                w instanceof DxView ? w.resEntry : w['resource-entry']
+              ).map((w) => w.toLowerCase())
+            ),
+          ])
+          .map(doc2freq);
+        return vms[tfIdfMostSimilar(frequents[0], frequents.slice(1)) + 1];
+      }
     }
     // no text, let's try resource-id and content-desc.
     // like text, let's firstly try a strict content-desc selection
@@ -548,6 +590,11 @@ export default class DxYota {
         if (best) {
           return best;
         }
+        // no best, we prefer containing desc
+        best = vms.find((vm) => vm['content-desc'].includes(view.desc));
+        if (best) {
+          return best;
+        }
         // or having similar desc (tfidf, 1-gram feature)
         const frequents = [view, ...vms]
           .map((w) => {
@@ -557,19 +604,7 @@ export default class DxYota {
             );
           })
           .map(doc2freq);
-        const words = Array.from(new Set(frequents.flatMap(Object.keys)));
-        const vectors = frequents.map((f) => freq2vec(f, words));
-        let min = Number.POSITIVE_INFINITY;
-        let minInd = -1;
-        // return the most similar one using cosine similarity
-        for (let i = 1; i < vectors.length; i++) {
-          const s = similarity.cosine(vectors[0].vector, vectors[i].vector);
-          if (s < min) {
-            min = s;
-            minInd = i;
-          }
-        }
-        return vms[minInd];
+        return vms[tfIdfMostSimilar(frequents[0], frequents.slice(1)) + 1];
       }
     }
     // no text, and does not find any by resource-id, let's try content-desc
