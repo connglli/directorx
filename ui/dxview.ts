@@ -915,6 +915,20 @@ export class Views {
     return false;
   }
 
+  static splitResourceId(resId: string): [string, string, string] {
+    if (resId.length == 0) return ['', '', ''];
+    const colon = resId.indexOf(':');
+    const slash = resId.indexOf('/');
+    if (colon == -1 || slash == -1) {
+      return ['', '', ''];
+    }
+    return [
+      resId.substring(0, colon),
+      resId.substring(colon + 1, slash),
+      resId.substring(slash + 1),
+    ];
+  }
+
   static bounds(v: DxView): XYInterval {
     return XYInterval.of(...Views.xxyy(v));
   }

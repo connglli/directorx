@@ -13,6 +13,7 @@ import DxSegment, {
   SegmentBottomUpFinder,
 } from '../ui/dxseg.ts';
 import DxDroid, { DevInfo } from '../dxdroid.ts';
+import adaptSel from './ada_sel.ts';
 import {
   NotImplementedError,
   IllegalStateError,
@@ -316,10 +317,7 @@ class Scroll extends Expand {
           iteration += 1;
         }
         lastDir = currDir;
-      } while (
-        iteration < 3 &&
-        (await droid.input.adaptiveSelect(this.args.v)) == null
-      );
+      } while (iteration < 3 && (await adaptSel(droid, this.args.v)) == null);
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
       }
@@ -366,10 +364,7 @@ class Scroll extends Expand {
           iteration += 1;
         }
         lastDir = currDir;
-      } while (
-        iteration < 3 &&
-        (await droid.input.adaptiveSelect(this.args.v)) == null
-      );
+      } while (iteration < 3 && (await adaptSel(droid, this.args.v)) == null);
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
       }
@@ -900,7 +895,7 @@ class SingleSideViewPager extends Reveal {
     // until the target view shown
     for (const page of this.vPager.children) {
       await droid.input.tap(Views.x0(page) + 1, Views.y0(page) + 1);
-      if ((await droid.input.adaptiveSelect(this.args.v)) != null) {
+      if ((await adaptSel(droid, this.args.v)) != null) {
         return false;
       }
     }

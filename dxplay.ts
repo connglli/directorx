@@ -15,6 +15,7 @@ import DxView, { Views } from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
 import DxSegment from './ui/dxseg.ts';
 import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
+import adaptSel from './algo/ada_sel.ts';
 import segUi from './algo/ui_seg.ts';
 import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';
 import recBpPat, { Invisible } from './algo/pat_syn.ts';
@@ -421,7 +422,7 @@ class ResPlayer extends DxPlayer {
       );
     }
     // try to select its corresponding view on playee
-    return [v, await DxDroid.get().input.adaptiveSelect(v, visible)];
+    return [v, await adaptSel(DxDroid.get(), v, visible)];
   }
 
   private async fireOnViewMap(

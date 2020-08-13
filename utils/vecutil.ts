@@ -33,16 +33,16 @@ export function closest(
   x: Vector[],
   simFn: (a: Vector, b: Vector) => number
 ): number {
-  let min = Number.POSITIVE_INFINITY;
-  let minInd = -1;
+  let max = Number.NEGATIVE_INFINITY;
+  let maxInd = -1;
   for (let i = 0; i < x.length; i++) {
     const s = simFn(a, x[i]);
-    if (s < min) {
-      min = s;
-      minInd = i;
+    if (s > max) {
+      max = s;
+      maxInd = i;
     }
   }
-  return minInd;
+  return maxInd;
 }
 
 export type WordFreq = {
