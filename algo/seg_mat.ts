@@ -2,15 +2,9 @@ import DxView from '../ui/dxview.ts';
 import DxSegment from '../ui/dxseg.ts';
 import { BiGraph } from '../utils/bigraph.ts';
 import * as vecutil from '../utils/vecutil.ts';
-import { filterStopwords, splitAsWords } from '../utils/strutil.ts';
 import { enumerate } from '../utils/pyalike.ts';
 
-type WordFreq = vecutil.WordFreq;
 type WordVec = vecutil.WordVec;
-
-const DEFAULTS = {
-  GRAM: 1, // N-GRAM features the matching algorithm used, default is 1-gram
-};
 
 /** If a segment is matched to nobody, then it is matched to NO_MATCH */
 export const NO_MATCH: DxSegment = new DxSegment([], -1, -1, -1, -1, -1);
@@ -93,39 +87,6 @@ export class DxSegMatch {
   }
 }
 
-/** Extract the n gram feature of a str */
-function extractNGramFeaturesOf(str: string, n: number): string[][] {
-  return vecutil.nGramFeature(
-    filterStopwords(splitAsWords(str).map((w) => w.toLowerCase())),
-    n
-  );
-}
-
-/** Collect the words and create a WordFreq from a segment */
-function newWordFreq(seg: DxSegment): WordFreq {
-  const freq: WordFreq = {};
-  function collect(view: DxView) {
-    const ws = [
-      ...extractNGramFeaturesOf(view.resEntry, DEFAULTS.GRAM),
-      ...extractNGramFeaturesOf(view.desc, DEFAULTS.GRAM),
-      ...extractNGramFeaturesOf(view.text, DEFAULTS.GRAM),
-      ...extractNGramFeaturesOf(view.tag, DEFAULTS.GRAM),
-      ...extractNGramFeaturesOf(view.tip, DEFAULTS.GRAM),
-      ...extractNGramFeaturesOf(view.hint, DEFAULTS.GRAM),
-    ].map((i) => i.join('')); // join n-gram feature as a single word
-    for (const w of ws) {
-      freq[w] = 1 + (freq[w] ?? 0);
-    }
-    for (const c of view.children) {
-      collect(c);
-    }
-  }
-  for (const r of seg.roots) {
-    collect(r);
-  }
-  return freq;
-}
-
 /** Calculator similarity of two word vectors (cosine similarity) */
 function similarity(v1: WordVec, v2: WordVec): number {
   return Math.round(1000 * vecutil.similarity.cosine(v1.vector, v2.vector));
@@ -144,20 +105,31 @@ export default function matchSeg(a: DxSegment[], b: DxSegment[]): DxSegMatch {
   }
   const size = side1.length;
 
-  // count word frequency
-  const freqs1 = side1.map(newWordFreq);
-  const freqs2 = side2.map(newWordFreq);
-  // create the word list
-  const words = Array.from(
-    new Set([...freqs1, ...freqs2].flatMap(Object.keys))
-  );
-  // calculate the tf-idf for each word
-  const tfidfs = vecutil.tfidf([...freqs1, ...freqs2]);
-  const tfidfs1 = tfidfs.slice(0, freqs1.length);
-  const tfidfs2 = tfidfs.slice(freqs1.length);
-  // create word vector from tfidf
-  const vecs1 = tfidfs1.map((tfidf) => vecutil.freq2vec(tfidf, words));
-  const vecs2 = tfidfs2.map((tfidf) => vecutil.freq2vec(tfidf, words));
+  // create an document for each segment
+  const corpus = [...side1, ...side2].map((seg) => {
+    let doc: string = '';
+    function concat(view: DxView) {
+      doc += view.resEntry + ' ';
+      doc += view.desc + ' ';
+      doc += view.text + ' ';
+      doc += view.tag + ' ';
+      doc += view.tip + ' ';
+      doc += view.hint + ' ';
+      for (const c of view.children) {
+        concat(c);
+      }
+    }
+    for (const r of seg.roots) {
+      concat(r);
+    }
+    return doc;
+  });
+  // train a tfidf model
+  const model = new vecutil.TfIdfModel(corpus, true, 1, '');
+  // retrieve the tfidf vector for each segment
+  const vectors = model.vectors;
+  const vecs1 = vectors.slice(0, side1.length);
+  const vecs2 = vectors.slice(side1.length);
 
   // treat similarity as weights, and make the
   // similarity of NO_MATCH to any as 0

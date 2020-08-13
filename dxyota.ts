@@ -8,8 +8,8 @@ import DxView, {
 import DxCompatUi from './ui/dxui.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
-import { doc2freq, freq2vec, similarity, WordFreq } from './utils/vecutil.ts';
-import { splitAsWords, filterStopwords } from './utils/strutil.ts';
+import { BoWModel, closest, similarity } from './utils/vecutil.ts';
+import { splitAsWords } from './utils/strutil.ts';
 
 /** Quotes shell command string with "" */
 function q(s: string | number): string {
@@ -341,23 +341,6 @@ export class YotaNoSuchViewError extends AdbError {
   }
 }
 
-function tfIdfMostSimilar(self: WordFreq, others: WordFreq[]) {
-  const frequents = [self, ...others];
-  const words = Array.from(new Set(frequents.flatMap(Object.keys)));
-  const vectors = frequents.map((f) => freq2vec(f, words));
-  let min = Number.POSITIVE_INFINITY;
-  let minInd = -1;
-  // return the most similar one using cosine similarity
-  for (let i = 1; i < vectors.length; i++) {
-    const s = similarity.cosine(vectors[0].vector, vectors[i].vector);
-    if (s < min) {
-      min = s;
-      minInd = i;
-    }
-  }
-  return minInd - 1;
-}
-
 export default class DxYota {
   public static readonly BIN = '/data/local/tmp/yota';
   constructor(public readonly adb: DxAdb) {}
@@ -531,20 +514,25 @@ export default class DxYota {
       } else if (vms.length == 1) {
         return vms[0];
       } else {
-        // choose the most similar best
-        const frequents = [view, ...vms]
-          .map((w) => [
-            ...filterStopwords(
-              splitAsWords(w.text).map((w) => w.toLowerCase())
-            ),
-            ...filterStopwords(
-              splitAsWords(
-                w instanceof DxView ? w.resEntry : w['resource-entry']
-              ).map((w) => w.toLowerCase())
-            ),
-          ])
-          .map(doc2freq);
-        return vms[tfIdfMostSimilar(frequents[0], frequents.slice(1)) + 1];
+        // choose the most BoW similar
+        const model = new BoWModel(
+          [view, ...vms].map((w) =>
+            [
+              w.text,
+              w instanceof DxView ? w.resEntry : w['resource-entry'],
+            ].join(' ')
+          ),
+          true,
+          1,
+          ''
+        );
+        const vecs = model.vectors;
+        const ind = closest(
+          vecs[0].vector,
+          vecs.slice(1).map((v) => v.vector),
+          similarity.cosine
+        );
+        return vms[ind + 1];
       }
     }
     // no text, let's try resource-id and content-desc.
@@ -595,16 +583,22 @@ export default class DxYota {
         if (best) {
           return best;
         }
-        // or having similar desc (tfidf, 1-gram feature)
-        const frequents = [view, ...vms]
-          .map((w) => {
-            let desc = w instanceof DxView ? w.desc : w['content-desc'];
-            return filterStopwords(
-              splitAsWords(desc).map((w) => w.toLowerCase())
-            );
-          })
-          .map(doc2freq);
-        return vms[tfIdfMostSimilar(frequents[0], frequents.slice(1)) + 1];
+        // or having the most BoW similar desc
+        const model = new BoWModel(
+          [view, ...vms].map((w) =>
+            w instanceof DxView ? w.desc : w['content-desc']
+          ),
+          true,
+          1,
+          ''
+        );
+        const vecs = model.vectors;
+        const ind = closest(
+          vecs[0].vector,
+          vecs.slice(1).map((v) => v.vector),
+          similarity.cosine
+        );
+        return vms[ind + 1];
       }
     }
     // no text, and does not find any by resource-id, let's try content-desc

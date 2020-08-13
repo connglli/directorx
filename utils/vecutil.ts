@@ -1,4 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.60.0/testing/asserts.ts';
+import { splitAsWords, filterStopwords } from './strutil.ts';
 
 export class VecutilError extends Error {}
 
@@ -25,6 +26,23 @@ export function norm(a: Vector, n = 2): number {
     default:
       return Math.pow(sum(a.map((x) => Math.pow(x, n))), 1 / n);
   }
+}
+
+export function closest(
+  a: Vector,
+  x: Vector[],
+  simFn: (a: Vector, b: Vector) => number
+): number {
+  let min = Number.POSITIVE_INFINITY;
+  let minInd = -1;
+  for (let i = 0; i < x.length; i++) {
+    const s = simFn(a, x[i]);
+    if (s < min) {
+      min = s;
+      minInd = i;
+    }
+  }
+  return minInd;
 }
 
 export type WordFreq = {
@@ -116,6 +134,72 @@ export const distance = {
     return 1 - similarity.cosine(a, b);
   },
 };
+
+export abstract class DocumentModel {
+  public readonly rawCorpus: string[];
+  public readonly rmStopwords: boolean;
+  public readonly nGram: number;
+  public readonly sep: string;
+
+  protected corpus_: string[][];
+  protected frequencies_: WordFreq[];
+  protected words_: string[];
+  protected vectors_: WordVec[];
+
+  constructor(corpus: string[], rmStopwords = true, nGram = 1, sep = '/') {
+    this.rawCorpus = corpus;
+    this.rmStopwords = rmStopwords;
+    this.nGram = nGram;
+    this.sep = sep;
+    this.corpus_ = corpus.map((d) =>
+      splitAsWords(d).map((i) => i.toLowerCase())
+    );
+    if (this.rmStopwords) {
+      this.corpus_ = this.corpus_.map((d) => filterStopwords(d));
+    }
+    this.corpus_ = this.corpus_.map((d) =>
+      nGramFeature(d, this.nGram).map((i) => i.join(this.sep))
+    );
+    this.frequencies_ = this.corpus_.map(doc2freq);
+    this.words_ = Array.from(new Set(this.frequencies_.flatMap(Object.keys)));
+    this.vectors_ = this.trainModel();
+  }
+
+  /** Returns the word frequency for each document */
+  get frequencies() {
+    return this.frequencies_;
+  }
+
+  /** Return all words that appears in this corpus */
+  get words() {
+    return this.words_;
+  }
+
+  /** Returns the document vector for each document */
+  get vectors() {
+    return this.vectors_;
+  }
+
+  /** Train the model, i.e., convert the frequency to  document vector */
+  protected abstract trainModel(): WordVec[];
+}
+
+/** The Bag of Words document model */
+export class BoWModel extends DocumentModel {
+  protected trainModel() {
+    // directly map frequencies to vectors
+    return this.frequencies_.map((f) => freq2vec(f, this.words_));
+  }
+}
+
+/** The Term-Frequency Inverse-Document-Frequency document model */
+export class TfIdfModel extends DocumentModel {
+  protected trainModel() {
+    // convert to tfidf freq, then map to vector
+    const tfidfRepr = tfidf(this.frequencies_);
+    return tfidfRepr.map((f) => freq2vec(f, this.words_));
+  }
+}
 
 if (import.meta.main) {
   assertEquals(sum([1, -1, 0, 3, 5, 7]), 15);
