@@ -109,9 +109,27 @@ export function tfidf(docs: WordFreq[]): WordFreq[] {
   });
 }
 
-export function nGramFeature<T>(doc: T[], n: number): T[][] {
+export function nGramFeature(
+  doc: string[],
+  n: number,
+  padStart = '<BOD>',
+  padEnd = '<EOD>'
+): string[][] {
+  return nGramFeatureGeneric(doc, n, padStart, padEnd);
+}
+
+export function nGramFeatureGeneric<T>(
+  doc: T[],
+  n: number,
+  padStart: T,
+  padEnd: T
+): T[][] {
   if (n <= 0) {
     throw new VecutilError('N cannot be non-positive');
+  } else if (n >= 1) {
+    doc = doc.slice();
+    doc.unshift(...new Array<T>(n - 1).fill(padStart));
+    doc.push(...new Array<T>(n - 1).fill(padEnd));
   }
   const features = [];
   for (let i = 0; i <= doc.length - n; i++) {
