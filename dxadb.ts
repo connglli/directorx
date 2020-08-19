@@ -925,6 +925,34 @@ export default class DxAdb {
     return await this.unsafeExecOut(`cmd ${args}`);
   }
 
+  async tap(x: number, y: number): Promise<void> {
+    await this.unsafeShell(`input tap ${x} ${y}`);
+  }
+
+  async longTap(x: number, y: number): Promise<void> {
+    await this.swipe(x, y, 0, 0, 500);
+  }
+
+  async swipe(
+    x: number,
+    y: number,
+    dx: number,
+    dy: number,
+    duration: number
+  ): Promise<void> {
+    const toX = x + dx;
+    const toY = y + dy;
+    await this.unsafeShell(`input swipe ${x} ${y} ${toX} ${toY} ${duration}`);
+  }
+
+  async key(key: string): Promise<void> {
+    await this.unsafeShell(`input keyevent ${key}`);
+  }
+
+  async text(text: string): Promise<void> {
+    await this.unsafeShell(`input text ${text}`);
+  }
+
   async topActivity(
     pkg: string,
     decoding: boolean,

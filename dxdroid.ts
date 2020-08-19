@@ -1,8 +1,13 @@
 import DxAdb, { DevInfo } from './dxadb.ts';
-import DxYota, { ViewInputOptions, SelectOptions, ViewMap } from './dxyota.ts';
+import DxYota, {
+  ViewInputOptions,
+  ViewInputType,
+  SelectOptions,
+  ViewMap,
+} from './dxyota.ts';
 import DxCompatUi from './ui/dxui.ts';
 
-export { DevInfo, ViewInputOptions, SelectOptions, ViewMap };
+export { DevInfo, ViewInputType, ViewInputOptions, SelectOptions, ViewMap };
 
 export class DxDroidError extends Error {}
 

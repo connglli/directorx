@@ -349,7 +349,7 @@ export default class DxYota {
     }
   }
 
-  async select(opt: ViewOptions): Promise<ViewMap[]> {
+  async select(opt: SelectOptions): Promise<ViewMap[]> {
     const args = makeSelectOpts(opt);
     let retry = 3,
       status: AdbResult;
