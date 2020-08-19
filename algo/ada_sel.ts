@@ -1,5 +1,5 @@
 import DxView, { Views } from '../ui/dxview.ts';
-import DxDroid, { ViewMap, SelectOptions, DevInfo } from '../dxdroid.ts';
+import { ViewMap, SelectOptions, DevInfo, DroidInput } from '../dxdroid.ts';
 import { BoWModel, similarity, closest } from '../utils/vecutil.ts';
 import { splitAsWords } from '../utils/strutil.ts';
 import { NotImplementedError } from '../utils/error.ts';
@@ -44,7 +44,7 @@ export function asViewMap(v: DxView, d: DevInfo): ViewMap {
 
 /** Adaptively select the target view */
 export default async function adaptSel(
-  droid: DxDroid,
+  input: DroidInput,
   view: DxView,
   compressed = true
 ): Promise<N<ViewMap>> {
@@ -70,7 +70,7 @@ export default async function adaptSel(
   opt.descContains = view.desc.length > 0 ? view.desc : undefined;
   // if there is only text, then use the less comprehensive selection
   if (opt.textContains && (opt.resIdContains || opt.descContains)) {
-    vms = await droid.input.select(opt);
+    vms = await input.select(opt);
     // choose the best match: text is complete same
     if (vms.length >= 1) {
       let found =
@@ -95,7 +95,7 @@ export default async function adaptSel(
   // never try other props like res-id and content description
   if (view.text.length != 0) {
     opt.textContains = view.text;
-    vms = await droid.input.select(opt);
+    vms = await input.select(opt);
     // always choose the best match, because if a view has
     // some text that presents to a user, it is probably
     // not changed across devices
@@ -137,7 +137,7 @@ export default async function adaptSel(
   // like text, let's firstly try a strict content-desc selection
   if (view.desc.length != 0) {
     opt.descContains = view.desc;
-    vms = await droid.input.select(opt);
+    vms = await input.select(opt);
     let found =
       (vms.find((vm) => vm['content-desc'] == view.desc) ||
         vms.find(
@@ -154,7 +154,7 @@ export default async function adaptSel(
   opt.resIdContains = undefined;
   if (view.resId.length != 0) {
     opt.resIdContains = view.resEntry;
-    vms = await droid.input.select(opt);
+    vms = await input.select(opt);
     if (vms.length == 1) {
       return vms[0];
     } else if (vms.length > 1) {
@@ -206,7 +206,7 @@ export default async function adaptSel(
   opt.descContains = undefined;
   if (view.desc.length != 0) {
     opt.descContains = view.desc;
-    vms = await droid.input.select(opt);
+    vms = await input.select(opt);
     if (vms.length == 0) {
       return null;
     }

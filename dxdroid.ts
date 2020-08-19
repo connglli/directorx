@@ -11,6 +11,25 @@ export { DevInfo, ViewInputType, ViewInputOptions, SelectOptions, ViewMap };
 
 export class DxDroidError extends Error {}
 
+export interface DroidInput {
+  tap(x: number, y: number): Promise<void>;
+  longTap(x: number, y: number): Promise<void>;
+  doubleTap(x: number, y: number): Promise<void>;
+  swipe(
+    x: number,
+    y: number,
+    dx: number,
+    dy: number,
+    duration: number
+  ): Promise<void>;
+  key(key: string): Promise<void>;
+  text(text: string): Promise<void>;
+  hideSoftKeyboard(): Promise<void>;
+  select(opt: SelectOptions): Promise<ViewMap[]>;
+  view(type: ViewInputType, opt: ViewInputOptions): Promise<void>;
+  pressBack(): Promise<void>;
+}
+
 export default class DxDroid {
   private static instance: DxDroid | null = null;
 
@@ -35,7 +54,7 @@ export default class DxDroid {
     return this.dev_;
   }
 
-  get input(): DxYota {
+  get input(): DroidInput {
     this.check();
     return this.yota_;
   }

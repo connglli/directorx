@@ -1,5 +1,4 @@
 import DxEvent, {
-  DxXYEvent,
   DxKeyEvent,
   DxLongTapEvent,
   DxDoubleTapEvent,
@@ -11,14 +10,15 @@ import DxEvent, {
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
-import DxView, { Views } from './ui/dxview.ts';
+import DxView from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
-import DxSegment from './ui/dxseg.ts';
 import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
-import adaptSel from './algo/ada_sel.ts';
-import segUi from './algo/ui_seg.ts';
-import matchSeg, { NO_MATCH } from './algo/seg_mat.ts';
-import recBpPat, { Invisible } from './algo/pat_syn.ts';
+import {
+  tryLookahead,
+  adaptiveSelect,
+  synthesizePattern,
+  DxBpPat,
+} from './algo/mod.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,
@@ -265,9 +265,18 @@ class ResPlayer extends DxPlayer {
       await droid.input.hideSoftKeyboard();
     }
 
-    // find the view in recordee and playee first
+    // find the view in recordee
+    const { ui: rUi, x, y } = e;
+    const v = rUi.findViewByXY(x, y);
+    if (v == null) {
+      throw new IllegalStateError(
+        `No visible view found on recordee tree at (${x}, ${y})`
+      );
+    }
+
+    // adaptively select the target view map in playee
     const pDev = droid.dev;
-    const [v, vm] = await this.find(e);
+    const vm = await adaptiveSelect(droid.input, v);
     if (vm != null && vm.visible) {
       return await this.fireOnViewMap(e, vm, rDev, pDev);
     }
@@ -276,153 +285,33 @@ class ResPlayer extends DxPlayer {
     // these events (including current) can be skipped if and only
     // if their next event can be fired directly on current ui
     // TODO: add more rules to check whether v can be skipped
-    if (v.text.length == 0 && this.seq.size() > 0) {
-      let found = -1;
-      const nextK = this.seq.topN(this.K);
-      for (let i = 0; i < nextK.length; i++) {
-        const ne = nextK[i];
-        // we come across an non-xy event, fail
-        if (!isXYEvent(ne)) {
-          found = -1;
-          break;
-        }
-        const [, vm] = await this.find(ne);
-        if (vm != null && vm.visible) {
-          found = i;
-          break;
-        }
-      }
-      // found one that can be fired on current ui
-      if (found != -1) {
-        const popped = found;
-        const skipped = popped + 1;
-        DxLog.info(`/* skip next ${skipped} events */`);
-        this.seq.popN(popped);
-        return;
-      }
-    }
-
-    // let's see if the view is invisible, and apply
-    // the invisible pattern if possible
-    const [, ivm] = await this.find(e, false);
     const pUi = await this.top();
-    if (ivm && !ivm.important) {
-      // sometimes an important or invisible view may got,
-      // even though it is not suitable to fire it, it provides
-      // useful information, specific patterns can be used.
-      let v: DxView | null = null;
-      // TODO: what if multiple views with same text
-      if (ivm.text.length > 0) {
-        v = pUi.findViewByText(ivm.text);
-        // FIX: view's text given by droid are often capitalized
-        if (!v) {
-          v = pUi.findViewByText(ivm.text, true);
-        }
-      } else if (ivm['resource-id'].length > 0) {
-        v = pUi.findViewByResource(ivm['resource-type'], ivm['resource-entry']);
-      } else if (ivm['content-desc'].length > 0) {
-        v = pUi.findViewByDesc(ivm['content-desc']);
-      } else {
-        v = pUi.findViewByXY(ivm.bounds.left + 1, ivm.bounds.top + 1);
-      }
-      if (v == null) {
-        throw new IllegalStateError('Cannot find view on playee tree');
-      }
-      const pattern = new Invisible({
-        v,
-        u: pUi,
-        d: pDev,
-      });
-      if (!pattern.match()) {
-        throw new NotImplementedError(`Pattern is not ${pattern.name}`);
-      } else {
-        DxLog.info(`pattern ${pattern.name}`);
-      }
-      // apply the rules to get the synthesized event
-      if (!(await pattern.apply(droid))) {
-        // push the raw event back to the sequence, and try again
-        this.seq.push(e);
-      }
+    const popped = await tryLookahead(this.seq, this.K, v, droid.input);
+    if (popped >= 0) {
+      const skipped = popped + 1; // including e
+      DxLog.info(`/* skip next ${skipped} events */`);
+      this.seq.popN(popped);
       return;
     }
 
-    // when lookahead fails, segment the ui,
-    // find the matched segment, and synthesize
-    // the equivalent event sequence
-    const rUi = e.ui;
-
-    // segment the ui
-    const [, rSegs] = segUi(rUi, rDev);
-    const [, pSegs] = segUi(pUi, pDev);
-
-    // match segment and find the target segment
-    const match = matchSeg(pSegs, rSegs);
-    // find the segment where the w resides
-    const rSeg = this.findSegByView(v, rSegs);
-    let pSeg = match.getPerfectMatch(rSeg);
-    if (!pSeg) {
-      throw new IllegalStateError(
-        'Does not find any matched segment, even NO_MATCH'
-      );
-    } else if (pSeg == NO_MATCH) {
-      DxLog.info('Perfect Match does not found, tune to Best Matches');
-      const [score, matched] = match.getBestMatches(rSeg);
-      if (matched.length == 0) {
-        throw new IllegalStateError('Best Matches do not found');
-      } else if (matched.length != 1) {
-        throw new NotImplementedError(
-          `Multiple best matched segments with score ${score}`
-        );
-      }
-      pSeg = matched[0];
-    }
-
-    // recognize the pattern
-    const pattern = recBpPat({
-      e,
-      v,
-      r: { u: rUi, s: rSeg, d: rDev },
-      p: { u: pUi, s: pSeg, d: pDev },
-    });
+    // lookahead failed, let's synthesize a pattern, and apply
+    // the pattern to synthesize an equivalent event sequence
+    const pattern = await synthesizePattern(e, v, pUi, rDev, pDev, droid.input);
     if (pattern == null) {
       throw new NotImplementedError('No pattern is recognized');
-    } else {
-      DxLog.info(`pattern ${pattern.level}:${pattern.name}`);
     }
+
+    if (pattern instanceof DxBpPat) {
+      DxLog.info(`pattern ${pattern.level}:${pattern.name}`);
+    } else {
+      DxLog.info(`pattern ${pattern.name}`);
+    }
+
     // apply the rules to get the synthesized event
-    if (!(await pattern.apply(droid))) {
+    if (!(await pattern.apply(droid.input))) {
       // push the raw event back to the sequence, and try again
       this.seq.push(e);
     }
-  }
-
-  private findSegByView(v: DxView, segs: DxSegment[]): DxSegment {
-    for (const s of segs) {
-      for (const r of s.roots) {
-        if (r == v || Views.isChild(v, r)) {
-          return s;
-        }
-      }
-    }
-    throw new IllegalStateError('Cannot find the view on any segment');
-  }
-
-  /** Return then view on recordee and view map on playee */
-  private async find(
-    event: DxXYEvent,
-    visible = true
-  ): Promise<[DxView, N<ViewMap>]> {
-    // TODO: what if multiple views with same text
-    const { ui: rUi, x, y } = event;
-    // retrieve the view on recordee
-    const v = rUi.findViewByXY(x, y);
-    if (v == null) {
-      throw new IllegalStateError(
-        `No visible view found on recordee tree at (${x}, ${y})`
-      );
-    }
-    // try to select its corresponding view on playee
-    return [v, await adaptSel(DxDroid.get(), v, visible)];
   }
 
   private async fireOnViewMap(

@@ -194,3 +194,25 @@ const STOPWORDS = new Set([
 export function filterStopwords(ws: string[]): string[] {
   return ws.filter((w) => !STOPWORDS.has(w));
 }
+
+export function wordsInclude(a: string, b: string, caseSensitive = true) {
+  let aw = splitAsWords(a);
+  let bw = splitAsWords(b);
+  if (!caseSensitive) {
+    aw = aw.map((w) => w.toLowerCase());
+    bw = bw.map((w) => w.toLowerCase());
+  }
+  if (aw.length == 0 || bw.length == 0) {
+    return false;
+  }
+  if (aw.length < bw.length) {
+    return false;
+  }
+  const len = bw.length;
+  for (let i = 0; i <= aw.length - len; i++) {
+    if (aw.slice(i, i + len).reduce((eq, w, j) => eq && w == bw[j], true)) {
+      return true;
+    }
+  }
+  return false;
+}
