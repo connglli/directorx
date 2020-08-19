@@ -24,9 +24,9 @@ class DecorViewContext : DxContext {
 
                 val bg = getBackgroundColor(decor)
                 when {
-                    bg.first == null -> { // no background, then inherits from parent
-                        appendKV(info, "bg-class", ".", prefix = "")
-                        appendKV(info, "bg-color", ".")
+                    bg.first == null -> { // no background, then let's set it as white
+                        appendKV(info, "bg-class", "ColorDrawable", prefix = "")
+                        appendKV(info, "bg-color", "-1")
                     }
                     bg.second == null -> { // no color, maybe a layer, a shape, an image
                         appendKV(info, "bg-class", bg.first!!, prefix = "")
