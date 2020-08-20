@@ -30,7 +30,9 @@ export default async function synPattern(
   rDev: DevInfo,
   pDev: DevInfo,
   input: DroidInput
-): Promise<N<DxPat>> {
+): Promise<DxPat[]> {
+  const patterns: DxPat[] = [];
+
   const rUi = event.ui;
 
   // let's see if the view is invisible, and apply
@@ -64,7 +66,9 @@ export default async function synPattern(
       u: pUi,
       d: pDev,
     });
-    return pattern.match() ? pattern : null;
+    if (pattern.match()) {
+      patterns.push(pattern);
+    }
   }
 
   // segment the ui
@@ -93,11 +97,14 @@ export default async function synPattern(
     pSeg = matched[0];
   }
 
-  // return the recognized bp pattern
-  return recBpPat({
-    e: event,
-    v: view,
-    r: { u: rUi, s: rSeg, d: rDev },
-    p: { u: pUi, s: pSeg, d: pDev },
-  });
+  patterns.push(
+    ...recBpPat({
+      e: event,
+      v: view,
+      r: { u: rUi, s: rSeg, d: rDev },
+      p: { u: pUi, s: pSeg, d: pDev },
+    })
+  );
+
+  return patterns;
 }

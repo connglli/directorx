@@ -49,13 +49,20 @@ prog
     }
   )
   .option(
-    '-K, --lookahead [type:number]',
+    '-K, --lookahead <type:number>',
     'Look ahead constant, required when player is res'
+  )
+  .option(
+    '-H, --autohide [type:boolean]',
+    'automatically hide soft keyboard before firing each event',
+    {
+      default: true,
+    }
   )
   .option('-v, --verbose [type:boolean]', 'output verbose information')
   .action(
     async (
-      { serial, player, lookahead, verbose }: IFlags,
+      { serial, player, lookahead, verbose, autohide }: IFlags,
       dxpk: string
     ): Promise<void> => {
       await dxPlay({
@@ -65,6 +72,7 @@ prog
         K: lookahead as number | undefined,
         decode: DECODE,
         verbose: verbose as boolean | undefined,
+        autoHideSoftKeyboard: autohide as boolean | undefined,
       });
     }
   );

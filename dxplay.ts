@@ -240,7 +240,8 @@ class ResPlayer extends DxPlayer {
   constructor(
     app: string,
     public readonly decode: boolean,
-    public readonly K: number
+    public readonly K: number,
+    public readonly autoHideSoftKeyboard: boolean
   ) {
     super(app);
   }
@@ -261,7 +262,7 @@ class ResPlayer extends DxPlayer {
 
     // let's hide the soft keyboard firstly
     const droid = DxDroid.get();
-    if (await droid.isSoftKeyboardPresent()) {
+    if (this.autoHideSoftKeyboard && (await droid.isSoftKeyboardPresent())) {
       await droid.input.hideSoftKeyboard();
     }
 
@@ -296,21 +297,48 @@ class ResPlayer extends DxPlayer {
 
     // lookahead failed, let's synthesize a pattern, and apply
     // the pattern to synthesize an equivalent event sequence
-    const pattern = await synthesizePattern(e, v, pUi, rDev, pDev, droid.input);
-    if (pattern == null) {
+    const patterns = await synthesizePattern(
+      e,
+      v,
+      pUi,
+      rDev,
+      pDev,
+      droid.input
+    );
+    if (patterns.length == 0) {
       throw new NotImplementedError('No pattern is recognized');
     }
 
-    if (pattern instanceof DxBpPat) {
-      DxLog.info(`pattern ${pattern.level}:${pattern.name}`);
-    } else {
-      DxLog.info(`pattern ${pattern.name}`);
-    }
+    // let's try to apply the patterns one by one in order
+    for (const pattern of patterns) {
+      if (pattern instanceof DxBpPat) {
+        DxLog.info(`try-pattern ${pattern.level}:${pattern.name}`);
+      } else {
+        DxLog.info(`try-pattern ${pattern.name}`);
+      }
 
-    // apply the rules to get the synthesized event
-    if (!(await pattern.apply(droid.input))) {
-      // push the raw event back to the sequence, and try again
-      this.seq.push(e);
+      // apply the pattern to get the synthesized event
+      try {
+        // successfully applied the pattern
+        let consumed = await pattern.apply(droid.input);
+        if (!consumed) {
+          // push the raw event back to the sequence if the event
+          // has not been consumed by the pattern
+          this.seq.push(e);
+        }
+        return;
+      } catch (x) {
+        // failed to apply the pattern
+
+        // throw the exception if the pattern is dirty, i.e.,
+        // produced some side effects to the app, and the side
+        // effects cannot be dismissed
+        if (pattern.dirty && !pattern.dismiss()) {
+          throw x;
+        } else {
+          DxLog.warning(`pattern-failed ${x} try next`);
+        }
+      }
     }
   }
 
@@ -368,10 +396,17 @@ export type DxPlayOptions = {
   K?: number; // look ahead, if use res
   decode: boolean; // decode or not
   verbose?: boolean; // verbose mode
+  autoHideSoftKeyboard?: boolean; // hide soft keyboard automatically
 };
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
-  const { serial, pty, dxpk, verbose = false } = opt;
+  const {
+    serial,
+    pty,
+    dxpk,
+    verbose = false,
+    autoHideSoftKeyboard = true,
+  } = opt;
 
   if (verbose) {
     DxLog.setLevel('DEBUG');
@@ -411,7 +446,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
         );
         Deno.exit(1);
       }
-      player = new ResPlayer(pkr.app, opt.decode, opt.K);
+      player = new ResPlayer(pkr.app, opt.decode, opt.K, autoHideSoftKeyboard);
       break;
     default:
       throw new CannotReachHereError();

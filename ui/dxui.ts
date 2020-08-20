@@ -1,3 +1,4 @@
+import { Views } from './dxview.ts';
 import { WindowOwner } from './dxwin.ts';
 import { IllegalStateError, NotImplementedError } from '../utils/error.ts';
 
@@ -161,5 +162,19 @@ export default class DxCompatUi extends WindowOwner implements FragmentOwner {
   public readonly fragmentManager: FragmentManager = new FragmentManager(this);
   public constructor(app: string, public readonly name: string) {
     super(app);
+  }
+}
+
+/** Utility to compute some fragment properties */
+export class Fragments {
+  static isValid(f: DxFragment, u: DxCompatUi) {
+    if (!f.viewId) {
+      return false;
+    }
+    const view = u.findViewById(f.viewId);
+    if (!view) {
+      return false;
+    }
+    return Views.isValid(view);
   }
 }

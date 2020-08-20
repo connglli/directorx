@@ -7,7 +7,7 @@ import DxView, {
   DxRecyclerView,
   DxListView,
 } from '../ui/dxview.ts';
-import DxCompatUi, { DxFragment } from '../ui/dxui.ts';
+import DxCompatUi, { DxFragment, Fragments } from '../ui/dxui.ts';
 import DxSegment, {
   SegmentFinder,
   SegmentBottomUpFinder,
@@ -30,6 +30,11 @@ export interface PatRecArgs {
 }
 
 export abstract class DxPat {
+  // when set to true, it means that this pattern has
+  // produced some side effects to the app, and one is
+  // expected to try to dismiss such side effects before
+  // any following work, or stop executing directly
+  private dirty_ = false;
   constructor(protected readonly args: PatRecArgs) {}
   /** Pattern name */
   abstract get name(): string;
@@ -37,6 +42,21 @@ export abstract class DxPat {
   abstract match(): boolean;
   /** Apply the pattern and return whether the original event is consumed */
   abstract async apply(input: DroidInput): Promise<boolean>;
+  /** Return whether this pattern has produced some side effects */
+  get dirty() {
+    return this.dirty_;
+  }
+  /** Dismiss the side effects, returning whether the side
+   * effects is dismissed or not, currently not supported */
+  dismiss() {
+    return false;
+  }
+  protected setDirty() {
+    this.dirty_ = true;
+  }
+  protected clearDirty() {
+    this.dirty_ = false;
+  }
 }
 
 export interface InvisiblePatRecArgs extends PatRecArgs {
@@ -81,6 +101,7 @@ export class Invisible extends DxPat {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
     await input.tap(Views.x0(this.vParent) + 1, Views.y0(this.vParent) + 1);
+    this.setDirty();
     return false;
   }
 }
@@ -189,6 +210,7 @@ class VagueText extends Expand {
       default:
         throw new CannotReachHereError();
     }
+    this.setDirty();
     return true;
   }
 
@@ -286,6 +308,8 @@ type ScrollDir = 'R2L' | 'L2R' | 'T2B' | 'B2T' | 'N';
  * a scrollable parent. And thus this pattern finds the view
  * by scrolling the parent until the view shows. */
 class Scroll extends Expand {
+  private static DEFAULT_SCROLL_TIME = 500;
+
   private vHSParent: N<DxView> = null;
   private vVSParent: N<DxView> = null;
 
@@ -343,7 +367,7 @@ class Scroll extends Expand {
               Views.yCenter(this.vHSParent),
               Views.xCenter(this.vHSParent),
               0,
-              300
+              Scroll.DEFAULT_SCROLL_TIME
             );
             break;
           case 'R2L':
@@ -352,7 +376,7 @@ class Scroll extends Expand {
               Views.yCenter(this.vHSParent),
               -Views.xCenter(this.vHSParent),
               0,
-              300
+              Scroll.DEFAULT_SCROLL_TIME
             );
             break;
           default:
@@ -360,6 +384,7 @@ class Scroll extends Expand {
               "Pattern is not satisfied, don't apply"
             );
         }
+        this.setDirty();
         if (lastDir != 'N' && lastDir != currDir) {
           iteration += 1;
         }
@@ -390,7 +415,7 @@ class Scroll extends Expand {
               Views.yCenter(this.vVSParent),
               0,
               Views.yCenter(this.vVSParent),
-              300
+              Scroll.DEFAULT_SCROLL_TIME
             );
             break;
           case 'B2T':
@@ -399,7 +424,7 @@ class Scroll extends Expand {
               Views.yCenter(this.vVSParent),
               0,
               -Views.yCenter(this.vVSParent),
-              300
+              Scroll.DEFAULT_SCROLL_TIME
             );
             break;
           default:
@@ -407,6 +432,7 @@ class Scroll extends Expand {
               "Pattern is not satisfied, don't apply"
             );
         }
+        this.setDirty();
         if (lastDir != 'N' && lastDir != currDir) {
           iteration += 1;
         }
@@ -483,6 +509,7 @@ abstract class RevealButton extends Reveal {
     // synthesize a tap event on the
     // more options button
     await input.tap(Views.x0(this.vButton) + 1, Views.y0(this.vButton) + 1);
+    this.setDirty();
     return false;
   }
 
@@ -599,6 +626,7 @@ class TabHostTab extends Reveal {
     }
     // tap found to reveal maybe the tab list
     await input.tap(Views.x0(found) + 1, Views.y0(found) + 1);
+    this.setDirty();
     return false;
   }
 
@@ -710,6 +738,7 @@ class TabHostContent extends Reveal {
     }
     // jump to the tab
     await input.tap(Views.x0(found) + 1, Views.y0(found) + 1);
+    this.setDirty();
     // in case tapped tab is not the selected
     if (found.text != selectedTab.text) {
       const vms = await input.select({
@@ -883,6 +912,7 @@ class DoubleSideViewPager extends Reveal {
       throw new NotImplementedError('Page containing v does not found');
     }
     await input.tap(Views.x0(targetPage) + 1, Views.y0(targetPage) + 1);
+    this.setDirty();
     return false;
   }
 }
@@ -930,6 +960,7 @@ class SingleSideViewPager extends Reveal {
     // until the target view shown
     for (const page of this.vPager.children) {
       await input.tap(Views.x0(page) + 1, Views.y0(page) + 1);
+      this.setDirty();
       if ((await adaptSel(input, this.args.v)) != null) {
         return false;
       }
@@ -968,9 +999,9 @@ abstract class MergeButton extends Merge {
     if (this.vButton == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    // synthesize a tap event on the
-    // more options button
+    // synthesize a tap event on the more options button
     await input.tap(Views.x0(this.vButton) + 1, Views.y0(this.vButton) + 1);
+    this.setDirty();
     return false;
   }
 
@@ -1006,19 +1037,88 @@ class NewButton extends MergeButton {
  * another for detailed view. DualFragment assumes that
  * there exists a *selected* descriptive preview, and it is
  * this view that makes the detailed preview shown. */
-class DualFragment extends Merge {
+abstract class DualFragment extends Merge {
+  /** Check whether a fragment is maybe a descriptive preview. A
+   * descriptive preview has a visible list children, where one
+   * of its visible children is in selected state */
+  static isDescriptivePreview(f: DxFragment, a: DxCompatUi, d: DevInfo) {
+    if (!f.viewId) {
+      return false;
+    }
+    const v = a.findViewById(f.viewId);
+    if (!v || !Views.isValid(v) || !Views.isVisibleToUser(v, d)) {
+      return false;
+    }
+    const l = ViewFinder.findView(
+      v,
+      (w) =>
+        (w instanceof DxListView || w instanceof DxRecyclerView) &&
+        Views.isVisibleToUser(w, d)
+    );
+    if (!l) {
+      return false;
+    }
+    return !!l.children.find((w) => w.flags.S && Views.isVisibleToUser(w, d));
+  }
+
+  /** Find the fragment that view resides in */
+  static findFragmentByView(v: DxView, u: DxCompatUi) {
+    return u.fragmentManager.findFragment((f) => {
+      if (!f.viewId) {
+        return false;
+      }
+      const fragView = u.findViewById(f.viewId);
+      if (fragView && (fragView == v || Views.isChild(v, fragView))) {
+        return true;
+      }
+      return false;
+    });
+  }
+}
+
+/** DualFragmentGotoDescriptive handles dual fragment that an action
+ * is triggered at the descriptive preview, and we are currently at
+ * the detailed view, what we need to do is directly press back to
+ * pop the current fragment */
+class DualFragmentGotoDescriptive extends DualFragment {
+  get name() {
+    return 'dual-fragment-goto-descriptive-preview';
+  }
+
+  match(): boolean {
+    const v = this.args.v;
+    const recordee = this.args.r;
+    const fr = DualFragment.findFragmentByView(v, recordee.u);
+    return (
+      !!fr && DualFragment.isDescriptivePreview(fr, recordee.u, recordee.d)
+    );
+  }
+
+  async apply(input: DroidInput): Promise<boolean> {
+    await input.pressBack();
+    this.setDirty();
+    return false;
+  }
+}
+
+/** DualFragmentGotoDetailed handles dual fragment that an action
+ * is triggered at the detailed view, and we are currently at the
+ * descriptive preview, we need to firstly parse and get the selected
+ * item in the descriptive preview, and the goto the detailed view
+ * by tappingthe selected item */
+class DualFragmentGotoDetailed extends DualFragment {
   // the detailed view fragment in playee
   private vDetFrag: N<DxFragment> = null;
 
   get name() {
-    return 'dual-fragment';
+    return 'dual-fragment-goto-detailed-view';
   }
 
   match(): boolean {
     const recordee = this.args.r;
     const v = this.args.v;
     this.vDetFrag = recordee.u.fragmentManager.findFragment((f) => {
-      if (!f.active || !f.viewId) {
+      if (!f.active || !f.viewId || !Fragments.isValid(f, recordee.u)) {
         return false;
       }
       const fragView = recordee.u.findViewById(f.viewId);
@@ -1027,6 +1127,12 @@ class DualFragment extends Merge {
       }
       return false;
     });
+    if (
+      !this.vDetFrag ||
+      DualFragment.isDescriptivePreview(this.vDetFrag, recordee.u, recordee.d)
+    ) {
+      this.vDetFrag = null;
+    }
     return !!this.vDetFrag;
   }
 
@@ -1037,7 +1143,12 @@ class DualFragment extends Merge {
     const recordee = this.args.r;
     const siblings = recordee.u.fragmentManager.active.filter(
       (f) =>
-        f != this.vDetFrag && f.active && !f.hidden && !f.detached && !!f.viewId
+        f != this.vDetFrag &&
+        f.active &&
+        !f.hidden &&
+        !f.detached &&
+        !!f.viewId &&
+        Fragments.isValid(f, recordee.u)
     );
     // the descriptive preview are often embed an recycler
     // or list view as a content to index the detailed view
@@ -1065,10 +1176,33 @@ class DualFragment extends Merge {
     if (!selected) {
       throw new NotImplementedError('No selected item in the descriptive view');
     }
-    selected = ViewFinder.findView(selected, (v) => Views.isText(v));
-    if (!selected) {
+    const texts = ViewFinder.findViews(selected, (v) => Views.isText(v));
+    if (texts.length == 0) {
       throw new NotImplementedError('The selected item has not valid text');
     }
+    // let select a unique view as the selected one
+    let uniqueText: N<DxView> = null;
+    for (const text of texts) {
+      for (const sib of content.children) {
+        if (sib == selected) {
+          continue;
+        }
+        if (!ViewFinder.findViews(sib, (w) => w.text.includes(text.text))) {
+          uniqueText = text;
+          break;
+        }
+      }
+    }
+    if (!uniqueText) {
+      // let use a random one, by far let's use a longer one
+      uniqueText = texts[0];
+      for (const text of texts) {
+        if (text.text.length > uniqueText.text.length) {
+          uniqueText = text;
+        }
+      }
+    }
+    selected = uniqueText;
     // for the same-versioned apk, the recordee and playee
     // often uses the same fragment id ('cause the same view).
     // so let's try to find the descriptive preview in playee
@@ -1090,7 +1224,8 @@ class DualFragment extends Merge {
             !f.hidden &&
             !f.detached &&
             f.cls == desFrag?.cls &&
-            !!pDesFrag?.viewId
+            !!pDesFrag?.viewId &&
+            Fragments.isValid(f, playee.u)
         );
       }
       if (!pDesFrag) {
@@ -1121,6 +1256,7 @@ class DualFragment extends Merge {
     }
     // let's fire the selected item on playee
     await input.tap(Views.x0(pSelected) + 1, Views.y0(pSelected) + 1);
+    this.setDirty();
     return false;
   }
 }
@@ -1152,6 +1288,7 @@ class NavigationUp extends Transform {
 
   async apply(input: DroidInput): Promise<boolean> {
     await input.pressBack();
+    this.setDirty();
     return true;
   }
 }
@@ -1167,7 +1304,7 @@ const patterns = [
   // Expand
   VagueText,
   VagueTextExt,
-  VagueTextDesc,
+  // VagueTextDesc,
   Scroll,
   // Reveal
   MoreOptions,
@@ -1178,7 +1315,8 @@ const patterns = [
   DoubleSideViewPager,
   SingleSideViewPager,
   // Merge
-  DualFragment,
+  DualFragmentGotoDescriptive,
+  DualFragmentGotoDetailed,
   NewButton,
 ];
 
@@ -1186,16 +1324,15 @@ const patterns = [
  * Transform. This is an assume and check process, i.e.,
  * assume a pattern, and test the pattern condition.
  * Confirm the pattern and return if and only if the
- * condition passes, or test next pattern
- */
+ * condition passes, or test next pattern. The returned
+ * are all patterns that matched, they are expected to
+ * fired one by one in order */
 export default function recBpPat(
   args: BpPatRecArgs,
   vagueOnly = false
-): N<DxBpPat> {
-  return (
-    patterns
-      .map((P) => new P(args))
-      .filter((p) => !vagueOnly || p instanceof VagueText)
-      .find((p) => p.match()) ?? null
-  );
+): DxBpPat[] {
+  return patterns
+    .map((P) => new P(args))
+    .filter((p) => !vagueOnly || p instanceof VagueText)
+    .filter((p) => p.match());
 }
