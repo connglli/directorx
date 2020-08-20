@@ -540,20 +540,101 @@ class MoreOptions extends RevealButton {
 /** DrawerMenu is the pattern for drawer button (often located
  * at the top-left corner, and responsible for showing/hiding
  * the drawer). */
-class DrawerMenu extends RevealButton {
-  static DESC = 'Open navigation drawer';
+class DrawerMenu extends Reveal {
+  private static MENU_LAYOUT_ID1 = ['Drawer', 'Menu']; // typically xx:id/drawer_menu
+  private static MENU_LAYOUT_ID2 = ['Drawer', 'Content']; // typically xx:id/drawer_content
+  private static MENU_BUTTON_OPEN_DESC = ['Open', 'Drawer']; // typically Open Navigation Drawer
+  private static MENU_BUTTON_CLOSE_DESC = ['Close', 'Drawer']; // typically Close Navigation Drawer
+
+  // the menu layout in recordee
+  private vMenuLayout: N<DxView> = null;
+  // the menu button in recordee
+  private vMenuButton: N<DxView> = null;
+  // the target menu button in playee
+  private vTargetMenuButton: N<DxView> = null;
 
   get name(): string {
     return 'drawer-menu';
   }
 
-  findButton(v: DxView): N<DxView> {
-    const drawerMenu = ViewFinder.findViewByDesc(v, DrawerMenu.DESC);
-    return drawerMenu &&
-      Views.isVisibleToUser(drawerMenu, this.args.p.d) &&
-      drawerMenu.flags.c
-      ? drawerMenu
-      : null;
+  match() {
+    const v = this.args.v;
+    const recordee = this.args.r;
+    const playee = this.args.p;
+    // the menu layout
+    this.vMenuLayout = ViewFinder.findParent(
+      v,
+      (w) =>
+        DrawerMenu.stringIncludesAllWords(
+          w.resEntry,
+          DrawerMenu.MENU_LAYOUT_ID1,
+          false
+        ) ||
+        DrawerMenu.stringIncludesAllWords(
+          w.resEntry,
+          DrawerMenu.MENU_LAYOUT_ID2,
+          false
+        )
+    );
+    if (!this.vMenuLayout) {
+      return false;
+    }
+    // the menu button in recordee is possibly invisible
+    this.vMenuButton = ViewFinder.findView(
+      recordee.u.decorView!,
+      (w) =>
+        w.flags.c &&
+        w.desc.length > 0 &&
+        DrawerMenu.stringIncludesAllWords(
+          w.desc,
+          DrawerMenu.MENU_BUTTON_CLOSE_DESC,
+          false
+        )
+    );
+    if (!this.vMenuButton) {
+      return false;
+    }
+    // the menu button in playee must be visible
+    this.vTargetMenuButton = ViewFinder.findView(
+      playee.u.decorView!,
+      (w) =>
+        Views.isVisibleToUser(w, playee.d) &&
+        w.flags.c &&
+        w.desc.length > 0 &&
+        DrawerMenu.stringIncludesAllWords(
+          w.desc,
+          DrawerMenu.MENU_BUTTON_OPEN_DESC,
+          false
+        )
+    );
+    return !!this.vTargetMenuButton;
+  }
+
+  async apply(input: DroidInput) {
+    if (!this.vTargetMenuButton) {
+      throw new IllegalStateError("Pattern is not satisfied, don't apply");
+    }
+    await input.tap(
+      Views.x0(this.vTargetMenuButton) + 1,
+      Views.y0(this.vTargetMenuButton)
+    );
+    this.setDirty();
+    return false;
+  }
+
+  private static stringIncludesAllWords(
+    s: string,
+    ws: string[],
+    caseSensitive = false
+  ) {
+    const str = caseSensitive ? s : s.toLowerCase();
+    const words = caseSensitive ? ws.slice() : ws.map((w) => w.toLowerCase());
+    for (const w of words) {
+      if (!str.includes(w)) {
+        return false;
+      }
+    }
+    return true;
   }
 }
 
