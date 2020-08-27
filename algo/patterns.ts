@@ -364,7 +364,7 @@ export class VagueTextDesc extends VagueText {
     }
     // let's choose the BoW most similar
     const corpus = [
-      [text, v.resId].join(' '),
+      [text, v.resEntry].join(' '),
       ...this.vFound.map((w) => [w[prop], w.resEntry].join(' ')),
     ];
     const model = new BoWModel(corpus);
@@ -527,6 +527,7 @@ export class Scroll extends Expand {
     const playee = this.args.p;
     const fns = [
       // TODO: change to only find parents, no siblings
+      // TODO: what if all these tests fail
       [v.text.length > 0, SegmentBottomUpFinder.findViewByText, v.text],
       [
         v.resId.length > 0,

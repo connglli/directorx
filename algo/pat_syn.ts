@@ -179,8 +179,8 @@ export default async function synPattern(
     if (matched.length == 0) {
       throw new IllegalStateError('Best Matches do not found');
     } else if (matched.length != 1) {
-      throw new NotImplementedError(
-        `Multiple best matched segments with score ${score}`
+      DxLog.warning(
+        `Multiple best matched segments with score ${score}, use the first one`
       );
     }
     pSeg = matched[0];

@@ -13,6 +13,7 @@ import DxPacker from './dxpack.ts';
 import DxView from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
 import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
+import DxPlugin, { createPlugin, applyPlugin } from './plugin/mod.ts';
 import { adaptiveSelect, synthesizePattern, DxBpPat } from './algo/mod.ts';
 import * as time from './utils/time.ts';
 import {
@@ -236,7 +237,8 @@ class ResPlayer extends DxPlayer {
     app: string,
     public readonly decode: boolean,
     public readonly K: number,
-    public readonly autoHideSoftKeyboard: boolean
+    public readonly autoHideSoftKeyboard: boolean,
+    public readonly plugin: N<DxPlugin>
   ) {
     super(app);
   }
@@ -277,9 +279,34 @@ class ResPlayer extends DxPlayer {
       return await this.fireOnViewMap(e, vm, rDev, pDev);
     }
 
+    // apply the plugins firstly before our synthesis
+    const pUi = await this.top();
+    if (this.plugin) {
+      DxLog.info(`try-plugin ${this.plugin.name()}`);
+      if (
+        await applyPlugin(this.plugin, {
+          event: e,
+          view: v,
+          seq: this.seq,
+          droid,
+          recordee: {
+            ui: rUi,
+            dev: rDev,
+          },
+          playee: {
+            ui: pUi,
+            dev: pDev,
+          },
+        })
+      ) {
+        return;
+      } else {
+        DxLog.warning('plugin-failed, try next');
+      }
+    }
+
     // let's synthesize a pattern, and apply the pattern to
     // synthesize an equivalent event sequence
-    const pUi = await this.top();
     const patterns = await synthesizePattern(
       this.seq,
       e,
@@ -385,6 +412,7 @@ export type DxPlayOptions = {
   decode: boolean; // decode or not
   verbose?: boolean; // verbose mode
   autoHideSoftKeyboard?: boolean; // hide soft keyboard automatically
+  pluginPath?: string; // plugin that is used before any patterns
 };
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
@@ -394,6 +422,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
     dxpk,
     verbose = false,
     autoHideSoftKeyboard = true,
+    pluginPath,
   } = opt;
 
   if (verbose) {
@@ -434,7 +463,13 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
         );
         Deno.exit(1);
       }
-      player = new ResPlayer(pkr.app, opt.decode, opt.K, autoHideSoftKeyboard);
+      player = new ResPlayer(
+        pkr.app,
+        opt.decode,
+        opt.K,
+        autoHideSoftKeyboard,
+        await createPlugin(pluginPath)
+      );
       break;
     default:
       throw new CannotReachHereError();
