@@ -1,4 +1,4 @@
-import DxEvent, { DxSwipeEvent } from '../dxevent.ts';
+import DxEvent, { DxSwipeEvent, DxEvSeq, isXYEvent } from '../dxevent.ts';
 import DxView, {
   DxTabHost,
   DxViewPager,
@@ -39,7 +39,7 @@ export abstract class DxPat {
   /** Pattern name */
   abstract get name(): string;
   /** Whether current circumstance match this pattern */
-  abstract match(): boolean;
+  abstract async match(): Promise<boolean>;
   /** Apply the pattern and return whether the original event is consumed */
   abstract async apply(input: DroidInput): Promise<boolean>;
   /** Return whether this pattern has produced some side effects */
@@ -56,6 +56,80 @@ export abstract class DxPat {
   }
   protected clearDirty() {
     this.dirty_ = false;
+  }
+}
+
+export interface LookaheadPatRecArgs extends PatRecArgs {
+  v: DxView; // the view on recordee
+  k: number; // number of events to lookahead
+  s: DxEvSeq; // the event sequence
+  i: DroidInput; // the input
+}
+
+/** Lookahead tries to look ahead next K events, and skip several events,
+ * these events (including current) can be skipped if and only
+ * if their next event can be fired directly on current ui */
+export class Lookahead extends DxPat {
+  private nPopped = -1;
+
+  constructor(protected args: LookaheadPatRecArgs) {
+    super(args);
+  }
+
+  get name() {
+    return `lookahead:${this.args.k}`;
+  }
+
+  async match(): Promise<boolean> {
+    this.nPopped = await this.tryLookahead(
+      this.args.v,
+      this.args.s,
+      this.args.k,
+      this.args.i
+    );
+    return this.nPopped >= 0;
+  }
+
+  async apply() {
+    if (this.nPopped < 0) {
+      throw new IllegalStateError("No events to pop, don't apply");
+    }
+    this.args.s.popN(this.nPopped);
+    return true;
+  }
+
+  private async tryLookahead(
+    view: DxView,
+    seq: DxEvSeq,
+    kVal: number,
+    input: DroidInput
+  ): Promise<number> {
+    // TODO: add more rules to check whether v can be skipped
+    if (view.text.length == 0 && seq.size() > 0) {
+      const nextK = seq.topN(kVal);
+      for (let i = 0; i < nextK.length; i++) {
+        const ne = nextK[i];
+        // we come across an non-xy event, fail
+        if (!isXYEvent(ne)) {
+          return -1;
+        }
+
+        // find the view in recordee
+        const nv = ne.ui.findViewByXY(ne.x, ne.y);
+        if (nv == null) {
+          throw new IllegalStateError(
+            `No visible view found on recordee tree at (${ne.x}, ${ne.y})`
+          );
+        }
+
+        // find its target view map in playee
+        const nvm = await adaptSel(input, nv);
+        if (nvm != null && nvm.visible) {
+          return i;
+        }
+      }
+    }
+    return -1;
   }
 }
 
@@ -84,7 +158,7 @@ export class Invisible extends DxPat {
     return 'invisible';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     // find its visible parent
     const { v: view, u: act, d: dev } = this.args;
     this.vParent = ViewFinder.findParent(
@@ -134,7 +208,7 @@ export abstract class DxBpPat extends DxPat {
   abstract get level(): string;
 }
 
-abstract class Expand extends DxBpPat {
+export abstract class Expand extends DxBpPat {
   get level() {
     return 'expand';
   }
@@ -144,7 +218,7 @@ abstract class Expand extends DxBpPat {
  * to become longer, or shrink to be shorter. VagueText
  * takes care of such pattern by finding a most probable
  * view that are text-similar */
-class VagueText extends Expand {
+export class VagueText extends Expand {
   // founded views that are text-similar to target view
   protected vFound: DxView[] = [];
 
@@ -152,7 +226,7 @@ class VagueText extends Expand {
     return 'vague-text';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     const v = this.args.v;
     if (v.text.length == 0) {
       return false;
@@ -221,12 +295,12 @@ class VagueText extends Expand {
 
 /** VagueTextExt differs from VagueText that it finds the
  * view bottom-up along the segment tree */
-class VagueTextExt extends VagueText {
+export class VagueTextExt extends VagueText {
   get name() {
     return 'vague-text-ext';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     const v = this.args.v;
     if (v.text.length == 0) {
       return false;
@@ -253,12 +327,12 @@ class VagueTextExt extends VagueText {
 /** VagueTextDesc handles those views that hide their text
  * on some devices behind content-desc, but show their text
  * on other devices */
-class VagueTextDesc extends VagueText {
+export class VagueTextDesc extends VagueText {
   get name() {
     return 'vague-text-desc';
   }
 
-  match() {
+  async match(): Promise<boolean> {
     const v = this.args.v;
     const playee = this.args.p;
     let text: string;
@@ -307,7 +381,7 @@ type ScrollDir = 'R2L' | 'L2R' | 'T2B' | 'B2T' | 'N';
  * Scroll assumes that the view to be triggered resides in
  * a scrollable parent. And thus this pattern finds the view
  * by scrolling the parent until the view shows. */
-class Scroll extends Expand {
+export class Scroll extends Expand {
   private static DEFAULT_SCROLL_TIME = 500;
 
   private vHSParent: N<DxView> = null;
@@ -317,7 +391,7 @@ class Scroll extends Expand {
     return 'scroll';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     // test whether v is children of a scrollable parent
     this.vHSParent = ViewFinder.findHScrollableParent(this.args.v);
     this.vVSParent = ViewFinder.findVScrollableParent(this.args.v);
@@ -471,7 +545,7 @@ class Scroll extends Expand {
   }
 }
 
-abstract class Reveal extends DxBpPat {
+export abstract class Reveal extends DxBpPat {
   get level() {
     return 'reveal';
   }
@@ -484,11 +558,11 @@ abstract class Reveal extends DxBpPat {
  * the triggered view by tap these buttons. These buttons are collected
  * from the official Android Documents, especially from many specific
  * official widgets. */
-abstract class RevealButton extends Reveal {
+export abstract class RevealButton extends Reveal {
   // the specific button that triggers a specific functionality
   protected vButton: N<DxView> = null;
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     // check if there are special button
     // buttons in the playee segment
     const playee = this.args.p;
@@ -520,7 +594,7 @@ abstract class RevealButton extends Reveal {
 /** MoreOption is the pattern for more options button (often
  * located at the top-right, or end of a container, and responsible
  * for hiding/showing some advanced operations). */
-class MoreOptions extends RevealButton {
+export class MoreOptions extends RevealButton {
   static DESC = 'More options';
 
   get name(): string {
@@ -540,7 +614,7 @@ class MoreOptions extends RevealButton {
 /** DrawerMenu is the pattern for drawer button (often located
  * at the top-left corner, and responsible for showing/hiding
  * the drawer). */
-class DrawerMenu extends Reveal {
+export class DrawerMenu extends Reveal {
   private static MENU_LAYOUT_ID1 = ['Drawer', 'Menu']; // typically xx:id/drawer_menu
   private static MENU_LAYOUT_ID2 = ['Drawer', 'Content']; // typically xx:id/drawer_content
   private static MENU_BUTTON_OPEN_DESC = ['Open', 'Drawer']; // typically Open Navigation Drawer
@@ -557,7 +631,7 @@ class DrawerMenu extends Reveal {
     return 'drawer-menu';
   }
 
-  match() {
+  async match(): Promise<boolean> {
     const v = this.args.v;
     const recordee = this.args.r;
     const playee = this.args.p;
@@ -643,7 +717,7 @@ class DrawerMenu extends Reveal {
  * or hided by some tabs, and one can find the target tab by
  * finding the tab on the view, or firstly find its sibling
  * tab then check if there are siblings show. */
-class TabHostTab extends Reveal {
+export class TabHostTab extends Reveal {
   // tabs are direct children of the a view
   // whose resource-id is android:id/tabs
   static isTabHostTabs(v: DxView): boolean {
@@ -657,7 +731,7 @@ class TabHostTab extends Reveal {
     return 'tab-host-tab';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     this.vPath.unshift(this.args.v);
     // find the TabHost tabs parent
     const found = ViewFinder.findParent(this.args.v, (p) => {
@@ -728,7 +802,7 @@ class TabHostTab extends Reveal {
 /** TabHostContent is the pattern for contents of a TabHost. Like
  * TabHost, TabHostContent will find the corresponding tab of the view
  * to be triggered. The assumes and applies like what TabHostTab does. */
-class TabHostContent extends Reveal {
+export class TabHostContent extends Reveal {
   // tab contents are direct children of the a view
   // whose resource-id is android:id/tabcontent
   static isTabHostContent(v: DxView): boolean {
@@ -744,7 +818,7 @@ class TabHostContent extends Reveal {
     return 'tab-host-content';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     // check whether v is in a TabHostContent
     this.vTabContent = ViewFinder.findParent(
       this.args.v,
@@ -836,7 +910,7 @@ class TabHostContent extends Reveal {
 
 /** Custom TabHost may override the default tabs and tabcontent.
  * TabHost is a much robust heuristic  for handling such cases */
-class TabHost extends TabHostTab {
+export class TabHost extends TabHostTab {
   // tabs are all children of TabHost
   static isTabHost(v: DxView): v is DxTabHost {
     return v instanceof DxTabHost;
@@ -846,7 +920,7 @@ class TabHost extends TabHostTab {
     return 'tab-host';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     // TODO: what if v is a tab content, then how to
     // resolve the tab name where v resides? Maybe we
     // can do something when recording?
@@ -892,7 +966,7 @@ class TabHost extends TabHostTab {
  * that both exists in recordee and playee. This pattern assumes
  * that the view to be triggered is hided by its ViewPager parent,
  * and can be manifested by this parent. */
-class DoubleSideViewPager extends Reveal {
+export class DoubleSideViewPager extends Reveal {
   // pages are all children of ViewPager
   static isViewPager(v: DxView): v is DxViewPager {
     return v instanceof DxViewPager;
@@ -913,7 +987,7 @@ class DoubleSideViewPager extends Reveal {
     return 'double-side-view-pager';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     this.vRPager = DoubleSideViewPager.findPagerParent(this.args.v);
     if (!this.vRPager) {
       return false;
@@ -1002,7 +1076,7 @@ class DoubleSideViewPager extends Reveal {
  * pattern for handling ViewPager that only shows in playee side.
  * Same as DoubleSideViewPager, this pattern also manifests the views
  * by operating its parents. */
-class SingleSideViewPager extends Reveal {
+export class SingleSideViewPager extends Reveal {
   // the pager in playee side
   private vPager: N<DxViewPager> = null;
 
@@ -1010,7 +1084,7 @@ class SingleSideViewPager extends Reveal {
     return 'single-side-view-pager';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     const playee = this.args.p;
     const pager = SegmentBottomUpFinder.findView(
       playee.s,
@@ -1050,7 +1124,7 @@ class SingleSideViewPager extends Reveal {
   }
 }
 
-abstract class Merge extends DxBpPat {
+export abstract class Merge extends DxBpPat {
   get level() {
     return 'merge';
   }
@@ -1063,10 +1137,10 @@ abstract class Merge extends DxBpPat {
  * finds the special button bottom-up from the matched playee segment to its
  * sibling, then its parent, then its parent's sibling, ...
  */
-abstract class MergeButton extends Merge {
+export abstract class MergeButton extends Merge {
   private vButton: N<DxView> = null;
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     const playee = this.args.p;
     this.vButton = SegmentBottomUpFinder.findView(
       playee.s,
@@ -1091,7 +1165,7 @@ abstract class MergeButton extends Merge {
 
 /** NewButton is those buttons that can are typically used to
  * create/add something new, e.g., create a new thing */
-class NewButton extends MergeButton {
+export class NewButton extends MergeButton {
   private static WORDS = ['New', 'Create', 'Add'];
 
   get name() {
@@ -1118,7 +1192,7 @@ class NewButton extends MergeButton {
  * another for detailed view. DualFragment assumes that
  * there exists a *selected* descriptive preview, and it is
  * this view that makes the detailed preview shown. */
-abstract class DualFragment extends Merge {
+export abstract class DualFragment extends Merge {
   /** Check whether a fragment is maybe a descriptive preview. A
    * descriptive preview has a visible list children, where one
    * of its visible children is in selected state */
@@ -1161,12 +1235,12 @@ abstract class DualFragment extends Merge {
  * is triggered at the descriptive preview, and we are currently at
  * the detailed view, what we need to do is directly press back to
  * pop the current fragment */
-class DualFragmentGotoDescriptive extends DualFragment {
+export class DualFragmentGotoDescriptive extends DualFragment {
   get name() {
     return 'dual-fragment-goto-descriptive-preview';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     const v = this.args.v;
     const recordee = this.args.r;
     const fr = DualFragment.findFragmentByView(v, recordee.u);
@@ -1186,8 +1260,8 @@ class DualFragmentGotoDescriptive extends DualFragment {
  * is triggered at the detailed view, and we are currently at the
  * descriptive preview, we need to firstly parse and get the selected
  * item in the descriptive preview, and the goto the detailed view
- * by tappingthe selected item */
-class DualFragmentGotoDetailed extends DualFragment {
+ * by tapping the selected item */
+export class DualFragmentGotoDetailed extends DualFragment {
   // the detailed view fragment in playee
   private vDetFrag: N<DxFragment> = null;
 
@@ -1195,7 +1269,7 @@ class DualFragmentGotoDetailed extends DualFragment {
     return 'dual-fragment-goto-detailed-view';
   }
 
-  match(): boolean {
+  async match(): Promise<boolean> {
     const recordee = this.args.r;
     const v = this.args.v;
     this.vDetFrag = recordee.u.fragmentManager.findFragment((f) => {
@@ -1350,14 +1424,14 @@ export abstract class Transform extends DxBpPat {
 
 /** NavigationUp handles those views who simulates an navigation
  * up action. This is the most frequently used Transform pattern */
-class NavigationUp extends Transform {
+export class NavigationUp extends Transform {
   private static DESC = ['Back', 'Navigation Up', 'Close', 'Dismiss'];
 
   get name() {
     return 'navigation-up';
   }
 
-  match() {
+  async match(): Promise<boolean> {
     const desc = this.args.v.desc;
     for (const d of NavigationUp.DESC) {
       if (desc == d) {
@@ -1372,48 +1446,4 @@ class NavigationUp extends Transform {
     this.setDirty();
     return true;
   }
-}
-
-// The Pattern is sorted bottom-up, in order of
-// [None, Reflow, Transform, Expand, Merge, Reveal]
-// put Transform before Expand because the Transform
-// is fully controlled by app developers, and it is
-// sometimes simply, but sometimes complicated
-const patterns = [
-  // Transform
-  NavigationUp,
-  // Expand
-  VagueText,
-  VagueTextExt,
-  // VagueTextDesc,
-  Scroll,
-  // Reveal
-  MoreOptions,
-  DrawerMenu,
-  TabHostTab,
-  TabHostContent,
-  TabHost,
-  DoubleSideViewPager,
-  SingleSideViewPager,
-  // Merge
-  DualFragmentGotoDescriptive,
-  DualFragmentGotoDetailed,
-  NewButton,
-];
-
-/** Recognize the pattern bottom-up from None to
- * Transform. This is an assume and check process, i.e.,
- * assume a pattern, and test the pattern condition.
- * Confirm the pattern and return if and only if the
- * condition passes, or test next pattern. The returned
- * are all patterns that matched, they are expected to
- * fired one by one in order */
-export default function recBpPat(
-  args: BpPatRecArgs,
-  vagueOnly = false
-): DxBpPat[] {
-  return patterns
-    .map((P) => new P(args))
-    .filter((p) => !vagueOnly || p instanceof VagueText)
-    .filter((p) => p.match());
 }

@@ -1,5 +1,5 @@
 import DxLog from '../dxlog.ts';
-import { DxXYEvent } from '../dxevent.ts';
+import { DxXYEvent, DxEvSeq } from '../dxevent.ts';
 import DxView, { Views } from '../ui/dxview.ts';
 import DxSegment from '../ui/dxseg.ts';
 import DxCompatUi from '../ui/dxui.ts';
@@ -7,7 +7,28 @@ import { DevInfo, DroidInput } from '../dxdroid.ts';
 import adaptSel from './ada_sel.ts';
 import segUi from './ui_seg.ts';
 import matchSeg, { NO_MATCH } from './seg_mat.ts';
-import recBpPat, { DxPat, Invisible } from './pat_rec.ts';
+import {
+  DxPat,
+  Invisible,
+  Lookahead,
+  DxBpPat,
+  BpPatRecArgs,
+  NavigationUp,
+  VagueText,
+  VagueTextExt,
+  VagueTextDesc,
+  Scroll,
+  MoreOptions,
+  DrawerMenu,
+  TabHostTab,
+  TabHostContent,
+  TabHost,
+  DoubleSideViewPager,
+  SingleSideViewPager,
+  DualFragmentGotoDescriptive,
+  DualFragmentGotoDetailed,
+  NewButton,
+} from './patterns.ts';
 import { IllegalStateError, NotImplementedError } from '../utils/error.ts';
 
 type N<T> = T | null;
@@ -23,17 +44,85 @@ function findSegByView(v: DxView, segs: DxSegment[]): DxSegment {
   throw new IllegalStateError('Cannot find the view on any segment');
 }
 
+// The Pattern is sorted bottom-up, in order of
+// [None, Reflow, Transform, Expand, Merge, Reveal]
+// put Transform before Expand because the Transform
+// is fully controlled by app developers, and it is
+// sometimes simply, but sometimes complicated
+const bpPatternClasses = [
+  // Transform
+  NavigationUp,
+  // Expand
+  VagueText,
+  VagueTextExt,
+  // VagueTextDesc,
+  Scroll,
+  // Reveal
+  MoreOptions,
+  DrawerMenu,
+  TabHostTab,
+  TabHostContent,
+  TabHost,
+  DoubleSideViewPager,
+  SingleSideViewPager,
+  // Merge
+  DualFragmentGotoDescriptive,
+  DualFragmentGotoDetailed,
+  NewButton,
+];
+
+/** Recognize the pattern bottom-up from None to
+ * Transform. This is an assume and check process, i.e.,
+ * assume a pattern, and test the pattern condition.
+ * Confirm the pattern and return if and only if the
+ * condition passes, or test next pattern. The returned
+ * are all patterns that matched, they are expected to
+ * fired one by one in order */
+async function recBpPat(
+  args: BpPatRecArgs,
+  vagueOnly = false
+): Promise<DxBpPat[]> {
+  const patterns = bpPatternClasses
+    .map((P) => new P(args))
+    .filter((p) => !vagueOnly || p instanceof VagueText);
+  const ret: DxBpPat[] = [];
+  for (const p of patterns) {
+    if (await p.match()) {
+      ret.push(p);
+    }
+  }
+  return ret;
+}
+
+/** Synthesize a sorted array of patterns that can be used
+ * in order to synthesize an equivalent event sequence for
+ * the target event in the event sequence */
 export default async function synPattern(
+  seq: DxEvSeq, // the event seq
   event: DxXYEvent, // target event
   view: DxView, // target view extracted from event
+  rUi: DxCompatUi,
   pUi: DxCompatUi,
   rDev: DevInfo,
   pDev: DevInfo,
-  input: DroidInput
+  input: DroidInput,
+  kVal: number
 ): Promise<DxPat[]> {
   const patterns: DxPat[] = [];
 
-  const rUi = event.ui;
+  // let's see if the view can be skipped by lookahead
+  {
+    const pattern = new Lookahead({
+      e: event,
+      v: view,
+      k: kVal,
+      s: seq,
+      i: input,
+    });
+    if (await pattern.match()) {
+      return [pattern];
+    }
+  }
 
   // let's see if the view is invisible, and apply
   // the invisible pattern if possible
@@ -66,7 +155,7 @@ export default async function synPattern(
       u: pUi,
       d: pDev,
     });
-    if (pattern.match()) {
+    if (await pattern.match()) {
       patterns.push(pattern);
     }
   }
@@ -98,12 +187,12 @@ export default async function synPattern(
   }
 
   patterns.push(
-    ...recBpPat({
+    ...(await recBpPat({
       e: event,
       v: view,
       r: { u: rUi, s: rSeg, d: rDev },
       p: { u: pUi, s: pSeg, d: pDev },
-    })
+    }))
   );
 
   return patterns;

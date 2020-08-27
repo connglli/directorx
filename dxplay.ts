@@ -13,12 +13,7 @@ import DxPacker from './dxpack.ts';
 import DxView from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
 import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
-import {
-  tryLookahead,
-  adaptiveSelect,
-  synthesizePattern,
-  DxBpPat,
-} from './algo/mod.ts';
+import { adaptiveSelect, synthesizePattern, DxBpPat } from './algo/mod.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,
@@ -282,31 +277,22 @@ class ResPlayer extends DxPlayer {
       return await this.fireOnViewMap(e, vm, rDev, pDev);
     }
 
-    // try to look ahead next K events, and skip several events.
-    // these events (including current) can be skipped if and only
-    // if their next event can be fired directly on current ui
-    // TODO: add more rules to check whether v can be skipped
+    // let's synthesize a pattern, and apply the pattern to
+    // synthesize an equivalent event sequence
     const pUi = await this.top();
-    const popped = await tryLookahead(this.seq, this.K, v, droid.input);
-    if (popped >= 0) {
-      const skipped = popped + 1; // including e
-      DxLog.info(`/* skip next ${skipped} events */`);
-      this.seq.popN(popped);
-      return;
-    }
-
-    // lookahead failed, let's synthesize a pattern, and apply
-    // the pattern to synthesize an equivalent event sequence
     const patterns = await synthesizePattern(
+      this.seq,
       e,
       v,
+      rUi,
       pUi,
       rDev,
       pDev,
-      droid.input
+      droid.input,
+      this.K
     );
     if (patterns.length == 0) {
-      throw new NotImplementedError('No pattern is recognized');
+      throw new NotImplementedError('No patterns are synthesized');
     }
 
     // let's try to apply the patterns one by one in order
@@ -329,7 +315,9 @@ class ResPlayer extends DxPlayer {
         return;
       } catch (x) {
         // failed to apply the pattern
-
+        if (x instanceof IllegalStateError) {
+          throw x;
+        }
         // throw the exception if the pattern is dirty, i.e.,
         // produced some side effects to the app, and the side
         // effects cannot be dismissed
