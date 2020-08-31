@@ -23,9 +23,12 @@ interface PluginContext {
     ui: DxCompatUi;
     dev: DevInfo;
   };
+}
+
+interface PluginGlobal {
   droid: DxDroid;
-  algo: typeof DxAlgo;
   input: DroidInput;
+  algo: typeof DxAlgo;
   logger: typeof DxLog;
   utils: {
     Events: {
@@ -46,74 +49,78 @@ interface PluginArgs {
   [key: string]: string;
 }
 
+type PluginScriptFn = (
+  plugin: DxPlugin,
+  pluginGlobal: PluginGlobal,
+  pluginFilePath: string
+) => void;
+
 /** Each plugin has a unique name, and an apply() function, the
  * apply() function is maybe applied multiple times, and thereby
  * it is the plugin developer's responsibility to maintain its
  * state if any */
-export default interface DxPlugin {
-  name(): string;
+export default class DxPlugin {
+  name(): string {
+    throw new Errors.NotImplementedError('name() is not implemented');
+  }
+
+  /** Invoke to create the plugin */
+  create(args: PluginArgs): void {
+    return this.onCreate(args);
+  }
+
   /** Invoked when the plugin is created */
-  create(args: PluginArgs): void;
+  protected onCreate(args: PluginArgs): void {}
+
   /** Apply the plugin, and return whether the plugin succeeds, by
    * succeeds, we mean the following process (synthesis) will not
    * be executed, or will */
-  apply(ctx: PluginContext): Promise<boolean>;
-}
-
-function requirePluginHasTypedKey(obj: any, key: string, type: string) {
-  if (obj[key] === undefined) {
-    throw new Errors.IllegalStateError(
-      `Invalid plugin, ${key} is not provided`
-    );
-  }
-  if (typeof obj[key] != type) {
-    throw new Errors.IllegalStateError(
-      `Invalid plugin, type of ${key} is expected to be ${type})`
-    );
+  async apply(ctx: PluginContext): Promise<boolean> {
+    throw new Errors.NotImplementedError('apply() is not implemented');
   }
 }
 
-function checkPlugin(maybePlugin: any): DxPlugin {
-  requirePluginHasTypedKey(maybePlugin, 'name', 'function');
-  requirePluginHasTypedKey(maybePlugin, 'create', 'function');
-  requirePluginHasTypedKey(maybePlugin, 'apply', 'function');
-  return maybePlugin as DxPlugin;
+async function loadScript(path: string) {
+  return new TextDecoder().decode(await Deno.readFile(path));
+}
+
+function wrapScript(script: string) {
+  return `(function (plugin, pluginGlobal, __plugin_filename) {
+    // create a plugin sandbox
+    const window = global = pluginGlobal;
+    const require = function (...args) {
+      throw new Error('require() is not allow in directorx plugin');
+    };
+    // the script of the plugin
+    ${script}
+  })`;
+}
+
+function compileScript(script: string) {
+  return window.eval(script) as PluginScriptFn;
+}
+
+async function loadPlugin(path: string, pluginGlobal: PluginGlobal) {
+  const pluginFn = compileScript(wrapScript(await loadScript(path)));
+  const plugin = Object.create(new DxPlugin());
+  pluginFn.call(plugin, plugin, pluginGlobal, path); // bind this to plugin
+  return plugin;
 }
 
 /** Parse and create the plugin */
-export async function createPlugin(line?: string): Promise<N<DxPlugin>> {
+export async function createPlugin(
+  line: string | undefined,
+  droid: DxDroid
+): Promise<N<DxPlugin>> {
   if (!line) {
     return null;
   }
   // path:k1=v1,k2=v2,...
   const [path, argsStr = ''] = line.split(':');
-  const plugin = checkPlugin(
-    window.eval(new TextDecoder().decode(await Deno.readFile(path)))
-  );
-  const args: PluginArgs = {};
-  if (argsStr.length > 0) {
-    const kvList = argsStr.split(',').filter((s) => s.length > 0);
-    for (const keyValue of kvList) {
-      const [key, value] = keyValue.split('=');
-      args[key] = value;
-    }
-  }
-  plugin.create(args);
-  return plugin;
-}
-
-/** Apply the plugin */
-export async function applyPlugin(
-  plugin: DxPlugin,
-  ctx: Pick<
-    PluginContext,
-    'event' | 'seq' | 'view' | 'droid' | 'recordee' | 'playee'
-  >
-): Promise<boolean> {
-  return await plugin.apply({
-    ...ctx,
+  const pluginGlobal: PluginGlobal = {
+    droid,
+    input: droid.input,
     algo: DxAlgo,
-    input: ctx.droid.input,
     logger: DxLog,
     utils: {
       Events: {
@@ -128,5 +135,24 @@ export async function applyPlugin(
       Strings,
       Errors,
     },
-  });
+  };
+  const args: PluginArgs = {};
+  if (argsStr.length > 0) {
+    const kvList = argsStr.split(',').filter((s) => s.length > 0);
+    for (const keyValue of kvList) {
+      const [key, value] = keyValue.split('=');
+      args[key] = value;
+    }
+  }
+  const plugin = await loadPlugin(path, pluginGlobal);
+  plugin.create(args);
+  return plugin;
+}
+
+/** Apply the plugin */
+export async function applyPlugin(
+  plugin: DxPlugin,
+  ctx: Pick<PluginContext, 'event' | 'seq' | 'view' | 'recordee' | 'playee'>
+): Promise<boolean> {
+  return await plugin.apply(ctx);
 }

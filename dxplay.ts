@@ -288,7 +288,6 @@ class ResPlayer extends DxPlayer {
           event: e,
           view: v,
           seq: this.seq,
-          droid,
           recordee: {
             ui: rUi,
             dev: rDev,
@@ -468,7 +467,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
         opt.decode,
         opt.K,
         autoHideSoftKeyboard,
-        await createPlugin(pluginPath)
+        await createPlugin(pluginPath, DxDroid.get())
       );
       break;
     default:
