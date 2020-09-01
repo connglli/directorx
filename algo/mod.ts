@@ -1,17 +1,13 @@
-export * from './ada_sel.ts';
-export * from './ui_seg.ts';
-export * from './seg_mat.ts';
-export * from './patterns.ts';
-export * from './pat_syn.ts';
+export * from './selector.ts';
+export * from './normalizer.ts';
+export * from './matcher.ts';
+export * from './recognizer.ts';
+export * from './synthesizer.ts';
 
-import adaptSel from './ada_sel.ts';
-import segUi from './ui_seg.ts';
-import matchSeg from './seg_mat.ts';
-import synPat from './pat_syn.ts';
+import DxSelector from './selector.ts';
+import DxNormalizer from './normalizer.ts';
+import DxSegmentMatcher from './matcher.ts';
+import DxSynthesizer from './synthesizer.ts';
 
-export {
-  adaptSel as adaptiveSelect,
-  segUi as segmentUi,
-  matchSeg as matchSegment,
-  synPat as synthesizePattern,
-};
+export default DxSynthesizer;
+export { DxSelector, DxNormalizer, DxSegmentMatcher };

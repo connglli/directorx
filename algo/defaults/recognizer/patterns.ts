@@ -1,4 +1,6 @@
-import DxEvent, { DxSwipeEvent, DxEvSeq, isXYEvent } from '../dxevent.ts';
+import { DxPattern } from '../../recognizer.ts';
+import DxSelector from '../../selector.ts';
+import { DxSwipeEvent } from '../../../dxevent.ts';
 import DxView, {
   DxTabHost,
   DxViewPager,
@@ -6,209 +8,35 @@ import DxView, {
   ViewFinder,
   DxRecyclerView,
   DxListView,
-} from '../ui/dxview.ts';
-import DxCompatUi, { DxFragment, Fragments } from '../ui/dxui.ts';
+} from '../../../ui/dxview.ts';
+import DxCompatUi, { DxFragment, Fragments } from '../../../ui/dxui.ts';
 import DxSegment, {
   SegmentFinder,
   SegmentBottomUpFinder,
-} from '../ui/dxseg.ts';
-import { DevInfo, DroidInput } from '../dxdroid.ts';
-import adaptSel from './ada_sel.ts';
+} from '../../../ui/dxseg.ts';
+import { DevInfo, DroidInput } from '../../../dxdroid.ts';
 import {
   NotImplementedError,
   IllegalStateError,
   CannotReachHereError,
-} from '../utils/error.ts';
-import { splitAsWords, wordsInclude } from '../utils/strutil.ts';
-import { BoWModel, closest, similarity } from '../utils/vecutil.ts';
+} from '../../../utils/error.ts';
+import { splitAsWords, wordsInclude } from '../../../utils/strutil.ts';
+import { BoWModel, closest, similarity } from '../../../utils/vecutil.ts';
 
 type N<T> = T | null;
-
-export interface PatRecArgs {
-  // the original fired event
-  e: DxEvent;
-}
-
-export abstract class DxPat {
-  // when set to true, it means that this pattern has
-  // produced some side effects to the app, and one is
-  // expected to try to dismiss such side effects before
-  // any following work, or stop executing directly
-  private dirty_ = false;
-  constructor(protected readonly args: PatRecArgs) {}
-  /** Pattern name */
-  abstract get name(): string;
-  /** Whether current circumstance match this pattern */
-  abstract async match(): Promise<boolean>;
-  /** Apply the pattern and return whether the original event is consumed */
-  abstract async apply(input: DroidInput): Promise<boolean>;
-  /** Return whether this pattern has produced some side effects */
-  get dirty() {
-    return this.dirty_;
-  }
-  /** Dismiss the side effects, returning whether the side
-   * effects is dismissed or not, currently not supported */
-  dismiss() {
-    return false;
-  }
-  protected setDirty() {
-    this.dirty_ = true;
-  }
-  protected clearDirty() {
-    this.dirty_ = false;
-  }
-}
-
-export interface LookaheadPatRecArgs extends PatRecArgs {
-  v: DxView; // the view on recordee
-  k: number; // number of events to lookahead
-  s: DxEvSeq; // the event sequence
-  i: DroidInput; // the input
-}
-
-/** Lookahead tries to look ahead next K events, and skip several events,
- * these events (including current) can be skipped if and only
- * if their next event can be fired directly on current ui */
-export class Lookahead extends DxPat {
-  private nPopped = -1;
-
-  constructor(protected args: LookaheadPatRecArgs) {
-    super(args);
-  }
-
-  get name() {
-    return `lookahead:${this.args.k}`;
-  }
-
-  async match(): Promise<boolean> {
-    this.nPopped = await this.tryLookahead(
-      this.args.v,
-      this.args.s,
-      this.args.k,
-      this.args.i
-    );
-    return this.nPopped >= 0;
-  }
-
-  async apply() {
-    if (this.nPopped < 0) {
-      throw new IllegalStateError("No events to pop, don't apply");
-    }
-    this.args.s.popN(this.nPopped);
-    return true;
-  }
-
-  private async tryLookahead(
-    view: DxView,
-    seq: DxEvSeq,
-    kVal: number,
-    input: DroidInput
-  ): Promise<number> {
-    // TODO: add more rules to check whether v can be skipped
-    if (view.text.length == 0 && seq.size() > 0) {
-      const nextK = seq.topN(kVal);
-      for (let i = 0; i < nextK.length; i++) {
-        const ne = nextK[i];
-        // we come across an non-xy event, fail
-        if (!isXYEvent(ne)) {
-          return -1;
-        }
-
-        // find the view in recordee
-        const nv = ne.ui.findViewByXY(ne.x, ne.y);
-        if (nv == null) {
-          throw new IllegalStateError(
-            `No visible view found on recordee tree at (${ne.x}, ${ne.y})`
-          );
-        }
-
-        // find its target view map in playee
-        const nvm = await adaptSel(input, nv);
-        if (nvm != null && nvm.visible) {
-          return i;
-        }
-      }
-    }
-    return -1;
-  }
-}
-
-export interface InvisiblePatRecArgs extends PatRecArgs {
-  // view on playee
-  v: DxView;
-  // playee ui
-  u: DxCompatUi;
-  // playee device
-  d: DevInfo;
-}
-
-/** Invisible pattern is used for those views which are
- * invisible but still presented on the view tree. Invisible
- * pattern assumes that the invisible button can be manifested
- * by actions on its visible parent, currently the actions
- * includes only the tap action. */
-export class Invisible extends DxPat {
-  // parent that are visible to user
-  private vParent: N<DxView> = null;
-  constructor(protected args: InvisiblePatRecArgs) {
-    super(args);
-  }
-
-  get name(): string {
-    return 'invisible';
-  }
-
-  async match(): Promise<boolean> {
-    // find its visible parent
-    const { v: view, u: act, d: dev } = this.args;
-    this.vParent = ViewFinder.findParent(
-      view,
-      (p) => Views.isViewImportantForA11y(p) && Views.isVisibleToUser(p, dev)
-    );
-    return !!this.vParent;
-  }
-
-  async apply(input: DroidInput): Promise<boolean> {
-    // TODO: what if the view is not triggered by
-    // tapping its visible parent?
-    if (this.vParent == null) {
-      throw new IllegalStateError("Pattern is not satisfied, don't apply");
-    }
-    await input.tap(Views.x0(this.vParent) + 1, Views.y0(this.vParent) + 1);
-    this.setDirty();
-    return false;
-  }
-}
-
-export interface BpPatRecArgs extends PatRecArgs {
-  // view on recordee
-  v: DxView;
-  // the recordee
-  r: {
-    s: DxSegment;
-    u: DxCompatUi;
-    d: DevInfo;
-  };
-  // the playee
-  p: {
-    s: DxSegment;
-    u: DxCompatUi;
-    d: DevInfo;
-  };
-}
 
 /** Bottom-up patterns that our pattern recognition
  * algorithm used. The level denotes the level the
  * pattern resides. */
-export abstract class DxBpPat extends DxPat {
-  constructor(protected args: BpPatRecArgs) {
-    super(args);
+export abstract class BottomUpPattern extends DxPattern {
+  get name() {
+    return `${this.level}:${this.subName}`;
   }
-
+  abstract get subName(): string;
   abstract get level(): string;
 }
 
-export abstract class Expand extends DxBpPat {
+export abstract class Expand extends BottomUpPattern {
   get level() {
     return 'expand';
   }
@@ -222,7 +50,7 @@ export class VagueText extends Expand {
   // founded views that are text-similar to target view
   protected vFound: DxView[] = [];
 
-  get name() {
+  get subName() {
     return 'vague-text';
   }
 
@@ -296,7 +124,7 @@ export class VagueText extends Expand {
 /** VagueTextExt differs from VagueText that it finds the
  * view bottom-up along the segment tree */
 export class VagueTextExt extends VagueText {
-  get name() {
+  get subName() {
     return 'vague-text-ext';
   }
 
@@ -328,7 +156,7 @@ export class VagueTextExt extends VagueText {
  * on some devices behind content-desc, but show their text
  * on other devices */
 export class VagueTextDesc extends VagueText {
-  get name() {
+  get subName() {
     return 'vague-text-desc';
   }
 
@@ -387,7 +215,7 @@ export class Scroll extends Expand {
   private vHSParent: N<DxView> = null;
   private vVSParent: N<DxView> = null;
 
-  get name(): string {
+  get subName(): string {
     return 'scroll';
   }
 
@@ -408,7 +236,7 @@ export class Scroll extends Expand {
     return !!this.vHSParent || !!this.vVSParent;
   }
 
-  async apply(input: DroidInput): Promise<boolean> {
+  async apply(input: DroidInput, selector: DxSelector): Promise<boolean> {
     if (this.vHSParent == null && this.vVSParent == null) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     } else if (this.vHSParent != null && this.vVSParent != null) {
@@ -463,7 +291,10 @@ export class Scroll extends Expand {
           iteration += 1;
         }
         lastDir = currDir;
-      } while (iteration < 3 && (await adaptSel(input, this.args.v)) == null);
+      } while (
+        iteration < 3 &&
+        (await selector.select(input, this.args.v, true)) == null
+      );
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
       }
@@ -511,7 +342,10 @@ export class Scroll extends Expand {
           iteration += 1;
         }
         lastDir = currDir;
-      } while (iteration < 3 && (await adaptSel(input, this.args.v)) == null);
+      } while (
+        iteration < 3 &&
+        (await selector.select(input, this.args.v, true)) == null
+      );
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
       }
@@ -546,7 +380,7 @@ export class Scroll extends Expand {
   }
 }
 
-export abstract class Reveal extends DxBpPat {
+export abstract class Reveal extends BottomUpPattern {
   get level() {
     return 'reveal';
   }
@@ -598,7 +432,7 @@ export abstract class RevealButton extends Reveal {
 export class MoreOptions extends RevealButton {
   static DESC = 'More options';
 
-  get name(): string {
+  get subName(): string {
     return 'more-options';
   }
 
@@ -628,7 +462,7 @@ export class DrawerMenu extends Reveal {
   // the target menu button in playee
   private vTargetMenuButton: N<DxView> = null;
 
-  get name(): string {
+  get subName(): string {
     return 'drawer-menu';
   }
 
@@ -728,7 +562,7 @@ export class TabHostTab extends Reveal {
   // the path from the view to the tab's parent
   protected vPath: DxView[] = [];
 
-  get name() {
+  get subName() {
     return 'tab-host-tab';
   }
 
@@ -815,7 +649,7 @@ export class TabHostContent extends Reveal {
 
   private vTabContent: N<DxView> = null;
 
-  get name() {
+  get subName() {
     return 'tab-host-content';
   }
 
@@ -917,7 +751,7 @@ export class TabHost extends TabHostTab {
     return v instanceof DxTabHost;
   }
 
-  get name() {
+  get subName() {
     return 'tab-host';
   }
 
@@ -984,7 +818,7 @@ export class DoubleSideViewPager extends Reveal {
   // the page's parent pager in playee
   private vPPager: N<DxViewPager> = null;
 
-  get name() {
+  get subName() {
     return 'double-side-view-pager';
   }
 
@@ -1081,7 +915,7 @@ export class SingleSideViewPager extends Reveal {
   // the pager in playee side
   private vPager: N<DxViewPager> = null;
 
-  get name() {
+  get subName() {
     return 'single-side-view-pager';
   }
 
@@ -1108,7 +942,7 @@ export class SingleSideViewPager extends Reveal {
     return found;
   }
 
-  async apply(input: DroidInput): Promise<boolean> {
+  async apply(input: DroidInput, selector: DxSelector): Promise<boolean> {
     if (!this.vPager) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
@@ -1117,7 +951,7 @@ export class SingleSideViewPager extends Reveal {
     for (const page of this.vPager.children) {
       await input.tap(Views.x0(page) + 1, Views.y0(page) + 1);
       this.setDirty();
-      if ((await adaptSel(input, this.args.v)) != null) {
+      if ((await selector.select(input, this.args.v, true)) != null) {
         return false;
       }
     }
@@ -1125,7 +959,7 @@ export class SingleSideViewPager extends Reveal {
   }
 }
 
-export abstract class Merge extends DxBpPat {
+export abstract class Merge extends BottomUpPattern {
   get level() {
     return 'merge';
   }
@@ -1169,7 +1003,7 @@ export abstract class MergeButton extends Merge {
 export class NewButton extends MergeButton {
   private static WORDS = ['New', 'Create', 'Add'];
 
-  get name() {
+  get subName() {
     return 'new-button';
   }
 
@@ -1237,7 +1071,7 @@ export abstract class DualFragment extends Merge {
  * the detailed view, what we need to do is directly press back to
  * pop the current fragment */
 export class DualFragmentGotoDescriptive extends DualFragment {
-  get name() {
+  get subName() {
     return 'dual-fragment-goto-descriptive-preview';
   }
 
@@ -1266,7 +1100,7 @@ export class DualFragmentGotoDetailed extends DualFragment {
   // the detailed view fragment in playee
   private vDetFrag: N<DxFragment> = null;
 
-  get name() {
+  get subName() {
     return 'dual-fragment-goto-detailed-view';
   }
 
@@ -1417,7 +1251,7 @@ export class DualFragmentGotoDetailed extends DualFragment {
   }
 }
 
-export abstract class Transform extends DxBpPat {
+export abstract class Transform extends BottomUpPattern {
   get level() {
     return 'transform';
   }
@@ -1428,7 +1262,7 @@ export abstract class Transform extends DxBpPat {
 export class NavigationUp extends Transform {
   private static DESC = ['Back', 'Navigation Up', 'Close', 'Dismiss'];
 
-  get name() {
+  get subName() {
     return 'navigation-up';
   }
 

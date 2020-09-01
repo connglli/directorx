@@ -1,8 +1,9 @@
-import DxView, { Views } from '../ui/dxview.ts';
-import { ViewMap, SelectOptions, DevInfo, DroidInput } from '../dxdroid.ts';
-import { BoWModel, similarity, closest } from '../utils/vecutil.ts';
-import { splitAsWords } from '../utils/strutil.ts';
-import { NotImplementedError } from '../utils/error.ts';
+import DxSelector from '../selector.ts';
+import DxView, { Views } from '../../ui/dxview.ts';
+import { ViewMap, SelectOptions, DevInfo, DroidInput } from '../../dxdroid.ts';
+import { BoWModel, similarity, closest } from '../../utils/vecutil.ts';
+import { splitAsWords } from '../../utils/strutil.ts';
+import { NotImplementedError } from '../../utils/error.ts';
 
 type N<T> = T | null;
 
@@ -43,7 +44,7 @@ export function asViewMap(v: DxView, d: DevInfo): ViewMap {
 }
 
 /** Adaptively select the target view */
-export default async function adaptSel(
+async function adaptSel(
   input: DroidInput,
   view: DxView,
   compressed = true
@@ -231,4 +232,14 @@ export default async function adaptSel(
   }
 
   return null;
+}
+
+export default class AdaptiveSelector implements DxSelector {
+  async select(
+    input: DroidInput,
+    view: DxView,
+    compressed: boolean
+  ): Promise<N<ViewMap>> {
+    return await adaptSel(input, view, compressed);
+  }
 }

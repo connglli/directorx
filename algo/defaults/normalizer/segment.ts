@@ -1,15 +1,16 @@
-import DxView, { Views, ViewFinder } from '../ui/dxview.ts';
-import DxCompatUi from '../ui/dxui.ts';
+import { NormalizeError, DxSegmentNormalizer } from '../../normalizer.ts';
+import DxView, { Views, ViewFinder } from '../../../ui/dxview.ts';
+import DxCompatUi from '../../../ui/dxui.ts';
 import DxSegment, {
   Segments,
   DxHVESegSep,
   DxShrinkSegSep,
-} from '../ui/dxseg.ts';
-import { DevInfo } from '../dxdroid.ts';
-import DxLog from '../dxlog.ts';
-import { XYIntervalTree } from '../utils/interval_tree.ts';
-import Interval, { XYIntervals, XYInterval } from '../utils/interval.ts';
-import { CannotReachHereError } from '../utils/error.ts';
+} from '../../../ui/dxseg.ts';
+import { DevInfo } from '../../../dxdroid.ts';
+import DxLog from '../../../dxlog.ts';
+import { XYIntervalTree } from '../../../utils/interval_tree.ts';
+import Interval, { XYIntervals, XYInterval } from '../../../utils/interval.ts';
+import { CannotReachHereError } from '../../../utils/error.ts';
 
 type N<T> = T | null;
 
@@ -56,7 +57,7 @@ const DEFAULTS = {
   },
 };
 
-export class UiSegError extends Error {
+export class UiSegError extends NormalizeError {
   constructor(msg: string) {
     super(`UiSegError: ${msg}`);
   }
@@ -563,10 +564,7 @@ function segSeg(seg: DxSegment, dev: DevInfo): N<DxShrinkSegSep | DxHVESegSep> {
 
 /** Segment the Ui, return the root segment and all accepted segments,
  * which is equivalent of Segments.acceptsOf(root) */
-export default function segUi(
-  a: DxCompatUi,
-  dev: DevInfo
-): [DxSegment, DxSegment[]] {
+function segUi(a: DxCompatUi, dev: DevInfo): [DxSegment, DxSegment[]] {
   // firstly, we segment the ui but reserve the low-level
   // overlapped segments, 'cause it is often difficult and
   // time-consuming to fully delete them safely (bfs)
@@ -652,4 +650,11 @@ export default function segUi(
   });
 
   return [root, segments.filter((s) => s.accepted)];
+}
+
+/** UiSegmenter normalizes the ui to multiple segments  */
+export default class UiSegmenter extends DxSegmentNormalizer {
+  apply(ui: DxCompatUi, dev: DevInfo): Promise<[DxSegment, DxSegment[]]> {
+    return Promise.resolve(segUi(ui, dev));
+  }
 }

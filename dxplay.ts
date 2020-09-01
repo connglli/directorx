@@ -13,8 +13,15 @@ import DxPacker from './dxpack.ts';
 import DxView from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
 import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
+import DxSynthesizer from './algo/mod.ts';
+import {
+  CompactSynthesizer,
+  AdaptiveSelector,
+  UiSegmenter,
+  TfIdfMatcher,
+  BottomUpRecognizer,
+} from './algo/defaults/mod.ts';
 import DxPlugin, { createPlugin, applyPlugin } from './plugin/mod.ts';
-import { adaptiveSelect, synthesizePattern, DxBpPat } from './algo/mod.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,
@@ -159,8 +166,7 @@ class PtPlayer extends DxPlayer {
  * 1. resId (contains-ignore-case)
  * 2. desc (contains-ignore-case)
  * 3. text (contains-ignore-case)
- * If no views are found, a YotaNoSuchViewException is thrown.
- */
+ * If no views are found, a YotaNoSuchViewException is thrown. */
 class WdgPlayer extends DxPlayer {
   async playEvent(e: DxEvent): Promise<void> {
     const input = DxDroid.get().input;
@@ -238,6 +244,7 @@ class ResPlayer extends DxPlayer {
     public readonly decode: boolean,
     public readonly K: number,
     public readonly autoHideSoftKeyboard: boolean,
+    public readonly synthesizer: DxSynthesizer,
     public readonly plugin: N<DxPlugin>
   ) {
     super(app);
@@ -274,13 +281,13 @@ class ResPlayer extends DxPlayer {
 
     // adaptively select the target view map in playee
     const pDev = droid.dev;
-    const vm = await adaptiveSelect(droid.input, v);
+    const vm = await this.synthesizer.selector.select(droid.input, v, true);
     if (vm != null && vm.visible) {
       return await this.fireOnViewMap(e, vm, rDev, pDev);
     }
 
     // apply the plugins firstly before our synthesis
-    const pUi = await this.top();
+    let pUi = await this.top();
     if (this.plugin) {
       DxLog.info(`try-plugin ${this.plugin.name()}`);
       if (
@@ -296,6 +303,7 @@ class ResPlayer extends DxPlayer {
             ui: pUi,
             dev: pDev,
           },
+          synthesizer: this.synthesizer,
         })
       ) {
         return;
@@ -306,16 +314,14 @@ class ResPlayer extends DxPlayer {
 
     // let's synthesize a pattern, and apply the pattern to
     // synthesize an equivalent event sequence
-    const patterns = await synthesizePattern(
+    const patterns = await this.synthesizer.synthesize(
       this.seq,
       e,
       v,
       rUi,
       pUi,
       rDev,
-      pDev,
-      droid.input,
-      this.K
+      pDev
     );
     if (patterns.length == 0) {
       throw new NotImplementedError('No patterns are synthesized');
@@ -323,16 +329,15 @@ class ResPlayer extends DxPlayer {
 
     // let's try to apply the patterns one by one in order
     for (const pattern of patterns) {
-      if (pattern instanceof DxBpPat) {
-        DxLog.info(`try-pattern ${pattern.level}:${pattern.name}`);
-      } else {
-        DxLog.info(`try-pattern ${pattern.name}`);
-      }
+      DxLog.info(`try-pattern ${pattern.name}`);
 
       // apply the pattern to get the synthesized event
       try {
         // successfully applied the pattern
-        let consumed = await pattern.apply(droid.input);
+        let consumed = await pattern.apply(
+          droid.input,
+          this.synthesizer.selector
+        );
         if (!consumed) {
           // push the raw event back to the sequence if the event
           // has not been consumed by the pattern
@@ -401,6 +406,42 @@ class ResPlayer extends DxPlayer {
   }
 }
 
+async function createResPlayer(
+  app: string,
+  droid: DxDroid,
+  opt: DxPlayOptions
+) {
+  const { autoHideSoftKeyboard = true, pluginPath } = opt;
+
+  if (!opt.K) {
+    DxLog.critical(
+      'Lookahead K is not specified, use -K or --lookahead to specify it'
+    );
+    Deno.exit(1);
+  }
+
+  const synthesizer = new CompactSynthesizer(
+    new DxSynthesizer({
+      input: droid.input,
+      selector: new AdaptiveSelector(),
+      normalizer: new UiSegmenter(),
+      matcher: new TfIdfMatcher(),
+      recognizer: new BottomUpRecognizer(),
+    }),
+    opt.K
+  );
+
+  const player = new ResPlayer(
+    app,
+    opt.decode,
+    opt.K,
+    autoHideSoftKeyboard,
+    synthesizer,
+    await createPlugin(pluginPath, DxDroid.get())
+  );
+  return player;
+}
+
 export type DxPlayerType = 'px' | 'pt' | 'wdg' | 'res';
 
 export type DxPlayOptions = {
@@ -415,14 +456,7 @@ export type DxPlayOptions = {
 };
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
-  const {
-    serial,
-    pty,
-    dxpk,
-    verbose = false,
-    autoHideSoftKeyboard = true,
-    pluginPath,
-  } = opt;
+  const { serial, pty, dxpk, verbose = false } = opt;
 
   if (verbose) {
     DxLog.setLevel('DEBUG');
@@ -456,19 +490,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
       player = new WdgPlayer(pkr.app);
       break;
     case 'res':
-      if (!opt.K) {
-        DxLog.critical(
-          'Lookahead K is not specified, use -K or --lookahead to specify it'
-        );
-        Deno.exit(1);
-      }
-      player = new ResPlayer(
-        pkr.app,
-        opt.decode,
-        opt.K,
-        autoHideSoftKeyboard,
-        await createPlugin(pluginPath, DxDroid.get())
-      );
+      player = await createResPlayer(pkr.app, DxDroid.get(), opt);
       break;
     default:
       throw new CannotReachHereError();

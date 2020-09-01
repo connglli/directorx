@@ -4,7 +4,8 @@ import DxEvent, { DxEvSeq, isXYEvent } from '../dxevent.ts';
 import DxView, { Views, ViewFinder } from '../ui/dxview.ts';
 import DxCompatUi from '../ui/dxui.ts';
 import { Segments, SegmentFinder, SegmentBottomUpFinder } from '../ui/dxseg.ts';
-import * as DxAlgo from '../algo/mod.ts';
+import DxSynthesizer, * as DxAlgo from '../algo/mod.ts';
+import * as DxAlgoDefaults from '../algo/defaults/mod.ts';
 import * as Vectors from '../utils/vecutil.ts';
 import * as Strings from '../utils/strutil.ts';
 import * as Errors from '../utils/error.ts';
@@ -23,12 +24,16 @@ interface PluginContext {
     ui: DxCompatUi;
     dev: DevInfo;
   };
+  synthesizer: DxSynthesizer;
 }
 
 interface PluginGlobal {
   droid: DxDroid;
   input: DroidInput;
-  algo: typeof DxAlgo;
+  algo: {
+    base: typeof DxAlgo;
+    defaults: typeof DxAlgoDefaults;
+  };
   logger: typeof DxLog;
   utils: {
     Events: {
@@ -120,7 +125,10 @@ export async function createPlugin(
   const pluginGlobal: PluginGlobal = {
     droid,
     input: droid.input,
-    algo: DxAlgo,
+    algo: {
+      base: DxAlgo,
+      defaults: DxAlgoDefaults,
+    },
     logger: DxLog,
     utils: {
       Events: {
@@ -152,7 +160,10 @@ export async function createPlugin(
 /** Apply the plugin */
 export async function applyPlugin(
   plugin: DxPlugin,
-  ctx: Pick<PluginContext, 'event' | 'seq' | 'view' | 'recordee' | 'playee'>
+  ctx: Pick<
+    PluginContext,
+    'event' | 'seq' | 'view' | 'recordee' | 'playee' | 'synthesizer'
+  >
 ): Promise<boolean> {
   return await plugin.apply(ctx);
 }

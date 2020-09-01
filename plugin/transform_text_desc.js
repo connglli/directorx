@@ -1,12 +1,11 @@
 const {
   input,
-  algo,
   utils: { Errors, Events, Views, ViewFinder },
 } = global;
 
 const args = {};
 
-async function tryVagueLookahead(view, seq, kVal, playee) {
+async function tryVagueLookahead(view, seq, kVal, playee, selector) {
   if (view.text.length != 0 || seq.size() <= 0) {
     return [-1, null];
   }
@@ -27,7 +26,7 @@ async function tryVagueLookahead(view, seq, kVal, playee) {
     }
 
     // find its target view map in playee
-    const nvm = await algo.adaptiveSelect(input, nv);
+    const nvm = await selector.select(input, nv, true);
     if (nvm != null && nvm.visible) {
       return [
         i,
@@ -85,8 +84,14 @@ plugin.onCreate = function (argv) {
   args.K = argv['K'] === undefined ? 1 : Number(argv['K']);
 };
 
-plugin.apply = async function ({ seq, view, recordee, playee }) {
-  const [popped, matched] = await tryVagueLookahead(view, seq, args.K, playee);
+plugin.apply = async function ({ seq, view, recordee, playee, synthesizer }) {
+  const [popped, matched] = await tryVagueLookahead(
+    view,
+    seq,
+    args.K,
+    playee,
+    synthesizer.selector
+  );
   if (popped < 0) {
     return false;
   }
