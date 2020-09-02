@@ -13,10 +13,11 @@ import DxPacker from './dxpack.ts';
 import DxView from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
 import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
-import DxSynthesizer, { DxUiNormalizer } from './algo/mod.ts';
+import DxSynthesizer from './algo/mod.ts';
 import {
   CompactSynthesizer,
   AdaptiveUiAutomatorSelector,
+  AdaptiveDumpsysSelector,
   UiSegmenter,
   TfIdfMatcher,
   BottomUpRecognizer,
@@ -34,10 +35,24 @@ import {
 type N<T> = T | null;
 
 abstract class DxPlayer {
-  public readonly timeSensitive = true;
+  static readonly TIME_WARPING_MS_LOW = 100;
+  static readonly TIME_WARPING_THRESHOLD_MS_LOW = 700;
+  static readonly TIME_WARPING_THRESHOLD_MS_HIGH = 3000;
+  static readonly TIME_WARPING_MS_HIGH = 3000;
+
+  static warpTime(t: number) {
+    return t < this.TIME_WARPING_THRESHOLD_MS_LOW
+      ? this.TIME_WARPING_MS_LOW
+      : t > this.TIME_WARPING_THRESHOLD_MS_HIGH
+      ? this.TIME_WARPING_MS_HIGH
+      : t;
+  }
+
   private seq_: N<DxEvSeq> = null;
   constructor(
-    public readonly app: string // app to play
+    public readonly app: string, // app to play
+    public readonly timeSens = true, // time sensitive
+    public readonly timeWarp = true // warp time or not
   ) {}
 
   get seq(): DxEvSeq {
@@ -49,20 +64,36 @@ abstract class DxPlayer {
 
   async play(seq: DxEvSeq, rDev: DevInfo): Promise<void> {
     this.seq_ = seq;
-    let lastMs = -1;
+    let prevEvent: N<DxEvent> = null;
     while (!this.seq.empty()) {
-      const e = this.seq.pop();
-      if (lastMs != -1) {
-        if (this.timeSensitive) {
-          const wait = e.t - lastMs;
-          if (wait > 0) {
-            await time.sleep(wait);
+      const currEvent = this.seq.pop();
+      DxLog.info(`next-event ${currEvent}`);
+      if (this.timeSens) {
+        // when time sensitive, let's accumulate time
+        let waitTime = 0;
+        if (currEvent != prevEvent) {
+          // a new event comes
+          if (prevEvent) {
+            // not the first event, let renew the wait time
+            waitTime = currEvent.t - prevEvent.t;
+            if (this.timeWarp) {
+              waitTime = DxPlayer.warpTime(waitTime);
+            }
+          } else {
+            // do not wait for the first event
+            waitTime = 0;
           }
+        } else {
+          // same as last event, let's wait a minim time
+          waitTime = 50;
+        }
+        if (waitTime > 0) {
+          DxLog.info(`wait-time ${waitTime}ms`);
+          await time.sleep(waitTime);
         }
       }
-      await this.playEvent(e, rDev);
-      DxLog.info(e.toString());
-      lastMs = e.t;
+      await this.playEvent(currEvent, rDev);
+      prevEvent = currEvent;
     }
   }
 
@@ -254,7 +285,6 @@ class ResPlayer extends DxPlayer {
     public readonly autoHideSoftKeyboard: boolean,
     public readonly droid: DxDroid,
     public readonly synthesizer: DxSynthesizer,
-    public readonly uiNormalizer: DxUiNormalizer,
     public readonly plugin: N<DxPlugin>
   ) {
     super(app);
@@ -274,10 +304,17 @@ class ResPlayer extends DxPlayer {
       Deno.exit(1);
     }
 
+    const uiNormalizer = uiNormalizerPath
+      ? await createUiNormalizer(uiNormalizerPath, droid)
+      : new IdentityUi();
+    const selector = uiNormalizerPath
+      ? new AdaptiveDumpsysSelector(app, droid, uiNormalizer)
+      : new AdaptiveUiAutomatorSelector(app, droid);
+
     const synthesizer = new CompactSynthesizer(
       new DxSynthesizer({
         input: droid.input,
-        selector: new AdaptiveUiAutomatorSelector(app, droid),
+        selector,
         normalizer: new UiSegmenter(),
         matcher: new TfIdfMatcher(),
         recognizer: new BottomUpRecognizer(),
@@ -285,17 +322,9 @@ class ResPlayer extends DxPlayer {
       opt.K
     );
 
-    let uiNormalizer: DxUiNormalizer;
-    if (uiNormalizerPath) {
-      uiNormalizer = await createUiNormalizer(uiNormalizerPath, droid);
-    } else {
-      uiNormalizer = new IdentityUi();
-    }
-
-    let plugin: N<DxPlugin> = null;
-    if (pluginPath) {
-      plugin = await createPlugin(pluginPath, droid);
-    }
+    const plugin: N<DxPlugin> = pluginPath
+      ? await createPlugin(pluginPath, droid)
+      : null;
 
     return new ResPlayer(
       app,
@@ -303,7 +332,6 @@ class ResPlayer extends DxPlayer {
       autoHideSoftKeyboard,
       droid,
       synthesizer,
-      uiNormalizer,
       plugin
     );
   }
@@ -345,10 +373,7 @@ class ResPlayer extends DxPlayer {
     }
 
     // apply the plugins firstly before our synthesis
-    let pUi = await this.synthesizer.selector.top();
-    // let's apply the normalizer firstly to normalize the ui
-    pUi = await this.uiNormalizer.normalize(pUi, pDev);
-
+    const pUi = await this.synthesizer.selector.topUi();
     if (this.plugin) {
       DxLog.info(`try-plugin ${this.plugin.name()}`);
       if (

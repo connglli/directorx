@@ -209,7 +209,7 @@ export default class AdaptiveUiAutomatorSelector implements DxSelector {
     return await adaptSel(this.droid.input, view, visibleOnly);
   }
 
-  async top() {
-    return this.droid.topActivity(this.app, 'dumpsys');
+  async topUi() {
+    return this.droid.topUi(this.app, 'dumpsys');
   }
 }

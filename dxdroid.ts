@@ -97,7 +97,7 @@ export default class DxDroid {
           left = Views.x0(view);
           right = Views.x1(view);
           top = Views.y0(view);
-          bottom = Views.y0(view);
+          bottom = Views.y1(view);
         } else {
           left = view.bounds.left;
           right = view.bounds.right;
@@ -139,16 +139,22 @@ export default class DxDroid {
     };
   }
 
-  async topActivity(
+  async windowCount(pkg: string) {
+    return (await this.adb_.windows(pkg)).length;
+  }
+
+  async topUi(
     pkg: string,
     tool: 'uiautomator' | 'dumpsys' = 'dumpsys'
   ): Promise<DxCompatUi> {
-    // TODO: recognize window count, and use uiautomator
-    // if there are multiple windows
     if (tool == 'dumpsys') {
-      return await this.adb_.topActivity(pkg, this.decoding_, this.dev);
+      if ((await this.windowCount(pkg)) == 1) {
+        return await this.adb_.topActivity(pkg, this.decoding_, this.dev);
+      } else {
+        return await this.yota_.topUi(pkg, this.dev);
+      }
     } else {
-      return await this.yota_.topActivity(pkg, this.dev);
+      return await this.yota_.topUi(pkg, this.dev);
     }
   }
 

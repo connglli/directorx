@@ -9,6 +9,12 @@ import DxCompatUi from './ui/dxui.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
 
+export class YotaError extends Error {
+  constructor(msg: string) {
+    super(msg);
+  }
+}
+
 /** Quotes shell command string with "" */
 function q(s: string | number): string {
   return `'"${s}"'`;
@@ -292,16 +298,36 @@ export class YotaNoSuchViewError extends AdbError {
 }
 
 export default class DxYota {
-  public static readonly BIN = '/data/local/tmp/yota';
+  public static readonly BINARY_PATH = '/data/local/tmp/yota';
+  public static readonly ERROR_PREFIX = '[Yota] ** ';
+
   constructor(public readonly adb: DxAdb) {}
 
+  async unsafeShell(cmd: string) {
+    const out = await this.adb.unsafeShell(cmd);
+    if (out.startsWith(DxYota.ERROR_PREFIX)) {
+      throw new YotaError(out);
+    }
+    return out;
+  }
+
+  async unsafeExecOut(cmd: string) {
+    const out = await this.adb.unsafeExecOut(cmd);
+    if (out.startsWith(DxYota.ERROR_PREFIX)) {
+      throw new YotaError(out);
+    }
+    return out;
+  }
+
   async tap(x: number, y: number): Promise<void> {
-    await this.adb.unsafeShell(`${DxYota.BIN} input tap -x ${q(x)} -y ${q(y)}`);
+    await this.unsafeShell(
+      `${DxYota.BINARY_PATH} input tap -x ${q(x)} -y ${q(y)}`
+    );
   }
 
   async longTap(x: number, y: number): Promise<void> {
-    await this.adb.unsafeShell(
-      `${DxYota.BIN} input longtap -x ${q(x)} -y ${q(y)}`
+    await this.unsafeShell(
+      `${DxYota.BINARY_PATH} input longtap -x ${q(x)} -y ${q(y)}`
     );
   }
 
@@ -319,19 +345,19 @@ export default class DxYota {
   ): Promise<void> {
     const toX = x + dx;
     const toY = y + dy;
-    await this.adb.unsafeShell(
-      `${DxYota.BIN} input swipe --from-x ${q(x)} --from-y ${q(y)} --to-x ${q(
-        toX
-      )} --to-y ${q(toY)} --duration ${q(duration)}`
+    await this.unsafeShell(
+      `${DxYota.BINARY_PATH} input swipe --from-x ${q(x)} --from-y ${q(
+        y
+      )} --to-x ${q(toX)} --to-y ${q(toY)} --duration ${q(duration)}`
     );
   }
 
   async key(key: string): Promise<void> {
-    await this.adb.unsafeShell(`${DxYota.BIN} input key ${key}`);
+    await this.unsafeShell(`${DxYota.BINARY_PATH} input key ${key}`);
   }
 
   async text(text: string): Promise<void> {
-    await this.adb.unsafeShell(`${DxYota.BIN} input text ${text}`);
+    await this.unsafeShell(`${DxYota.BINARY_PATH} input text ${text}`);
   }
 
   async view(type: ViewInputType, opt: ViewInputOptions = {}): Promise<void> {
@@ -340,7 +366,9 @@ export default class DxYota {
       status: AdbResult;
     do {
       retry -= 1; // code == 6 means root is null, retry
-      status = await this.adb.raw.shell(`${DxYota.BIN} input view ${args}`);
+      status = await this.adb.raw.shell(
+        `${DxYota.BINARY_PATH} input view ${args}`
+      );
     } while (status.code == 6 && retry > 0);
     if (status.code == 5) {
       throw new YotaNoSuchViewError(5);
@@ -355,7 +383,7 @@ export default class DxYota {
       status: AdbResult;
     do {
       retry -= 1; // code == 2 means root is null, retry
-      status = await this.adb.raw.shell(`${DxYota.BIN} select ${args}`);
+      status = await this.adb.raw.shell(`${DxYota.BINARY_PATH} select ${args}`);
     } while (status.code == 2 && retry > 0);
     if (status.code != 0) {
       throw new AdbError('yota select', status.code, status.out);
@@ -376,7 +404,7 @@ export default class DxYota {
 
   async info(cmd: string): Promise<string> {
     // TODO: info commands may fail on real devices
-    return await this.adb.unsafeShell(`${DxYota.BIN} info ${cmd}`);
+    return await this.unsafeShell(`${DxYota.BINARY_PATH} info ${cmd}`);
   }
 
   async pressBack(): Promise<void> {
@@ -396,12 +424,26 @@ export default class DxYota {
   }
 
   async dump(compressed = true): Promise<string> {
-    return await this.adb.unsafeExecOut(
-      `${DxYota.BIN} dump ${compressed ? '-c' : ''} -b -o stdout`
-    );
+    let retry = 3;
+    do {
+      try {
+        return await this.unsafeExecOut(
+          `${DxYota.BINARY_PATH} dump ${compressed ? '-c' : ''} -b -o stdout`
+        );
+      } catch (x) {
+        if (x instanceof YotaError) {
+          if (x.message.startsWith(' [Yota] ** Error: Root is null')) {
+            retry -= 1;
+          }
+        } else {
+          throw x;
+        }
+      }
+    } while (retry > 0);
+    throw new YotaError('Root is null');
   }
 
-  async topActivity(pkg: string, dev: DevInfo): Promise<DxCompatUi> {
+  async topUi(pkg: string, dev: DevInfo): Promise<DxCompatUi> {
     const info = await this.info('topactivity');
     const tokens = info.split('/');
     if (tokens[1].startsWith('.')) {

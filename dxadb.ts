@@ -421,6 +421,10 @@ export class DumpSysActivityInfo {
   }
 }
 
+export class DumpsysWindowInfo {
+  constructor(private readonly pkg_: string, private readonly info: string[]) {}
+}
+
 // FIX: some apps/devices often output non-standard attributes
 // for example aid=1073741824 following resource-id
 /** See DecorView#toString() */
@@ -951,6 +955,28 @@ export default class DxAdb {
 
   async text(text: string): Promise<void> {
     await this.unsafeShell(`input text ${text}`);
+  }
+
+  async windows(pkg: string): Promise<DumpsysWindowInfo[]> {
+    const out = (await this.unsafeExecOut(`dumpsys window ${pkg}`)).split('\n');
+    const windows: DumpsysWindowInfo[] = [];
+    const windowStartLinePrefix = '  Window #';
+    let currentStartLine = -1;
+    for (let i = 1; i < out.length; i++) {
+      const isStartLine = out[i].startsWith(windowStartLinePrefix);
+      if (isStartLine && currentStartLine != -1) {
+        windows.push(
+          new DumpsysWindowInfo(pkg, out.slice(currentStartLine, i))
+        );
+      }
+      if (isStartLine) {
+        currentStartLine = i;
+      }
+    }
+    if (currentStartLine != -1) {
+      windows.push(new DumpsysWindowInfo(pkg, out.slice(currentStartLine)));
+    }
+    return windows;
   }
 
   async topActivity(
