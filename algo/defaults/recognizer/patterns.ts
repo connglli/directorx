@@ -1,6 +1,5 @@
 import { DxPattern } from '../../recognizer.ts';
 import DxSelector from '../../selector.ts';
-import { DxSwipeEvent } from '../../../dxevent.ts';
 import DxView, {
   DxTabHost,
   DxViewPager,
@@ -87,31 +86,12 @@ export class VagueText extends Expand {
     if (!matched) {
       throw new IllegalStateError('vFound is empty');
     }
-    switch (this.args.e.ty) {
-      case 'tap':
-        await input.tap(Views.x0(matched) + 1, Views.y0(matched) + 1);
-        break;
-      case 'double-tap':
-        await input.doubleTap(Views.x0(matched) + 1, Views.y0(matched) + 1);
-        break;
-      case 'long-tap':
-        await input.longTap(Views.x0(matched) + 1, Views.y0(matched) + 1);
-        break;
-      case 'swipe': {
-        const { dx, dy, t0, t1 } = this.args.e as DxSwipeEvent;
-        const duration = t1 - t0;
-        const rDev = this.args.r.d;
-        const pDev = this.args.p.d;
-        const fromX = dx >= 0 ? Views.x0(matched) + 1 : Views.x1(matched) - 1;
-        const fromY = dy >= 0 ? Views.y0(matched) + 1 : Views.y1(matched) - 1;
-        const realDx = (dx / rDev.width) * pDev.width;
-        const realDy = (dy / rDev.height) * pDev.height;
-        await input.swipe(fromX, fromY, realDx, realDy, duration);
-        break;
-      }
-      default:
-        throw new CannotReachHereError();
-    }
+    await input.convertInput(
+      this.args.e,
+      matched,
+      this.args.r.d,
+      this.args.p.d
+    );
     this.setDirty();
     return true;
   }
@@ -293,7 +273,7 @@ export class Scroll extends Expand {
         lastDir = currDir;
       } while (
         iteration < 3 &&
-        (await selector.select(input, this.args.v, true)) == null
+        (await selector.select(this.args.v, true)) == null
       );
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
@@ -344,7 +324,7 @@ export class Scroll extends Expand {
         lastDir = currDir;
       } while (
         iteration < 3 &&
-        (await selector.select(input, this.args.v, true)) == null
+        (await selector.select(this.args.v, true)) == null
       );
       if (iteration == 3) {
         throw new NotImplementedError('No views found in the list');
@@ -951,7 +931,7 @@ export class SingleSideViewPager extends Reveal {
     for (const page of this.vPager.children) {
       await input.tap(Views.x0(page) + 1, Views.y0(page) + 1);
       this.setDirty();
-      if ((await selector.select(input, this.args.v, true)) != null) {
+      if ((await selector.select(this.args.v, true)) != null) {
         return false;
       }
     }

@@ -16,7 +16,7 @@ import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
 import DxSynthesizer, { DxUiNormalizer } from './algo/mod.ts';
 import {
   CompactSynthesizer,
-  AdaptiveSelector,
+  AdaptiveUiAutomatorSelector,
   UiSegmenter,
   TfIdfMatcher,
   BottomUpRecognizer,
@@ -239,13 +239,20 @@ class WdgPlayer extends DxPlayer {
   }
 }
 
+type ResPlayerCreateOptions = {
+  K?: number; // look ahead count
+  autoHideSoftKeyboard?: boolean; // hide soft keyboard automatically
+  pluginPath?: string; // plugin that is used before any patterns
+  uiNormalizerPath?: string; // ui normalizer that is used to normalize the ui
+};
+
 /** ResPlayer plays each event responsively */
 class ResPlayer extends DxPlayer {
   constructor(
     app: string,
-    public readonly decode: boolean,
     public readonly K: number,
     public readonly autoHideSoftKeyboard: boolean,
+    public readonly droid: DxDroid,
     public readonly synthesizer: DxSynthesizer,
     public readonly uiNormalizer: DxUiNormalizer,
     public readonly plugin: N<DxPlugin>
@@ -253,14 +260,62 @@ class ResPlayer extends DxPlayer {
     super(app);
   }
 
+  static async create(
+    app: string,
+    droid: DxDroid,
+    opt: ResPlayerCreateOptions
+  ) {
+    const { autoHideSoftKeyboard = true, pluginPath, uiNormalizerPath } = opt;
+
+    if (!opt.K) {
+      DxLog.critical(
+        'Lookahead K is not specified, use -K or --lookahead to specify it'
+      );
+      Deno.exit(1);
+    }
+
+    const synthesizer = new CompactSynthesizer(
+      new DxSynthesizer({
+        input: droid.input,
+        selector: new AdaptiveUiAutomatorSelector(app, droid),
+        normalizer: new UiSegmenter(),
+        matcher: new TfIdfMatcher(),
+        recognizer: new BottomUpRecognizer(),
+      }),
+      opt.K
+    );
+
+    let uiNormalizer: DxUiNormalizer;
+    if (uiNormalizerPath) {
+      uiNormalizer = await createUiNormalizer(uiNormalizerPath, droid);
+    } else {
+      uiNormalizer = new IdentityUi();
+    }
+
+    let plugin: N<DxPlugin> = null;
+    if (pluginPath) {
+      plugin = await createPlugin(pluginPath, droid);
+    }
+
+    return new ResPlayer(
+      app,
+      opt.K,
+      autoHideSoftKeyboard,
+      droid,
+      synthesizer,
+      uiNormalizer,
+      plugin
+    );
+  }
+
   async playEvent(e: DxEvent, rDev: DevInfo): Promise<void> {
     if (!isXYEvent(e)) {
       if (e.ty == 'key') {
-        await DxDroid.get().input.key((e as DxKeyEvent).k);
+        await this.droid.input.key((e as DxKeyEvent).k);
       } else if (e.ty == 'text') {
-        await DxDroid.get().input.text((e as DxTextEvent).x);
+        await this.droid.input.text((e as DxTextEvent).x);
       } else if (e.ty == 'hsk') {
-        await DxDroid.get().input.hideSoftKeyboard();
+        await this.droid.input.hideSoftKeyboard();
       } else {
         throw new NotImplementedError();
       }
@@ -268,7 +323,7 @@ class ResPlayer extends DxPlayer {
     }
 
     // let's hide the soft keyboard firstly
-    const droid = DxDroid.get();
+    const droid = this.droid;
     if (this.autoHideSoftKeyboard && (await droid.isSoftKeyboardPresent())) {
       await droid.input.hideSoftKeyboard();
     }
@@ -284,13 +339,13 @@ class ResPlayer extends DxPlayer {
 
     // adaptively select the target view map in playee
     const pDev = droid.dev;
-    const vm = await this.synthesizer.selector.select(droid.input, v, true);
+    const vm = await this.synthesizer.selector.select(v, true);
     if (vm != null && vm.visible) {
-      return await this.fireOnViewMap(e, vm, rDev, pDev);
+      return await droid.input.convertInput(e, vm, rDev, pDev);
     }
 
     // apply the plugins firstly before our synthesis
-    let pUi = await this.top();
+    let pUi = await this.synthesizer.selector.top();
     // let's apply the normalizer firstly to normalize the ui
     pUi = await this.uiNormalizer.normalize(pUi, pDev);
 
@@ -366,116 +421,20 @@ class ResPlayer extends DxPlayer {
       }
     }
   }
-
-  private async fireOnViewMap(
-    e: DxEvent,
-    v: ViewMap,
-    rDev: DevInfo,
-    pDev: DevInfo
-  ) {
-    // fire on the top-left corner
-    const {
-      bounds: { left, right, top, bottom },
-    } = v;
-    const realX = Math.min(left + 1, right);
-    const realY = Math.min(top + 1, bottom);
-    switch (e.ty) {
-      case 'tap':
-        return await DxDroid.get().input.tap(realX, realY);
-      case 'double-tap':
-        return await DxDroid.get().input.doubleTap(realX, realY);
-      case 'long-tap':
-        return await DxDroid.get().input.longTap(realX, realY);
-      case 'swipe': {
-        const { dx, dy, t0, t1 } = e as DxSwipeEvent;
-        const duration = t1 - t0;
-        const fromX = dx >= 0 ? left + 1 : right - 1;
-        const fromY = dy >= 0 ? top + 1 : bottom - 1;
-        const realDx = (dx / rDev.width) * pDev.width;
-        const realDy = (dy / rDev.height) * pDev.height;
-        return await DxDroid.get().input.swipe(
-          fromX,
-          fromY,
-          realDx,
-          realDy,
-          duration
-        );
-      }
-      default:
-        throw new CannotReachHereError();
-    }
-  }
-
-  private async top(): Promise<DxCompatUi> {
-    // TODO: check windows count, and invoke uiautomator at time
-    return await DxDroid.get().topActivity(this.app, this.decode, 'dumpsys');
-  }
-}
-
-async function createResPlayer(
-  app: string,
-  droid: DxDroid,
-  opt: DxPlayOptions
-) {
-  const { autoHideSoftKeyboard = true, pluginPath, uiNormalizerPath } = opt;
-
-  if (!opt.K) {
-    DxLog.critical(
-      'Lookahead K is not specified, use -K or --lookahead to specify it'
-    );
-    Deno.exit(1);
-  }
-
-  const synthesizer = new CompactSynthesizer(
-    new DxSynthesizer({
-      input: droid.input,
-      selector: new AdaptiveSelector(),
-      normalizer: new UiSegmenter(),
-      matcher: new TfIdfMatcher(),
-      recognizer: new BottomUpRecognizer(),
-    }),
-    opt.K
-  );
-
-  let uiNormalizer: DxUiNormalizer;
-  if (uiNormalizerPath) {
-    uiNormalizer = await createUiNormalizer(uiNormalizerPath, droid);
-  } else {
-    uiNormalizer = new IdentityUi();
-  }
-
-  let plugin: N<DxPlugin> = null;
-  if (pluginPath) {
-    plugin = await createPlugin(pluginPath, droid);
-  }
-
-  return new ResPlayer(
-    app,
-    opt.decode,
-    opt.K,
-    autoHideSoftKeyboard,
-    synthesizer,
-    uiNormalizer,
-    plugin
-  );
 }
 
 export type DxPlayerType = 'px' | 'pt' | 'wdg' | 'res';
 
-export type DxPlayOptions = {
+export interface DxPlayOptions extends ResPlayerCreateOptions {
   serial?: string; // phone serial no
   pty: DxPlayerType; // player type
   dxpk: string; // path to dxpk
-  K?: number; // look ahead, if use res
   decode: boolean; // decode or not
   verbose?: boolean; // verbose mode
-  autoHideSoftKeyboard?: boolean; // hide soft keyboard automatically
-  pluginPath?: string; // plugin that is used before any patterns
-  uiNormalizerPath?: string; // ui normalizer that is used to normalize the ui
-};
+}
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
-  const { serial, pty, dxpk, verbose = false } = opt;
+  const { serial, pty, dxpk, verbose = false, decode } = opt;
 
   if (verbose) {
     DxLog.setLevel('DEBUG');
@@ -483,6 +442,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
 
   // connect to droid
   await DxDroid.connect(serial);
+  DxDroid.get().decoding(decode);
 
   const pkr = await DxPacker.load(dxpk);
   const dev = DxDroid.get().dev;
@@ -509,7 +469,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
       player = new WdgPlayer(pkr.app);
       break;
     case 'res':
-      player = await createResPlayer(pkr.app, DxDroid.get(), opt);
+      player = await ResPlayer.create(pkr.app, DxDroid.get(), opt);
       break;
     default:
       throw new CannotReachHereError();

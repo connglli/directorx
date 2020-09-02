@@ -50,7 +50,10 @@ prog
   )
   .option(
     '-K, --lookahead <type:number>',
-    'Look ahead constant, required when player is res'
+    'Look ahead constant, used only when player is res',
+    {
+      default: 1,
+    }
   )
   .option(
     '-H, --autohide [type:boolean]',
@@ -61,7 +64,9 @@ prog
   )
   .option('-P, --plugin <type:string>', 'path of the plugin used')
   .option('-U, --uinorm <type:string>', 'path of the ui normalizer used')
-  .option('-v, --verbose [type:boolean]', 'output verbose information')
+  .option('-v, --verbose [type:boolean]', 'output verbose information', {
+    default: false,
+  })
   .action(
     async (
       { serial, player, lookahead, verbose, autohide, plugin, uinorm }: IFlags,

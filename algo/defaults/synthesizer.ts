@@ -78,7 +78,7 @@ class Lookahead extends DxPattern {
       }
 
       // find its target view map in playee
-      const nvm = await sel.select(inp, nv, true);
+      const nvm = await sel.select(nv, true);
       if (nvm != null && nvm.visible) {
         return i;
       }
@@ -185,7 +185,7 @@ export default class CompactSynthesizer extends DxSynthesizer {
 
     // let's see if the view is invisible, and apply
     // the invisible pattern if possible
-    const ivm = await this.selector.select(this.input, view, false);
+    const ivm = await this.selector.select(view, false);
     if (ivm && !ivm.important) {
       // sometimes an important or invisible view may got,
       // even though it is not suitable to fire it, it provides

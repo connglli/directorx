@@ -97,34 +97,6 @@ plugin.apply = async function ({ seq, view, recordee, playee, synthesizer }) {
   }
   seq.popN(popped);
   const e = seq.pop();
-  switch (e.ty) {
-    case 'tap':
-      await input.tap(matched.x0 + 1, matched.y0 + 1);
-      break;
-    case 'double-tap':
-      await input.doubleTap(matched.x0 + 1, matched.y0 + 1);
-      break;
-    case 'long-tap':
-      await input.longTap(matched.x0 + 1, matched.y0 + 1);
-      break;
-    case 'swipe': {
-      const { dx, dy, t0, t1 } = e;
-      const duration = t1 - t0;
-      const rDev = recordee.dev;
-      const pDev = playee.dev;
-      const fromX = dx >= 0 ? matched.x0 + 1 : matched.x1 - 1;
-      const fromY = dy >= 0 ? matched.y0 + 1 : matched.y1 - 1;
-      let realDx = (dx / rDev.width) * pDev.width;
-      let realDy = (dy / rDev.height) * pDev.height;
-      if (fromY + realDy <= 0) {
-        realDy = -fromY + 1;
-      }
-
-      await input.swipe(fromX, fromY, realDx, realDy, duration);
-      break;
-    }
-    default:
-      throw new Errors.CannotReachHereError();
-  }
+  await input.convertInput(e, matched, rDev, pDev);
   return true;
 };

@@ -1,47 +1,15 @@
-import DxSelector from '../selector.ts';
-import DxView, { Views } from '../../ui/dxview.ts';
-import { ViewMap, SelectOptions, DevInfo, DroidInput } from '../../dxdroid.ts';
-import { BoWModel, similarity, closest } from '../../utils/vecutil.ts';
-import { splitAsWords } from '../../utils/strutil.ts';
-import { NotImplementedError } from '../../utils/error.ts';
+import DxSelector from '../../selector.ts';
+import DxView from '../../../ui/dxview.ts';
+import DxDroid, {
+  ViewMap,
+  SelectOptions,
+  DroidInput,
+} from '../../../dxdroid.ts';
+import { BoWModel, similarity, closest } from '../../../utils/vecutil.ts';
+import { splitAsWords } from '../../../utils/strutil.ts';
+import { NotImplementedError } from '../../../utils/error.ts';
 
 type N<T> = T | null;
-
-export function asViewMap(v: DxView, d: DevInfo): ViewMap {
-  const [resPkg, resType, resEntry] = Views.splitResourceId(v.resId);
-  return {
-    index: v.parent?.children.indexOf(v) ?? -1,
-    package: v.pkg,
-    class: v.cls,
-    'resource-id': v.resId,
-    'resource-pkg': resPkg,
-    'resource-type': resType,
-    'resource-entry': resEntry,
-    visible: Views.isVisibleToUser(v, d),
-    text: v.text,
-    'content-desc': v.desc,
-    clickable: v.flags.c,
-    'context-clickable': v.flags.cc,
-    'long-clickable': v.flags.lc,
-    scrollable: v.flags.s.b || v.flags.s.t || v.flags.s.l || v.flags.s.r,
-    checkable: false, // TODO: add checkable
-    checked: false, // TODO: add checked
-    focusable: v.flags.f,
-    focused: v.flags.F,
-    selected: v.flags.S,
-    password: false, // TODO: add password
-    enabled: v.flags.E,
-    important: v.flags.a,
-    background: v.bgColor ?? undefined,
-    bounds: {
-      // the visible and drawing bounds
-      left: Views.x0(v),
-      right: Views.x1(v),
-      top: Views.y0(v),
-      bottom: Views.y1(v),
-    },
-  };
-}
 
 /** Adaptively select the target view */
 async function adaptSel(
@@ -234,12 +202,14 @@ async function adaptSel(
   return null;
 }
 
-export default class AdaptiveSelector implements DxSelector {
-  async select(
-    input: DroidInput,
-    view: DxView,
-    compressed: boolean
-  ): Promise<N<ViewMap>> {
-    return await adaptSel(input, view, compressed);
+export default class AdaptiveUiAutomatorSelector implements DxSelector {
+  constructor(public readonly app: string, public readonly droid: DxDroid) {}
+
+  async select(view: DxView, visibleOnly: boolean): Promise<N<ViewMap>> {
+    return await adaptSel(this.droid.input, view, visibleOnly);
+  }
+
+  async top() {
+    return this.droid.topActivity(this.app, 'dumpsys');
   }
 }

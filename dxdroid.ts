@@ -5,7 +5,10 @@ import DxYota, {
   SelectOptions,
   ViewMap,
 } from './dxyota.ts';
+import DxEvent, { DxSwipeEvent } from './dxevent.ts';
+import DxView, { Views } from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
+import { CannotReachHereError } from './utils/error.ts';
 
 export { DevInfo, ViewInputType, ViewInputOptions, SelectOptions, ViewMap };
 
@@ -28,6 +31,12 @@ export interface DroidInput {
   select(opt: SelectOptions): Promise<ViewMap[]>;
   view(type: ViewInputType, opt: ViewInputOptions): Promise<void>;
   pressBack(): Promise<void>;
+  convertInput(
+    event: DxEvent,
+    view: ViewMap | DxView,
+    fromDev: DevInfo,
+    toDev: DevInfo
+  ): Promise<void>;
 }
 
 export default class DxDroid {
@@ -54,20 +63,90 @@ export default class DxDroid {
     return this.dev_;
   }
 
+  decoding(flag?: boolean) {
+    if (flag !== undefined) {
+      this.decoding_ = true;
+    }
+    return this.decoding_;
+  }
+
   get input(): DroidInput {
     this.check();
-    return this.yota_;
+    return {
+      tap: this.yota_.tap.bind(this.yota_),
+      longTap: this.yota_.longTap.bind(this.yota_),
+      doubleTap: this.yota_.doubleTap.bind(this.yota_),
+      swipe: this.yota_.swipe.bind(this.yota_),
+      key: this.yota_.key.bind(this.yota_),
+      text: this.yota_.text.bind(this.yota_),
+      hideSoftKeyboard: this.yota_.hideSoftKeyboard.bind(this.yota_),
+      select: this.yota_.select.bind(this.yota_),
+      view: this.yota_.view.bind(this.yota_),
+      pressBack: this.yota_.pressBack.bind(this.yota_),
+      convertInput: async function (
+        event: DxEvent,
+        view: ViewMap | DxView,
+        fromDev: DevInfo,
+        toDev: DevInfo
+      ) {
+        let left: number;
+        let right: number;
+        let top: number;
+        let bottom: number;
+        if (view instanceof DxView) {
+          left = Views.x0(view);
+          right = Views.x1(view);
+          top = Views.y0(view);
+          bottom = Views.y0(view);
+        } else {
+          left = view.bounds.left;
+          right = view.bounds.right;
+          top = view.bounds.top;
+          bottom = view.bounds.bottom;
+        }
+        const realX = Math.min(left + 1, right);
+        const realY = Math.min(top + 1, bottom);
+        switch (event.ty) {
+          case 'tap':
+            return await this.tap(realX, realY);
+          case 'double-tap':
+            return await this.doubleTap(realX, realY);
+          case 'long-tap':
+            return await this.longTap(realX, realY);
+          case 'swipe': {
+            const { dx, dy, t0, t1 } = event as DxSwipeEvent;
+            const duration = t1 - t0;
+            const fromX = dx >= 0 ? left + 1 : right - 1;
+            const fromY = dy >= 0 ? top + 1 : bottom - 1;
+            let realDx = (dx / fromDev.width) * toDev.width;
+            let realDy = (dy / fromDev.height) * toDev.height;
+            if (fromY + realDy <= 0) {
+              realDy = -fromY + 1;
+            } else if (fromY + realDy >= toDev.height) {
+              realDy = toDev.height - 1 - fromY;
+            }
+            if (fromX + realDx <= 0) {
+              realDx = -fromX + 1;
+            } else if (fromX + realDx >= toDev.width) {
+              realDx = toDev.width - 1 - fromX;
+            }
+            return await this.swipe(fromX, fromY, realDx, realDy, duration);
+          }
+          default:
+            throw new CannotReachHereError();
+        }
+      },
+    };
   }
 
   async topActivity(
     pkg: string,
-    decoding = true,
     tool: 'uiautomator' | 'dumpsys' = 'dumpsys'
   ): Promise<DxCompatUi> {
     // TODO: recognize window count, and use uiautomator
     // if there are multiple windows
     if (tool == 'dumpsys') {
-      return await this.adb_.topActivity(pkg, decoding, this.dev);
+      return await this.adb_.topActivity(pkg, this.decoding_, this.dev);
     } else {
       return await this.yota_.topActivity(pkg, this.dev);
     }
@@ -77,7 +156,8 @@ export default class DxDroid {
     return await this.adb_.isSoftKeyboardPresent();
   }
 
-  private inited = false;
+  private init_ = false;
+  private decoding_ = true;
   private dev_: DevInfo = (null as any) as DevInfo; // eslint-disable-line
   private constructor(
     private readonly adb_: DxAdb,
@@ -86,11 +166,11 @@ export default class DxDroid {
 
   private async init(): Promise<void> {
     this.dev_ = await this.adb_.fetchInfo();
-    this.inited = true;
+    this.init_ = true;
   }
 
   private check() {
-    if (!this.inited) {
+    if (!this.init_) {
       throw new DxDroidError(
         'Not initialized by far, use init() to init first'
       );
