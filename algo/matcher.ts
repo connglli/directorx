@@ -86,5 +86,5 @@ export class DxSegMatch {
  * a matching result, from which one can fetch the perfect and best
  * matches */
 export default interface DxSegmentMatcher {
-  apply(a: DxSegment[], b: DxSegment[]): Promise<DxSegMatch>;
+  match(a: DxSegment[], b: DxSegment[]): Promise<DxSegMatch>;
 }

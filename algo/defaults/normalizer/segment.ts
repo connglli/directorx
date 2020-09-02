@@ -654,7 +654,7 @@ function segUi(a: DxCompatUi, dev: DevInfo): [DxSegment, DxSegment[]] {
 
 /** UiSegmenter normalizes the ui to multiple segments  */
 export default class UiSegmenter extends DxSegmentNormalizer {
-  apply(ui: DxCompatUi, dev: DevInfo): Promise<[DxSegment, DxSegment[]]> {
+  normalize(ui: DxCompatUi, dev: DevInfo): Promise<[DxSegment, DxSegment[]]> {
     return Promise.resolve(segUi(ui, dev));
   }
 }

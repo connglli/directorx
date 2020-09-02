@@ -13,15 +13,17 @@ import DxPacker from './dxpack.ts';
 import DxView from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
 import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
-import DxSynthesizer from './algo/mod.ts';
+import DxSynthesizer, { DxUiNormalizer } from './algo/mod.ts';
 import {
   CompactSynthesizer,
   AdaptiveSelector,
   UiSegmenter,
   TfIdfMatcher,
   BottomUpRecognizer,
+  IdentityUi,
 } from './algo/defaults/mod.ts';
-import DxPlugin, { createPlugin, applyPlugin } from './plugin/mod.ts';
+import DxPlugin, { createPlugin, applyPlugin } from './module/plugin.ts';
+import createUiNormalizer from './module/ui_normalizer.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,
@@ -245,6 +247,7 @@ class ResPlayer extends DxPlayer {
     public readonly K: number,
     public readonly autoHideSoftKeyboard: boolean,
     public readonly synthesizer: DxSynthesizer,
+    public readonly uiNormalizer: DxUiNormalizer,
     public readonly plugin: N<DxPlugin>
   ) {
     super(app);
@@ -288,6 +291,9 @@ class ResPlayer extends DxPlayer {
 
     // apply the plugins firstly before our synthesis
     let pUi = await this.top();
+    // let's apply the normalizer firstly to normalize the ui
+    pUi = await this.uiNormalizer.normalize(pUi, pDev);
+
     if (this.plugin) {
       DxLog.info(`try-plugin ${this.plugin.name()}`);
       if (
@@ -411,7 +417,7 @@ async function createResPlayer(
   droid: DxDroid,
   opt: DxPlayOptions
 ) {
-  const { autoHideSoftKeyboard = true, pluginPath } = opt;
+  const { autoHideSoftKeyboard = true, pluginPath, uiNormalizerPath } = opt;
 
   if (!opt.K) {
     DxLog.critical(
@@ -431,15 +437,27 @@ async function createResPlayer(
     opt.K
   );
 
-  const player = new ResPlayer(
+  let uiNormalizer: DxUiNormalizer;
+  if (uiNormalizerPath) {
+    uiNormalizer = await createUiNormalizer(uiNormalizerPath, droid);
+  } else {
+    uiNormalizer = new IdentityUi();
+  }
+
+  let plugin: N<DxPlugin> = null;
+  if (pluginPath) {
+    plugin = await createPlugin(pluginPath, droid);
+  }
+
+  return new ResPlayer(
     app,
     opt.decode,
     opt.K,
     autoHideSoftKeyboard,
     synthesizer,
-    await createPlugin(pluginPath, DxDroid.get())
+    uiNormalizer,
+    plugin
   );
-  return player;
 }
 
 export type DxPlayerType = 'px' | 'pt' | 'wdg' | 'res';
@@ -453,6 +471,7 @@ export type DxPlayOptions = {
   verbose?: boolean; // verbose mode
   autoHideSoftKeyboard?: boolean; // hide soft keyboard automatically
   pluginPath?: string; // plugin that is used before any patterns
+  uiNormalizerPath?: string; // ui normalizer that is used to normalize the ui
 };
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {

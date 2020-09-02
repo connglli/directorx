@@ -60,10 +60,11 @@ prog
     }
   )
   .option('-P, --plugin <type:string>', 'path of the plugin used')
+  .option('-U, --uinorm <type:string>', 'path of the ui normalizer used')
   .option('-v, --verbose [type:boolean]', 'output verbose information')
   .action(
     async (
-      { serial, player, lookahead, verbose, autohide, plugin }: IFlags,
+      { serial, player, lookahead, verbose, autohide, plugin, uinorm }: IFlags,
       dxpk: string
     ): Promise<void> => {
       await dxPlay({
@@ -75,6 +76,7 @@ prog
         verbose: verbose as boolean | undefined,
         autoHideSoftKeyboard: autohide as boolean | undefined,
         pluginPath: plugin as string | undefined,
+        uiNormalizerPath: uinorm as string | undefined,
       });
     }
   );

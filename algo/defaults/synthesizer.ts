@@ -1,11 +1,11 @@
 import DxSynthesizer from '../synthesizer.ts';
+import DxSelector from '../selector.ts';
 import { NO_MATCH } from '../matcher.ts';
 import { DxPattern, PatternArgs } from '../recognizer.ts';
 import { DxXYEvent, DxEvSeq, isXYEvent } from '../../dxevent.ts';
 import DxView, { Views, ViewFinder } from '../../ui/dxview.ts';
 import DxCompatUi from '../../ui/dxui.ts';
 import { DevInfo, DroidInput } from '../../dxdroid.ts';
-import DxSelector from './selector.ts';
 import { IllegalStateError } from '../../utils/error.ts';
 
 type N<T> = T | null;
@@ -133,7 +133,7 @@ class Invisible extends DxPattern {
   }
 }
 
-/** CompatSynthesizer compacts the default synthesizer with ability of
+/** CompactSynthesizer enhances the default synthesizer with ability of
  * lookahead, and invisible before it does actual synthesis work
  */
 export default class CompactSynthesizer extends DxSynthesizer {

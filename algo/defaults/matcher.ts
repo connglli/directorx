@@ -79,7 +79,7 @@ function matchSeg(a: DxSegment[], b: DxSegment[]): DxSegMatch {
 
 /** A TfIdfMatcher matches the segments by their tf-idf similarity */
 export default class TfIdfMatcher implements DxSegmentMatcher {
-  apply(a: DxSegment[], b: DxSegment[]) {
+  match(a: DxSegment[], b: DxSegment[]) {
     return Promise.resolve(matchSeg(a, b));
   }
 }

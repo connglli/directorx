@@ -56,11 +56,11 @@ export default class DxSynthesizer {
     const patterns: DxPattern[] = [];
 
     // normalize the ui
-    const [, rSegs] = await this.normalizer.apply(rUi, rDev);
-    const [, pSegs] = await this.normalizer.apply(pUi, pDev);
+    const [, rSegs] = await this.normalizer.normalize(rUi, rDev);
+    const [, pSegs] = await this.normalizer.normalize(pUi, pDev);
 
     // match segment and find the target segment
-    const match = await this.matcher.apply(pSegs, rSegs);
+    const match = await this.matcher.match(pSegs, rSegs);
     // find the segment where the w resides
     const rSeg = DxSynthesizer.findSegByView(view, rSegs);
     let pSeg = match.getPerfectMatch(rSeg);

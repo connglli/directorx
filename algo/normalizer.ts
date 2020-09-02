@@ -10,14 +10,14 @@ export class NormalizeError extends Error {
 
 /** A normalizer normalizes the input typed I to output typed O */
 export default interface DxNormalizer<I, O, D = undefined> {
-  apply(i: I, d?: D): O;
+  normalize(i: I, d?: D): O;
 }
 
 /** An DxUiNormalizer normalizes an ui and returns a new
  * normalized ui */
 export abstract class DxUiNormalizer
   implements DxNormalizer<DxCompatUi, Promise<DxCompatUi>, DevInfo> {
-  abstract apply(u: DxCompatUi, d: DevInfo): Promise<DxCompatUi>;
+  abstract normalize(u: DxCompatUi, d: DevInfo): Promise<DxCompatUi>;
 }
 
 /** A DxSegmentNormalizer normalizes an ui and returns the root
@@ -26,5 +26,8 @@ export abstract class DxUiNormalizer
 export abstract class DxSegmentNormalizer
   implements
     DxNormalizer<DxCompatUi, Promise<[DxSegment, DxSegment[]]>, DevInfo> {
-  abstract apply(u: DxCompatUi, d: DevInfo): Promise<[DxSegment, DxSegment[]]>;
+  abstract normalize(
+    u: DxCompatUi,
+    d: DevInfo
+  ): Promise<[DxSegment, DxSegment[]]>;
 }
