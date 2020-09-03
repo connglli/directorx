@@ -12,7 +12,7 @@ import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
 import DxView from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
-import DxDroid, { DevInfo, ViewInputOptions, ViewMap } from './dxdroid.ts';
+import DxDroid, { DevInfo, ViewInputOptions } from './dxdroid.ts';
 import DxSynthesizer from './algo/mod.ts';
 import {
   CompactSynthesizer,
@@ -24,7 +24,12 @@ import {
   IdentityUi,
 } from './algo/defaults/mod.ts';
 import DxPlugin, { createPlugin, applyPlugin } from './module/plugin.custom.ts';
-import createUiNormalizer from './module/uinorm.node.ts';
+import {
+  createUiNormalizer,
+  createSegNormalizer,
+  createSegMatcher,
+  createRecognizer,
+} from './module/syncomp.node.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,
@@ -272,9 +277,12 @@ class WdgPlayer extends DxPlayer {
 
 type ResPlayerCreateOptions = {
   K?: number; // look ahead count
-  autoHideSoftKeyboard?: boolean; // hide soft keyboard automatically
+  dontHideSoftKeyboard?: boolean; // don't hide soft keyboard automatically
   pluginPath?: string; // plugin that is used before any patterns
   uiNormalizerPath?: string; // ui normalizer that is used to normalize the ui
+  segNormalizerPath?: string; // seg normalizer that is used to normalize the ui to segment
+  matcherPath?: string; // seg matcher that is used to match two segments
+  recognizerPath?: string; // pattern recognizer that is used to recognize patterns
 };
 
 /** ResPlayer plays each event responsively */
@@ -295,7 +303,14 @@ class ResPlayer extends DxPlayer {
     droid: DxDroid,
     opt: ResPlayerCreateOptions
   ) {
-    const { autoHideSoftKeyboard = true, pluginPath, uiNormalizerPath } = opt;
+    const {
+      dontHideSoftKeyboard = false,
+      pluginPath,
+      uiNormalizerPath,
+      segNormalizerPath,
+      matcherPath,
+      recognizerPath,
+    } = opt;
 
     if (!opt.K) {
       DxLog.critical(
@@ -307,17 +322,30 @@ class ResPlayer extends DxPlayer {
     const uiNormalizer = uiNormalizerPath
       ? await createUiNormalizer(uiNormalizerPath, droid)
       : new IdentityUi();
+
     const selector = uiNormalizerPath
       ? new AdaptiveDumpsysSelector(app, droid, uiNormalizer)
       : new AdaptiveUiAutomatorSelector(app, droid);
+
+    const normalizer = segNormalizerPath
+      ? await createSegNormalizer(segNormalizerPath, droid)
+      : new UiSegmenter();
+
+    const matcher = matcherPath
+      ? await createSegMatcher(matcherPath, droid)
+      : new TfIdfMatcher();
+
+    const recognizer = recognizerPath
+      ? await createRecognizer(recognizerPath, droid)
+      : new BottomUpRecognizer();
 
     const synthesizer = new CompactSynthesizer(
       new DxSynthesizer({
         input: droid.input,
         selector,
-        normalizer: new UiSegmenter(),
-        matcher: new TfIdfMatcher(),
-        recognizer: new BottomUpRecognizer(),
+        normalizer,
+        matcher,
+        recognizer,
       }),
       opt.K
     );
@@ -329,7 +357,7 @@ class ResPlayer extends DxPlayer {
     return new ResPlayer(
       app,
       opt.K,
-      autoHideSoftKeyboard,
+      !dontHideSoftKeyboard,
       droid,
       synthesizer,
       plugin

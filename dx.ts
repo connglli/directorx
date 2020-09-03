@@ -3,7 +3,7 @@ import dxRec from './dxrec.ts';
 import dxPlay, { DxPlayerType } from './dxplay.ts';
 
 const NAME = 'dx.ts';
-const VERSION = '0.1';
+const VERSION = '0.2.1';
 const TAG = 'DxRecorder';
 const DECODE = true;
 
@@ -18,12 +18,13 @@ prog
 
 prog
   .command('rec <app>')
+  .version(VERSION)
   .description('Record as a dxpk')
   .option('-s, --serial <type:string>', 'serial no')
   .option('-o, --output <type:string>', 'output dxpk', {
     default: 'out.dxpk',
   })
-  .option('-v, --verbose [type:boolean]', 'output verbose information')
+  .option('-v, --verbose', 'output verbose information')
   .action(
     async ({ serial, output, verbose }: IFlags, app: string): Promise<void> => {
       await dxRec({
@@ -39,6 +40,7 @@ prog
 
 prog
   .command('play <dxpk>')
+  .version(VERSION)
   .description('Replay an dxpk')
   .option('-s, --serial <type:string>', 'serial no')
   .option(
@@ -48,28 +50,33 @@ prog
       default: 'px',
     }
   )
+  .option('-K, --lookahead <type:number>', 'Look ahead constant', {
+    default: 1,
+  })
   .option(
-    '-K, --lookahead <type:number>',
-    'Look ahead constant, used only when player is res',
-    {
-      default: 1,
-    }
-  )
-  .option(
-    '-H, --autohide [type:boolean]',
-    'automatically hide soft keyboard before firing each event',
-    {
-      default: true,
-    }
+    '-H, --nohide',
+    'do not automatically hide soft keyboard before firing each event'
   )
   .option('-P, --plugin <type:string>', 'path of the plugin used')
   .option('-U, --uinorm <type:string>', 'path of the ui normalizer used')
-  .option('-v, --verbose [type:boolean]', 'output verbose information', {
-    default: false,
-  })
+  .option('-S, --segnorm <type:string>', 'path of the segment normalizer used')
+  .option('-M, --matcher <type:string>', 'path of the segment matcher used')
+  .option('-R, --recogn <type:string>', 'path of the pattern recognizer used')
+  .option('-v, --verbose', 'output verbose information')
   .action(
     async (
-      { serial, player, lookahead, verbose, autohide, plugin, uinorm }: IFlags,
+      {
+        serial,
+        player,
+        lookahead,
+        verbose,
+        nohide,
+        plugin,
+        uinorm,
+        segnorm,
+        matcher,
+        recogn,
+      }: IFlags,
       dxpk: string
     ): Promise<void> => {
       await dxPlay({
@@ -79,9 +86,12 @@ prog
         K: lookahead as number | undefined,
         decode: DECODE,
         verbose: verbose as boolean | undefined,
-        autoHideSoftKeyboard: autohide as boolean | undefined,
+        dontHideSoftKeyboard: nohide as boolean | undefined,
         pluginPath: plugin as string | undefined,
         uiNormalizerPath: uinorm as string | undefined,
+        segNormalizerPath: segnorm as string | undefined,
+        matcherPath: matcher as string | undefined,
+        recognizerPath: recogn as string | undefined,
       });
     }
   );
