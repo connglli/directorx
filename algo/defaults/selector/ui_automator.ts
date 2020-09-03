@@ -202,10 +202,12 @@ async function adaptSel(
   return null;
 }
 
-export default class AdaptiveUiAutomatorSelector implements DxSelector {
-  constructor(public readonly app: string, public readonly droid: DxDroid) {}
+export default class AdaptiveUiAutomatorSelector extends DxSelector {
+  constructor(public readonly app: string, public readonly droid: DxDroid) {
+    super();
+  }
 
-  async select(view: DxView, visibleOnly: boolean): Promise<N<ViewMap>> {
+  async doSelect(view: DxView, visibleOnly: boolean): Promise<N<ViewMap>> {
     return await adaptSel(this.droid.input, view, visibleOnly);
   }
 

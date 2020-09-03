@@ -21,6 +21,8 @@ class MsWordAppendTextForButton {
   }
 }
 
-uiNorm.create = async function () {
-  return new MsWordAppendTextForButton();
+module.exports = {
+  create: async function () {
+    return new MsWordAppendTextForButton();
+  },
 };

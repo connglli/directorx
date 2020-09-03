@@ -1,10 +1,25 @@
-#! /bin/sh
+#! /bin/bash
 
-exec deno run \
-  --unstable \
-  --allow-read \
-  --allow-write \
-  --allow-net \
-  --allow-run \
-  dx.ts \
-  "$@"
+if [[ ! -z "$DEBUG" ]]; then
+  exec deno run \
+    --inspect-brk \
+    --unstable \
+    --allow-read \
+    --allow-write \
+    --allow-net \
+    --allow-run \
+    --allow-env \
+    dx.ts \
+    "$@"
+else
+  exec deno run \
+    --unstable \
+    --allow-read \
+    --allow-write \
+    --allow-net \
+    --allow-run \
+    --allow-env \
+    dx.ts \
+    "$@"
+fi
+

@@ -23,8 +23,8 @@ import {
   BottomUpRecognizer,
   IdentityUi,
 } from './algo/defaults/mod.ts';
-import DxPlugin, { createPlugin, applyPlugin } from './module/plugin.ts';
-import createUiNormalizer from './module/ui_normalizer.ts';
+import DxPlugin, { createPlugin, applyPlugin } from './module/plugin.custom.ts';
+import createUiNormalizer from './module/uinorm.node.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,

@@ -23,6 +23,8 @@ class AppendTripleDotsWithFile {
   }
 }
 
-uiNorm.create = function () {
-  return new AppendTripleDotsWithFile();
+module.exports = {
+  create: function () {
+    return new AppendTripleDotsWithFile();
+  },
 };

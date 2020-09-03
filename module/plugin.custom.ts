@@ -1,3 +1,11 @@
+/** plugin.custom is a custom javascript module that
+ * can be loaded dynamically, it differs from cjs
+ * module that it does not have a module object, but
+ * and it by default
+ * (1) disables the `require` functionality,
+ * (2) provides a custom global/window object, and
+ * (3) provides a `plugin` as cjs module
+ * that is specific to directorx */
 import createModuleGlobal, { DxModuleGlobal } from './global.ts';
 import DxDroid, { DevInfo } from '../dxdroid.ts';
 import DxEvent, { DxEvSeq } from '../dxevent.ts';
@@ -5,7 +13,10 @@ import DxView from '../ui/dxview.ts';
 import DxCompatUi from '../ui/dxui.ts';
 import DxSynthesizer from '../algo/mod.ts';
 import { NotImplementedError } from '../utils/error.ts';
-import loadModule, { Module, ModuleMeta } from '../utils/module.ts';
+import importModule, {
+  Module,
+  ModuleMeta,
+} from '../utils/module/custom_module.ts';
 
 interface PluginContext {
   event: DxEvent;
@@ -29,7 +40,7 @@ type PluginArgs = Record<string, string>;
 const PluginModuleMeta: ModuleMeta = {
   name: 'plugin',
   globalName: 'pluginGlobal',
-  fileName: '__pluginFileName',
+  workingDirName: '__pluginWorkingDir',
   replaceWindowGlobal: true,
   useRequire: false,
 };
@@ -60,10 +71,14 @@ export default class DxPlugin implements Module {
 }
 
 async function loadPlugin(path: string, pluginGlobal: PluginGlobal) {
-  const pluginFn = await loadModule(path, PluginModuleMeta);
-  const plugin = Object.create(new DxPlugin()) as DxPlugin;
-  pluginFn.call(plugin, plugin, pluginGlobal, path); // bind this to plugin
-  return plugin;
+  // working directory of the plugin is the directory of the plugin
+  const pluginWorkingDir = path.slice(0, path.lastIndexOf('/'));
+  return await importModule(path, {
+    meta: PluginModuleMeta,
+    proto: new DxPlugin(),
+    global: pluginGlobal,
+    workingDir: pluginWorkingDir,
+  });
 }
 
 /** Parse and create the plugin */

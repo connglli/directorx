@@ -26,32 +26,14 @@ async function tryVagueLookahead(view, seq, kVal, playee, selector) {
     }
 
     // find its target view map in playee
-    const nvm = await selector.select(input, nv, true);
+    const nvm = await selector.select(nv, true);
     if (nvm != null && nvm.visible) {
-      return [
-        i,
-        {
-          v: nvm,
-          x0: nvm.bounds.left,
-          x1: nvm.bounds.right,
-          y0: nvm.bounds.top,
-          y1: nvm.bounds.bottom,
-        },
-      ];
+      return [i, nvm];
     } else if (nvm == null) {
       // vague select an view
       const nvv = vagueSelect(nv, playee);
       if (nvv) {
-        return [
-          i,
-          {
-            v: nvv,
-            x0: Views.x0(nvv),
-            x1: Views.x1(nvv),
-            y0: Views.y0(nvv),
-            y1: Views.y1(nvv),
-          },
-        ];
+        return [i, nvv];
       }
     }
   }
@@ -97,6 +79,6 @@ plugin.apply = async function ({ seq, view, recordee, playee, synthesizer }) {
   }
   seq.popN(popped);
   const e = seq.pop();
-  await input.convertInput(e, matched, rDev, pDev);
+  await input.convertInput(e, matched, recordee.d, playee.d);
   return true;
 };

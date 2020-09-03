@@ -157,14 +157,16 @@ async function adaptSel(
   return asViewMap(array[index], dev);
 }
 
-export default class AdaptiveDumpsysSelector implements DxSelector {
+export default class AdaptiveDumpsysSelector extends DxSelector {
   constructor(
     public readonly app: string,
     public readonly droid: DxDroid,
     public readonly uiNorm: DxUiNormalizer
-  ) {}
+  ) {
+    super();
+  }
 
-  async select(view: DxView, visibleOnly: boolean) {
+  async doSelect(view: DxView, visibleOnly: boolean) {
     return adaptSel(view, await this.topUi(), this.droid.dev, visibleOnly);
   }
 
