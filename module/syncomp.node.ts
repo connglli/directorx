@@ -21,9 +21,10 @@ type CompCreator<T> = {
   create(): Promise<T>;
 };
 
-async function createComponent<T>(path: string, droid: DxDroid) {
+async function createComponent<T>(path: string, app: string, droid: DxDroid) {
   const require = await createRequire(path.slice(0, path.lastIndexOf('/')));
   const creator = await require<CompCreator<T>>(path, createModuleGlobal(
+    app,
     droid
   ), false);
   return await creator.create();
@@ -31,28 +32,32 @@ async function createComponent<T>(path: string, droid: DxDroid) {
 
 export async function createUiNormalizer(
   path: string,
+  app: string,
   droid: DxDroid
 ): Promise<DxUiNormalizer> {
-  return createComponent<DxUiNormalizer>(path, droid);
+  return createComponent<DxUiNormalizer>(path, app, droid);
 }
 
 export async function createSegNormalizer(
   path: string,
+  app: string,
   droid: DxDroid
 ): Promise<DxSegmentNormalizer> {
-  return createComponent<DxSegmentNormalizer>(path, droid);
+  return createComponent<DxSegmentNormalizer>(path, app, droid);
 }
 
 export async function createSegMatcher(
   path: string,
+  app: string,
   droid: DxDroid
 ): Promise<DxSegmentMatcher> {
-  return createComponent<DxSegmentMatcher>(path, droid);
+  return createComponent<DxSegmentMatcher>(path, app, droid);
 }
 
 export async function createRecognizer(
   path: string,
+  app: string,
   droid: DxDroid
 ): Promise<DxRecognizer> {
-  return createComponent<DxRecognizer>(path, droid);
+  return createComponent<DxRecognizer>(path, app, droid);
 }

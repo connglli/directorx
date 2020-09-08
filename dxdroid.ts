@@ -63,7 +63,13 @@ export default class DxDroid {
     return this.dev_;
   }
 
+  get adb(): DxAdb {
+    this.check();
+    return this.adb_;
+  }
+
   decoding(flag?: boolean) {
+    this.check();
     if (flag !== undefined) {
       this.decoding_ = true;
     }

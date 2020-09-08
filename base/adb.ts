@@ -149,6 +149,8 @@ export type LogcatOptions = {
   prio?: LogcatPrio;
   /** Set default filter to silent */
   silent?: boolean;
+  /** Dump the log and then exit (don't block) */
+  dump?: boolean;
   /** Logcat format */
   formats?: LogcatFormat[];
   /** Clear and exit */
@@ -163,6 +165,7 @@ function makeLogcatCmd(tag = '*', opt: LogcatOptions = {}): string {
   const {
     prio = 'V',
     silent = false,
+    dump = false,
     formats = [],
     clear = false,
     buffers = [],
@@ -179,6 +182,9 @@ function makeLogcatCmd(tag = '*', opt: LogcatOptions = {}): string {
   }
   if (silent) {
     cmd += '-s ';
+  }
+  if (dump) {
+    cmd += '-d ';
   }
   if (formats.length > 0) {
     for (const fm of formats) {

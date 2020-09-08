@@ -25,8 +25,12 @@ prog
     default: 'out.dxpk',
   })
   .option('-v, --verbose', 'output verbose information')
+  .option('-L, --lhook <type:string>', 'path of the lifecycle hook used')
   .action(
-    async ({ serial, output, verbose }: IFlags, app: string): Promise<void> => {
+    async (
+      { serial, output, verbose, lhook }: IFlags,
+      app: string
+    ): Promise<void> => {
       await dxRec({
         serial: serial as string | undefined,
         app,
@@ -34,6 +38,7 @@ prog
         decode: DECODE,
         tag: TAG,
         verbose: verbose as boolean | undefined,
+        lifecycleHookPath: lhook as string | undefined,
       });
     }
   );
@@ -57,6 +62,7 @@ prog
     '-H, --nohide',
     'do not automatically hide soft keyboard before firing each event'
   )
+  .option('-L, --lhook <type:string>', 'path of the lifecycle hook used')
   .option('-P, --plugin <type:string>', 'path of the plugin used')
   .option('-U, --uinorm <type:string>', 'path of the ui normalizer used')
   .option('-S, --segnorm <type:string>', 'path of the segment normalizer used')
@@ -71,6 +77,7 @@ prog
         lookahead,
         verbose,
         nohide,
+        lhook,
         plugin,
         uinorm,
         segnorm,
@@ -86,6 +93,7 @@ prog
         K: lookahead as number | undefined,
         decode: DECODE,
         verbose: verbose as boolean | undefined,
+        lifecycleHookPath: lhook as string | undefined,
         dontHideSoftKeyboard: nohide as boolean | undefined,
         pluginPath: plugin as string | undefined,
         uiNormalizerPath: uinorm as string | undefined,

@@ -1,5 +1,5 @@
 import { signal } from './deps.ts';
-import DxAdb, {
+import {
   DevInfo,
   ProcessError,
   DumpSysActivityInfo,
@@ -17,6 +17,10 @@ import DxEvent, {
 } from './dxevent.ts';
 import DxCompatUi from './ui/dxui.ts';
 import DxLog from './dxlog.ts';
+import DxDroid from './dxdroid.ts';
+import createLifecycleHook, {
+  DxLifecycleHook,
+} from './module/lifecycle.node.ts';
 import * as base64 from './utils/base64.ts';
 import * as gzip from './utils/gzip.ts';
 import { IllegalStateError } from './utils/error.ts';
@@ -260,19 +264,33 @@ export type DxRecordOptions = {
   dxpk: string; // output dxpk path
   decode: boolean; // flag: decode string or not
   verbose?: boolean; // verbose mode
+  lifecycleHookPath?: string; // lifecycle hook path
 };
 
 export default async function dxRec(opt: DxRecordOptions): Promise<void> {
-  const { serial, tag, app, dxpk, decode, verbose = false } = opt;
+  const {
+    serial,
+    tag,
+    app,
+    dxpk,
+    decode,
+    verbose = false,
+    lifecycleHookPath,
+  } = opt;
 
   if (verbose) {
     DxLog.setLevel('DEBUG');
   }
 
-  const adb = new DxAdb({ serial });
-
   // fetch basic information
-  const dev = await adb.fetchInfo();
+  await DxDroid.connect(serial);
+  const droid = DxDroid.get();
+  const adb = droid.adb;
+  const dev = droid.dev;
+  let lifecycleHook: DxLifecycleHook | null = null;
+  if (lifecycleHookPath) {
+    lifecycleHook = await createLifecycleHook(lifecycleHookPath, app, droid);
+  }
 
   // prepare packer
   const packer = new DxPacker(dev, app);
@@ -301,13 +319,19 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
   });
 
   try {
-    for await (const line of output) {
-      const ln = line.trim();
-      if (ln.length != 0) {
-        // DxLog.debug(ln);
-        parser.parse(ln);
-      }
-    }
+    await lifecycleHook?.onStart();
+    await Promise.all([
+      lifecycleHook?.onResume(),
+      (async () => {
+        for await (const line of output) {
+          const ln = line.trim();
+          if (ln.length != 0) {
+            // DxLog.debug(ln);
+            parser.parse(ln);
+          }
+        }
+      })(),
+    ]);
   } catch (e) {
     if (e instanceof ProcessError) {
       // https://unix.stackexchange.com/questions/223189/what-does-exit-code-130-mean-for-postgres-command
@@ -315,9 +339,11 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
       // as an exit number, use `kill -l exit_code` to see which signal
       // exit_code stands for
       if (e.code == undefined || e.code == 2 || e.code == 130) {
+        await lifecycleHook?.onStop();
         return;
       }
     }
+    await lifecycleHook?.onUnhandledException(e);
     throw e;
   }
 }

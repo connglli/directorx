@@ -12,6 +12,7 @@ import { ModuleGlobal } from '../utils/module/custom_module.ts';
 
 /** The base global context of any directorx module */
 export interface DxModuleGlobal extends ModuleGlobal {
+  app: string;
   droid: DxDroid;
   input: DroidInput;
   algo: {
@@ -35,8 +36,12 @@ export interface DxModuleGlobal extends ModuleGlobal {
 }
 
 /** Create a global context from droid */
-export default function createModuleGlobal(droid: DxDroid): DxModuleGlobal {
+export default function createModuleGlobal(
+  app: string,
+  droid: DxDroid
+): DxModuleGlobal {
   return {
+    app,
     droid,
     input: droid.input,
     algo: {

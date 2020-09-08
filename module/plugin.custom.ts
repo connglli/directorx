@@ -7,6 +7,7 @@
  * (3) provides a `plugin` as cjs module
  * that is specific to directorx */
 import createModuleGlobal, { DxModuleGlobal } from './global.ts';
+import parseModuleArgs, { DxModuleArgs } from './args.ts';
 import DxDroid, { DevInfo } from '../dxdroid.ts';
 import DxEvent, { DxEvSeq } from '../dxevent.ts';
 import DxView from '../ui/dxview.ts';
@@ -35,7 +36,7 @@ interface PluginContext {
 
 interface PluginGlobal extends DxModuleGlobal {}
 
-type PluginArgs = Record<string, string>;
+type PluginArgs = DxModuleArgs;
 
 const PluginModuleMeta: ModuleMeta = {
   name: 'plugin',
@@ -83,24 +84,16 @@ async function loadPlugin(path: string, pluginGlobal: PluginGlobal) {
 
 /** Parse and create the plugin */
 export async function createPlugin(
-  line: string,
+  pathArgs: string,
+  app: string,
   droid: DxDroid
 ): Promise<DxPlugin> {
-  // path:k1=v1,k2=v2,...
-  const [path, argsStr = ''] = line.split(':');
   const pluginGlobal: PluginGlobal = {
-    ...createModuleGlobal(droid),
+    ...createModuleGlobal(app, droid),
   } as PluginGlobal;
-  const args: PluginArgs = {};
-  if (argsStr.length > 0) {
-    const kvList = argsStr.split(',').filter((s) => s.length > 0);
-    for (const keyValue of kvList) {
-      const [key, value] = keyValue.split('=');
-      args[key] = value;
-    }
-  }
+  const [path, args] = parseModuleArgs(pathArgs);
   const plugin = await loadPlugin(path, pluginGlobal);
-  plugin.create(args);
+  plugin.create(args as PluginArgs);
   return plugin;
 }
 

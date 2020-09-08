@@ -30,6 +30,9 @@ import {
   createSegMatcher,
   createRecognizer,
 } from './module/syncomp.node.ts';
+import createLifecycleHook, {
+  DxLifecycleHook,
+} from './module/lifecycle.node.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,
@@ -72,7 +75,6 @@ abstract class DxPlayer {
     let prevEvent: N<DxEvent> = null;
     while (!this.seq.empty()) {
       const currEvent = this.seq.pop();
-      DxLog.info(`next-event ${currEvent}`);
       if (this.timeSens) {
         // when time sensitive, let's accumulate time
         let waitTime = 0;
@@ -97,6 +99,7 @@ abstract class DxPlayer {
           await time.sleep(waitTime);
         }
       }
+      DxLog.info(`next-event ${currEvent}`);
       await this.playEvent(currEvent, rDev);
       prevEvent = currEvent;
     }
@@ -320,7 +323,7 @@ class ResPlayer extends DxPlayer {
     }
 
     const uiNormalizer = uiNormalizerPath
-      ? await createUiNormalizer(uiNormalizerPath, droid)
+      ? await createUiNormalizer(uiNormalizerPath, app, droid)
       : new IdentityUi();
 
     const selector = uiNormalizerPath
@@ -328,15 +331,15 @@ class ResPlayer extends DxPlayer {
       : new AdaptiveUiAutomatorSelector(app, droid);
 
     const normalizer = segNormalizerPath
-      ? await createSegNormalizer(segNormalizerPath, droid)
+      ? await createSegNormalizer(segNormalizerPath, app, droid)
       : new UiSegmenter();
 
     const matcher = matcherPath
-      ? await createSegMatcher(matcherPath, droid)
+      ? await createSegMatcher(matcherPath, app, droid)
       : new TfIdfMatcher();
 
     const recognizer = recognizerPath
-      ? await createRecognizer(recognizerPath, droid)
+      ? await createRecognizer(recognizerPath, app, droid)
       : new BottomUpRecognizer();
 
     const synthesizer = new CompactSynthesizer(
@@ -351,7 +354,7 @@ class ResPlayer extends DxPlayer {
     );
 
     const plugin: N<DxPlugin> = pluginPath
-      ? await createPlugin(pluginPath, droid)
+      ? await createPlugin(pluginPath, app, droid)
       : null;
 
     return new ResPlayer(
@@ -484,10 +487,11 @@ export interface DxPlayOptions extends ResPlayerCreateOptions {
   dxpk: string; // path to dxpk
   decode: boolean; // decode or not
   verbose?: boolean; // verbose mode
+  lifecycleHookPath?: string; // lifecycle hook path
 }
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
-  const { serial, pty, dxpk, verbose = false, decode } = opt;
+  const { serial, pty, dxpk, verbose = false, decode, lifecycleHookPath } = opt;
 
   if (verbose) {
     DxLog.setLevel('DEBUG');
@@ -495,11 +499,20 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
 
   // connect to droid
   await DxDroid.connect(serial);
-  DxDroid.get().decoding(decode);
+  const droid = DxDroid.get();
+  droid.decoding(decode);
 
   const pkr = await DxPacker.load(dxpk);
-  const dev = DxDroid.get().dev;
+  const dev = droid.dev;
   const seq = new DxEvSeq(pkr.eventSeq.map((e) => pkr.unpack(e)));
+  let lifecycleHook: N<DxLifecycleHook> = null;
+  if (lifecycleHookPath) {
+    lifecycleHook = await createLifecycleHook(
+      lifecycleHookPath,
+      pkr.app,
+      droid
+    );
+  }
 
   let player: DxPlayer;
   switch (pty) {
@@ -522,11 +535,18 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
       player = new WdgPlayer(pkr.app);
       break;
     case 'res':
-      player = await ResPlayer.create(pkr.app, DxDroid.get(), opt);
+      player = await ResPlayer.create(pkr.app, droid, opt);
       break;
     default:
       throw new CannotReachHereError();
   }
 
-  await player.play(seq, pkr.dev);
+  try {
+    await lifecycleHook?.onStart();
+    await Promise.all([lifecycleHook?.onResume(), player.play(seq, pkr.dev)]);
+    await lifecycleHook?.onStop();
+  } catch (x) {
+    await lifecycleHook?.onUnhandledException(x);
+    throw x;
+  }
 }
