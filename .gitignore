@@ -3,3 +3,5 @@ node_modules
 .DS_Store
 .vscode/launch.json
 dxrec/.idea/checkstyle-idea.xml
+evaluation
+case_study
