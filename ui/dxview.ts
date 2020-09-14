@@ -864,6 +864,18 @@ export class Views {
     return v.width >= 5 && v.height >= 5;
   }
 
+  /** Return the visible bounds of this view */
+  static visibleBounds(v: DxView, d: DevInfo) {
+    if (!v.shown) {
+      return null;
+    }
+    const { width, height } = d;
+    return XYInterval.overlap(
+      XYInterval.of(0, width, 0, height),
+      Views.bounds(v)
+    );
+  }
+
   /** Test whether the user can see the given view */
   static isVisibleToUser(v: DxView, d: DevInfo): boolean {
     if (!v.shown) {

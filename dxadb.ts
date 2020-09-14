@@ -625,7 +625,8 @@ export class ActivityDumpSysBuilder {
     // parse view line by line
     const res = PAT_AV_VIEW.exec(line);
     if (!res || !res.groups) {
-      throw new IllegalStateError(`No activity entries match: ${line}`);
+      // drop directly this line
+      return [cview, cdep];
     }
 
     const {

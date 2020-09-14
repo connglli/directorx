@@ -8,7 +8,8 @@ import DxYota, {
 import DxEvent, { DxSwipeEvent } from './dxevent.ts';
 import DxView, { Views } from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
-import { CannotReachHereError } from './utils/error.ts';
+import { XYInterval } from './utils/interval.ts';
+import { CannotReachHereError, IllegalStateError } from './utils/error.ts';
 
 export { DevInfo, ViewInputType, ViewInputOptions, SelectOptions, ViewMap };
 
@@ -78,6 +79,7 @@ export default class DxDroid {
 
   get input(): DroidInput {
     this.check();
+    const self = this;
     return {
       tap: this.yota_.tap.bind(this.yota_),
       longTap: this.yota_.longTap.bind(this.yota_),
@@ -110,8 +112,15 @@ export default class DxDroid {
           top = view.bounds.top;
           bottom = view.bounds.bottom;
         }
-        const realX = Math.min(left + 1, right);
-        const realY = Math.min(top + 1, bottom);
+        const bounds = XYInterval.overlap(
+          XYInterval.of(0, self.dev.width, 0, self.dev.height),
+          XYInterval.of(left, right, top, bottom)
+        );
+        if (!bounds) {
+          throw new IllegalStateError('View is not visible to user');
+        }
+        const realX = (bounds.x.low + bounds.x.high) / 2;
+        const realY = (bounds.y.low + bounds.y.high) / 2;
         switch (event.ty) {
           case 'tap':
             return await this.tap(realX, realY);
