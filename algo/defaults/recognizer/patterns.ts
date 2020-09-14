@@ -271,6 +271,12 @@ export class Scroll extends Expand {
           iteration += 1;
         }
         lastDir = currDir;
+        this.vHSParent = (await selector.topUi()).findViewById(
+          this.vHSParent!!.id
+        );
+        if (!this.vHSParent) {
+          throw new NotImplementedError('Id of scroll parent changed');
+        }
       } while (
         iteration < 3 &&
         (await selector.select(this.args.v, true)) == null
@@ -322,6 +328,12 @@ export class Scroll extends Expand {
           iteration += 1;
         }
         lastDir = currDir;
+        this.vVSParent = (await selector.topUi()).findViewById(
+          this.vVSParent!!.id
+        );
+        if (!this.vVSParent) {
+          throw new NotImplementedError('Id of scroll parent changed');
+        }
       } while (
         iteration < 3 &&
         (await selector.select(this.args.v, true)) == null
