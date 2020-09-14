@@ -208,11 +208,6 @@ export class ActivityYotaBuilder {
     let v: DxView;
     if (a.decorView == null) {
       const decor = vhp;
-      if (decor.bounds.left != 0 || decor.bounds.top != 0) {
-        throw new IllegalStateError(
-          `Expect the decor at (0, 0), but at (${decor.bounds.left}, ${decor.bounds.top})`
-        );
-      }
       a.installDecor(
         '',
         decor.bounds.right,

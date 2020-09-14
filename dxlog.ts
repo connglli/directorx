@@ -27,21 +27,39 @@ async function setupLogger(level: LogLevels): Promise<Logger> {
 
 let dxLogger = await setupLogger(DX_LG_DEFAULT_LEVEL);
 
+export interface CustomLogger {
+  debug(msg: string): void;
+  info(msg: string): void;
+  warning(msg: string): void;
+  error(msg: string): void;
+  critical(msg: string): void;
+}
+
+let alsoLogger: CustomLogger | null = null;
+
 const DxLog = {
+  also(logger: CustomLogger) {
+    alsoLogger = logger;
+  },
   debug(msg: string): void {
     dxLogger.debug(msg);
+    alsoLogger?.debug(msg);
   },
   info(msg: string): void {
     dxLogger.info(msg);
+    alsoLogger?.info(msg);
   },
   warning(msg: string): void {
     dxLogger.warning(msg);
+    alsoLogger?.warning(msg);
   },
   error(msg: string): void {
     dxLogger.error(msg);
+    alsoLogger?.error(msg);
   },
   critical(msg: string): void {
     dxLogger.critical(msg);
+    alsoLogger?.critical(msg);
   },
   getLevel(): LogLevels {
     return dxLogger.levelName;

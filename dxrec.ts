@@ -21,6 +21,7 @@ import DxDroid from './dxdroid.ts';
 import createLifecycleHook, {
   DxLifecycleHook,
 } from './module/lifecycle.node.ts';
+import createCustomLogger from './module/log.node.ts';
 import * as base64 from './utils/base64.ts';
 import * as gzip from './utils/gzip.ts';
 import { IllegalStateError } from './utils/error.ts';
@@ -265,6 +266,7 @@ export type DxRecordOptions = {
   decode: boolean; // flag: decode string or not
   verbose?: boolean; // verbose mode
   lifecycleHookPath?: string; // lifecycle hook path
+  customLoggerPath?: string; // custom logger path
 };
 
 export default async function dxRec(opt: DxRecordOptions): Promise<void> {
@@ -276,10 +278,15 @@ export default async function dxRec(opt: DxRecordOptions): Promise<void> {
     decode,
     verbose = false,
     lifecycleHookPath,
+    customLoggerPath,
   } = opt;
 
   if (verbose) {
     DxLog.setLevel('DEBUG');
+  }
+
+  if (customLoggerPath) {
+    DxLog.also(await createCustomLogger(customLoggerPath, app));
   }
 
   // fetch basic information

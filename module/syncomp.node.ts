@@ -10,10 +10,10 @@ import {
   DxUiNormalizer,
   DxSegmentNormalizer,
   DxSegmentMatcher,
+  DxRecognizer,
 } from '../algo/mod.ts';
 import DxDroid from '../dxdroid.ts';
 import createRequire from '../utils/module/custom_node_module.ts';
-import DxRecognizer from '../algo/recognizer.ts';
 
 /** A component create exports a create function to
  * create the required component dynamically */

@@ -26,9 +26,10 @@ prog
   })
   .option('-v, --verbose', 'output verbose information')
   .option('-L, --lhook <type:string>', 'path of the lifecycle hook used')
+  .option('-G, --mylog <type:string>', 'path of the custom logger')
   .action(
     async (
-      { serial, output, verbose, lhook }: IFlags,
+      { serial, output, verbose, lhook, mylog }: IFlags,
       app: string
     ): Promise<void> => {
       await dxRec({
@@ -39,6 +40,7 @@ prog
         tag: TAG,
         verbose: verbose as boolean | undefined,
         lifecycleHookPath: lhook as string | undefined,
+        customLoggerPath: mylog as string | undefined,
       });
     }
   );
