@@ -70,6 +70,7 @@ prog
   .option('-S, --segnorm <type:string>', 'path of the segment normalizer used')
   .option('-M, --matcher <type:string>', 'path of the segment matcher used')
   .option('-R, --recogn <type:string>', 'path of the pattern recognizer used')
+  .option('-G, --mylog <type:string>', 'path of the custom logger')
   .option('-v, --verbose', 'output verbose information')
   .action(
     async (
@@ -85,6 +86,7 @@ prog
         segnorm,
         matcher,
         recogn,
+        mylog,
       }: IFlags,
       dxpk: string
     ): Promise<void> => {
@@ -102,6 +104,7 @@ prog
         segNormalizerPath: segnorm as string | undefined,
         matcherPath: matcher as string | undefined,
         recognizerPath: recogn as string | undefined,
+        customLoggerPath: mylog as string | undefined,
       });
     }
   );

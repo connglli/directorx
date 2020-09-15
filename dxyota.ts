@@ -314,20 +314,20 @@ export default class DxYota {
     return out;
   }
 
-  async tap(x: number, y: number): Promise<void> {
+  async tap(x: number, y: number, v?: DxView): Promise<void> {
     await this.unsafeShell(
       `${DxYota.BINARY_PATH} input tap -x ${q(x)} -y ${q(y)}`
     );
   }
 
-  async longTap(x: number, y: number): Promise<void> {
+  async longTap(x: number, y: number, v?: DxView): Promise<void> {
     await this.unsafeShell(
       `${DxYota.BINARY_PATH} input longtap -x ${q(x)} -y ${q(y)}`
     );
   }
 
   // eslint-disable-next-line
-  async doubleTap(x: number, y: number): Promise<void> {
+  async doubleTap(x: number, y: number, v?: DxView): Promise<void> {
     throw new NotImplementedError();
   }
 
@@ -336,7 +336,8 @@ export default class DxYota {
     y: number,
     dx: number,
     dy: number,
-    duration: number
+    duration: number,
+    v?: DxView
   ): Promise<void> {
     const toX = x + dx;
     const toY = y + dy;

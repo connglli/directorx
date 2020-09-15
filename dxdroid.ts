@@ -8,6 +8,7 @@ import DxYota, {
 import DxEvent, { DxSwipeEvent } from './dxevent.ts';
 import DxView, { Views } from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
+import DxLog from './dxlog.ts';
 import { XYInterval } from './utils/interval.ts';
 import { CannotReachHereError, IllegalStateError } from './utils/error.ts';
 
@@ -16,15 +17,16 @@ export { DevInfo, ViewInputType, ViewInputOptions, SelectOptions, ViewMap };
 export class DxDroidError extends Error {}
 
 export interface DroidInput {
-  tap(x: number, y: number): Promise<void>;
-  longTap(x: number, y: number): Promise<void>;
-  doubleTap(x: number, y: number): Promise<void>;
+  tap(x: number, y: number, v?: DxView): Promise<void>;
+  longTap(x: number, y: number, v?: DxView): Promise<void>;
+  doubleTap(x: number, y: number, v?: DxView): Promise<void>;
   swipe(
     x: number,
     y: number,
     dx: number,
     dy: number,
-    duration: number
+    duration: number,
+    v?: DxView
   ): Promise<void>;
   key(key: string): Promise<void>;
   text(text: string): Promise<void>;
@@ -38,6 +40,89 @@ export interface DroidInput {
     fromDev: DevInfo,
     toDev: DevInfo
   ): Promise<void>;
+}
+
+class LoggedInput implements DroidInput {
+  constructor(public readonly input: DroidInput) {}
+
+  tap(x: number, y: number, v?: DxView): Promise<void> {
+    DxLog.info(`tap (${x}, ${y}) ${this.asSimpleString(v)}`);
+    return this.input.tap(x, y);
+  }
+
+  longTap(x: number, y: number, v?: DxView): Promise<void> {
+    DxLog.info(`long-tap (${x}, ${y}) ${this.asSimpleString(v)}`);
+    return this.input.tap(x, y);
+  }
+
+  doubleTap(x: number, y: number, v?: DxView): Promise<void> {
+    DxLog.info(`double-tap (${x}, ${y}) ${this.asSimpleString(v)}`);
+    return this.input.tap(x, y);
+  }
+
+  swipe(
+    x: number,
+    y: number,
+    dx: number,
+    dy: number,
+    duration: number,
+    v?: DxView
+  ): Promise<void> {
+    DxLog.info(`swipe (${x}, ${y}) + (${dx}, ${dy}) ${this.asSimpleString(v)}`);
+    return this.input.swipe(x, y, dx, dy, duration);
+  }
+
+  key(key: string): Promise<void> {
+    DxLog.info(`key ${key}`);
+    return this.input.key(key);
+  }
+
+  text(text: string): Promise<void> {
+    DxLog.info(`text ${text}`);
+    return this.input.text(text);
+  }
+
+  hideSoftKeyboard(): Promise<void> {
+    DxLog.info('hide-soft-keyboard');
+    return this.input.hideSoftKeyboard();
+  }
+
+  select(opt: SelectOptions): Promise<ViewMap[]> {
+    return this.input.select(opt);
+  }
+
+  view(type: ViewInputType, opt: ViewInputOptions): Promise<void> {
+    return this.input.view(type, opt);
+  }
+
+  pressBack(): Promise<void> {
+    DxLog.info('press-back');
+    return this.input.pressBack();
+  }
+
+  convertInput(
+    event: DxEvent,
+    view: ViewMap | DxView,
+    fromDev: DevInfo,
+    toDev: DevInfo
+  ): Promise<void> {
+    DxLog.info(`${event.ty} ${this.asSimpleString(view)}`);
+    return this.input.convertInput(event, view, fromDev, toDev);
+  }
+
+  private asSimpleString(view?: DxView | ViewMap) {
+    if (!view) {
+      return '';
+    } else if (view instanceof DxView) {
+      return `cls=${view.cls} id="${view.resId}" text="${view.text}" desc="${
+        view.desc
+      }" x=${Views.x0(view)}-${Views.x1(view)} y=${Views.y0(view)}-${Views.y1(
+        view
+      )} z=${Views.z(view)}`;
+    } else {
+      return `cls=${view.class} id="${view['resource-id']}" text="${view.text}" desc="${view['content-desc']}" x=${view.bounds.left}-${view.bounds.right} y=${view.bounds.top}-${view.bounds.bottom} z=0`;
+    }
+  }
 }
 
 export default class DxDroid {
@@ -80,7 +165,7 @@ export default class DxDroid {
   get input(): DroidInput {
     this.check();
     const self = this;
-    return {
+    return new LoggedInput({
       tap: this.yota_.tap.bind(this.yota_),
       longTap: this.yota_.longTap.bind(this.yota_),
       doubleTap: this.yota_.doubleTap.bind(this.yota_),
@@ -151,7 +236,7 @@ export default class DxDroid {
             throw new CannotReachHereError();
         }
       },
-    };
+    });
   }
 
   async windowCount(pkg: string) {

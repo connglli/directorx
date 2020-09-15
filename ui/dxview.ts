@@ -972,6 +972,10 @@ export class Views {
   static yCenter(v: DxView): number {
     return (Views.y0(v) + Views.y1(v)) / 2;
   }
+
+  static z(v: DxView): number {
+    return v.drawingZ;
+  }
 }
 
 export interface ViewProps extends BaseProps, ExtraProps {

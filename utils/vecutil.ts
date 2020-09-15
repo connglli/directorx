@@ -174,6 +174,8 @@ export abstract class DocumentModel {
     );
     if (this.rmStopwords) {
       this.corpus_ = this.corpus_.map((d) => filterStopwords(d));
+      // in case some documents becomes empty
+      this.corpus_ = this.corpus_.map((d) => (d.length == 0 ? ['.'] : d));
     }
     this.corpus_ = this.corpus_.map((d) =>
       nGramFeature(d, this.nGram).map((i) => i.join(this.sep))

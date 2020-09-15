@@ -71,8 +71,9 @@ async function adaptSel(
     // TODO: what if there are multiple? (add context info)
     // FIX: sometimes, yota returns the capitalized text (because
     // of text view settings)
-    vms = vms.filter((vm) => vm.text == view.text);
-    if (vms.length == 0) {
+    if (vms.find((vm) => vm.text == view.text)) {
+      vms = vms.filter((vm) => vm.text == view.text);
+    } else {
       vms = vms.filter(
         (vm) => vm.text.toLowerCase() == view.text.toLowerCase()
       );

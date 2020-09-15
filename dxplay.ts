@@ -33,6 +33,7 @@ import {
 import createLifecycleHook, {
   DxLifecycleHook,
 } from './module/lifecycle.node.ts';
+import createCustomLogger from './module/log.node.ts';
 import * as time from './utils/time.ts';
 import {
   IllegalStateError,
@@ -488,10 +489,19 @@ export interface DxPlayOptions extends ResPlayerCreateOptions {
   decode: boolean; // decode or not
   verbose?: boolean; // verbose mode
   lifecycleHookPath?: string; // lifecycle hook path
+  customLoggerPath?: string; // custom logger path
 }
 
 export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
-  const { serial, pty, dxpk, verbose = false, decode, lifecycleHookPath } = opt;
+  const {
+    serial,
+    pty,
+    dxpk,
+    verbose = false,
+    decode,
+    lifecycleHookPath,
+    customLoggerPath,
+  } = opt;
 
   if (verbose) {
     DxLog.setLevel('DEBUG');
@@ -505,6 +515,11 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
   const pkr = await DxPacker.load(dxpk);
   const dev = droid.dev;
   const seq = new DxEvSeq(pkr.eventSeq.map((e) => pkr.unpack(e)));
+
+  if (customLoggerPath) {
+    DxLog.also(await createCustomLogger(customLoggerPath, pkr.app));
+  }
+
   let lifecycleHook: N<DxLifecycleHook> = null;
   if (lifecycleHookPath) {
     lifecycleHook = await createLifecycleHook(
