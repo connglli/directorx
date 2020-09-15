@@ -108,6 +108,35 @@ async function adaptSel(
   if (view.desc.length != 0) {
     opt.descContains = view.desc;
     vms = await input.select(opt);
+    if (vms.find((vm) => vm['content-desc'] == view.desc)) {
+      vms = vms.filter((vm) => vm['content-desc'] == view.desc);
+    } else {
+      vms = vms.filter(
+        (vm) => vm['content-desc'].toLowerCase() == view.desc.toLowerCase()
+      );
+    }
+    if (vms.length == 1) {
+      return vms[0];
+    } else if (vms.length > 0) {
+      // choose the most BoW similar
+      const model = new BoWModel(
+        [view, ...vms].map((w) =>
+          [w.text, w instanceof DxView ? w.resEntry : w['resource-entry']].join(
+            ' '
+          )
+        ),
+        true,
+        1,
+        ''
+      );
+      const vecs = model.vectors;
+      const ind = closest(
+        vecs[0].vector,
+        vecs.slice(1).map((v) => v.vector),
+        similarity.cosine
+      );
+      return vms[ind];
+    }
     let found =
       (vms.find((vm) => vm['content-desc'] == view.desc) ||
         vms.find(

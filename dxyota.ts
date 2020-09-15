@@ -9,6 +9,8 @@ import DxCompatUi from './ui/dxui.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
 import { DevInfo } from './dxdroid.ts';
 
+const RETRY_COUNT = 10;
+
 export class YotaError extends Error {
   constructor(msg: string) {
     super(msg);
@@ -358,7 +360,7 @@ export default class DxYota {
 
   async view(type: ViewInputType, opt: ViewInputOptions = {}): Promise<void> {
     const args = makeViewInputOpts(type, opt);
-    let retry = 3,
+    let retry = RETRY_COUNT,
       status: AdbResult;
     do {
       retry -= 1; // code == 6 means root is null, retry
@@ -375,7 +377,7 @@ export default class DxYota {
 
   async select(opt: SelectOptions): Promise<ViewMap[]> {
     const args = makeSelectOpts(opt);
-    let retry = 3,
+    let retry = RETRY_COUNT,
       status: AdbResult;
     do {
       retry -= 1; // code == 2 means root is null, retry
@@ -420,7 +422,7 @@ export default class DxYota {
   }
 
   async dump(compressed = true): Promise<string> {
-    let retry = 3;
+    let retry = RETRY_COUNT;
     do {
       try {
         return await this.unsafeExecOut(

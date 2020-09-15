@@ -243,12 +243,16 @@ export default class DxDroid {
     return (await this.adb_.windows(pkg)).length;
   }
 
+  async activityCount(pkg: string) {
+    return (await this.adb_.activities(pkg)).length;
+  }
+
   async topUi(
     pkg: string,
     tool: 'uiautomator' | 'dumpsys' = 'dumpsys'
   ): Promise<DxCompatUi> {
     if (tool == 'dumpsys') {
-      if ((await this.windowCount(pkg)) == 1) {
+      if ((await this.windowCount(pkg)) == (await this.activityCount(pkg))) {
         return await this.adb_.topActivity(pkg, this.decoding_, this.dev);
       } else {
         return await this.yota_.topUi(pkg, this.dev);

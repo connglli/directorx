@@ -1,6 +1,6 @@
 #! /bin/bash
 
-if [[ ! -z "$DEBUG" ]]; then
+if [[ ! -z "$DX_DEBUG" ]]; then
   exec deno run \
     --inspect-brk \
     --unstable \

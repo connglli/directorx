@@ -20,6 +20,18 @@ export class AdbError extends Error {
 
 const PAT_DEVICE_SIZE = /Physical\ssize:\s(?<pw>\d+)x(?<ph>\d+)(\nOverride\ssize:\s(?<ow>\d+)x(?<oh>\d+))?/;
 const PAT_DEVICE_DENS = /Physical\sdensity:\s(?<pd>\d+)(\nOverride\sdensity:\s(?<od>\d+))?/;
+const PAT_DEVICE_ROTA = /\s+SurfaceOrientation: (?<ro>[0123])/;
+
+export type DevOrientation = 'landscape' | 'portrait';
+const DevRotation0: '0' = '0';
+const DevRotation90: '1' = '1';
+const DevRotation180: '2' = '2';
+const DevRotation270: '3' = '3';
+type DevRotation =
+  | typeof DevRotation0
+  | typeof DevRotation90
+  | typeof DevRotation180
+  | typeof DevRotation270;
 
 export class DevInfo {
   constructor(
@@ -38,12 +50,38 @@ export class DevInfo {
     return this.dpi / 160;
   }
 
+  get orientation(): DevOrientation {
+    return this.width > this.height ? 'landscape' : 'portrait';
+  }
+
   px2dp(px: number): number {
     return px * this.density;
   }
 
   dp2px(dp: number): number {
     return dp / this.density;
+  }
+
+  static oriAfterRotate(
+    fromOrientation: DevOrientation,
+    rotation: DevRotation
+  ) {
+    return ({
+      landscape: {
+        [DevRotation0]: 'landscape',
+        [DevRotation90]: 'portrait',
+        [DevRotation180]: 'landscape',
+        [DevRotation270]: 'portrait',
+      },
+      portrait: {
+        [DevRotation0]: 'portrait',
+        [DevRotation90]: 'landscape',
+        [DevRotation180]: 'portrait',
+        [DevRotation270]: 'landscape',
+      },
+    } as Record<DevOrientation, Record<DevRotation, DevOrientation>>)[
+      fromOrientation
+    ][rotation];
   }
 }
 
@@ -68,9 +106,7 @@ export class DumpSysActivityInfo {
   ];
   private name_ = '';
 
-  constructor(private readonly pkg_: string, private readonly info: string[]) {
-    this.parse();
-  }
+  constructor(private readonly pkg_: string, private readonly info: string[]) {}
 
   get(): string[] {
     return this.info;
@@ -105,7 +141,7 @@ export class DumpSysActivityInfo {
   }
 
   // Parse and initialize fields, don't change the parsing orders
-  private parse() {
+  public parse() {
     // parse head to pkg and name
     this.parseHeader();
     // parse to find the fragments
@@ -678,7 +714,7 @@ export class ActivityDumpSysBuilder {
       // child of curr
       if (diff != 1) {
         throw new IllegalStateError(
-          `Expect a direct child, but got an indirect (+${diff}) child`
+          `Expect a direct child, but got an indirect (+${diff}) child: ${line}`
         );
       }
       parent = cview;
@@ -849,6 +885,7 @@ export function buildActivityFromDumpSysInfo(
   dev: DevInfo,
   decoding: boolean = true
 ): DxCompatUi {
+  info.parse();
   const vhIndex = info.viewHierarchy;
   const frIndex = info.fragments;
   const sfrIndex = info.supportFragments;
@@ -980,13 +1017,70 @@ export default class DxAdb {
     return windows;
   }
 
+  async activities(pkg: string): Promise<DumpSysActivityInfo[]> {
+    const out = (await this.unsafeExecOut(`dumpsys activity ${pkg}`)).split(
+      '\n'
+    );
+    let taskStartLine = -1;
+    const taskStartLinePrefix = `TASK `;
+    for (let i = 0; i < out.length; i++) {
+      if (out[i].startsWith(taskStartLinePrefix)) {
+        taskStartLine = i;
+        break;
+      }
+    }
+    if (taskStartLine == -1) {
+      throw new AdbError(
+        `dumpsys activity ${pkg}`,
+        0,
+        `Cannot find any task for ${pkg}`
+      );
+    }
+    const activities: DumpSysActivityInfo[] = [];
+    const activityStartLinePrefix = `  ACTIVITY ${pkg}/`;
+    let currentStartLine = -1;
+    for (let i = taskStartLine; i < out.length; i++) {
+      const isStartLine = out[i].startsWith(activityStartLinePrefix);
+      if (isStartLine && currentStartLine != -1) {
+        activities.push(
+          new DumpSysActivityInfo(
+            pkg,
+            out.slice(currentStartLine, i).map((l) => l.substring(2))
+          )
+        );
+      }
+      if (isStartLine) {
+        currentStartLine = i;
+      }
+    }
+    if (currentStartLine != -1) {
+      activities.push(
+        new DumpSysActivityInfo(
+          pkg,
+          out.slice(currentStartLine).map((l) => l.substring(2))
+        )
+      );
+    }
+    const inactiveActivityStartLineSuffix = '(not running)';
+    return activities.filter(
+      (i) => !i.get()[0].endsWith(inactiveActivityStartLineSuffix)
+    );
+  }
+
   async topActivity(
     pkg: string,
     decoding: boolean,
     dev: DevInfo
   ): Promise<DxCompatUi> {
-    const info = await this.dumpTopActivity(pkg);
-    return buildActivityFromDumpSysInfo(info, dev, decoding);
+    const activities = await this.activities(pkg);
+    if (activities.length == 0) {
+      throw new AdbError(
+        `dumpsys activity ${pkg}`,
+        0,
+        `Cannot find any RUNNING activity for ${pkg}`
+      );
+    }
+    return buildActivityFromDumpSysInfo(activities[0], dev, decoding);
   }
 
   async fetchInfo(): Promise<DevInfo> {
@@ -1006,7 +1100,31 @@ export default class DxAdb {
     } else {
       throw new AdbError('window size', -1, 'Match device size failed');
     }
-    out = (await this.unsafeExecOut('wm density')).trim();
+    out = await this.unsafeExecOut('dumpsys input');
+    res = PAT_DEVICE_ROTA.exec(out);
+    if (!res || !res.groups) {
+      throw new AdbError(
+        'dumpsys input',
+        -1,
+        'Match device orientation failed'
+      );
+    } else if (res.groups.ro) {
+      const defOri = width > height ? 'landscape' : 'portrait';
+      const actOri = DevInfo.oriAfterRotate(
+        defOri,
+        res.groups.ro as DevRotation
+      );
+      if (defOri != actOri) {
+        [width, height] = [height, width];
+      }
+    } else {
+      throw new AdbError(
+        'dumpsys input',
+        -1,
+        'Match device orientation failed'
+      );
+    }
+    if (res) out = (await this.unsafeExecOut('wm density')).trim();
     res = PAT_DEVICE_DENS.exec(out);
     if (!res || !res.groups) {
       throw new AdbError('window density', -1, 'Match device density failed');
@@ -1049,61 +1167,8 @@ export default class DxAdb {
   private async dumpTopActivity(pkg: string): Promise<DumpSysActivityInfo> {
     // TODO: what if there are multiple activities, is the
     // first one the top activity
-    const out = (await this.unsafeExecOut(`dumpsys activity ${pkg}`)).split(
-      '\n'
-    );
-    // find the task start line
-    let taskStartLine = -1;
-    const taskStartLinePrefix = `TASK `;
-    for (let i = 0; i < out.length; i++) {
-      if (out[i].startsWith(taskStartLinePrefix)) {
-        taskStartLine = i;
-        break;
-      }
-    }
-    if (taskStartLine == -1) {
-      throw new AdbError(
-        'dumpsys activity top',
-        0,
-        `Cannot find any task for ${pkg}`
-      );
-    }
-    // find the activity start line, there is only one
-    // ACTIVITY entry and its mResumed=true 'cause we're
-    // using the `top` command
-    let activityStartLine = -1;
-    const activityStartPrefix = '  ACTIVITY ';
-    for (let i = taskStartLine + 1; i < out.length; i++) {
-      if (out[i].startsWith(taskStartLinePrefix)) {
-        break;
-      }
-      if (out[i].startsWith(activityStartPrefix)) {
-        activityStartLine = i;
-        break;
-      }
-    }
-    if (activityStartLine == -1) {
-      throw new AdbError(
-        'dumpsys activity top',
-        0,
-        `Task ${pkg} found, but no activities exist`
-      );
-    }
-    // find the activity end line
-    let activityEndLine = out.length;
-    const activityLinePrefix = '    ';
-    for (let i = activityStartLine + 1; i < out.length; i++) {
-      if (!out[i].startsWith(activityLinePrefix)) {
-        activityEndLine = i;
-        break;
-      }
-    }
-    // return the activity entry
-    const info = [];
-    for (let i = activityStartLine; i < activityEndLine; i++) {
-      info.push(out[i].substring(2));
-    }
-    return new DumpSysActivityInfo(pkg, info);
+    const activities = await this.activities(pkg);
+    return activities[0];
   }
 }
 
@@ -1112,6 +1177,7 @@ if (import.meta.main) {
     serial: 'emulator-5554',
   });
   const dev = await adb.fetchInfo();
-  const act = await adb.topActivity('com.microsoft.todos', true, dev);
+  const act = await adb.topActivity('com.grubhub.android', true, dev);
+  // console.log((act.findViewByXY(100, 200, true) as any).props);
   console.log(act);
 }

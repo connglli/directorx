@@ -46,6 +46,12 @@ export class WindowOwner {
     this.window.decor = decor;
   }
 
+  findViewByHash(hash: string): N<DxView> {
+    return this.decorView
+      ? ViewFinder.findViewByHash(this.decorView, hash)
+      : null;
+  }
+
   findViewById(id: string): N<DxView> {
     return this.decorView ? ViewFinder.findViewById(this.decorView, id) : null;
   }

@@ -108,7 +108,11 @@ fun getBackgroundColor(view: View): Pair<String?, Int?> {
             color = mColor?.getColorForState(bg.state, mColor.defaultColor)
         }
     }
-    return Pair(type, color)
+    return if (type == null) {
+        Pair(null, null)
+    } else {
+        Pair(if (type.length == 0) null else type, color)
+    }
 }
 
 fun getForegroundColor(view: View): String? {
@@ -119,6 +123,8 @@ fun getForegroundColor(view: View): String? {
     }
     return if (fg is ColorDrawable) {
         "#${Integer.toHexString(fg.color)}"
+    } else if (fg.javaClass.simpleName.length == 0) {
+        null
     } else {
         fg.javaClass.simpleName
     }

@@ -14,13 +14,13 @@ import DxSegment, {
   SegmentBottomUpFinder,
 } from '../../../ui/dxseg.ts';
 import { DevInfo, DroidInput } from '../../../dxdroid.ts';
+import { splitAsWords, wordsInclude } from '../../../utils/strutil.ts';
+import { BoWModel, closest, similarity } from '../../../utils/vecutil.ts';
 import {
   NotImplementedError,
   IllegalStateError,
   CannotReachHereError,
 } from '../../../utils/error.ts';
-import { splitAsWords, wordsInclude } from '../../../utils/strutil.ts';
-import { BoWModel, closest, similarity } from '../../../utils/vecutil.ts';
 
 type N<T> = T | null;
 
@@ -206,6 +206,32 @@ export class Scroll extends Expand {
     if (!this.vHSParent && !this.vVSParent) {
       return false;
     }
+    if (this.vHSParent && this.vVSParent) {
+      // prefer the closest
+      const hDis = Views.distance(this.args.v, this.vHSParent);
+      const vDis = Views.distance(this.args.v, this.vVSParent);
+      if (hDis < vDis) {
+        this.vVSParent = null;
+      } else if (hDis > vDis) {
+        this.vHSParent = null;
+      } else {
+        const canLR =
+          Views.canL2RScroll(this.vHSParent) ||
+          Views.canR2LScroll(this.vHSParent);
+        const canBT =
+          Views.canT2BScroll(this.vVSParent) ||
+          Views.canB2TScroll(this.vVSParent);
+        if (canLR && !canBT) {
+          this.vVSParent = null;
+        } else if (!canLR && canBT) {
+          this.vHSParent = null;
+        } else {
+          throw new IllegalStateError(
+            'Both horizontally and vertically scrollable (same parent)'
+          );
+        }
+      }
+    }
     // find the corresponding scrollable parent in the playee segment
     if (this.vHSParent) {
       this.vHSParent = this.findTarget(this.vHSParent);
@@ -271,12 +297,7 @@ export class Scroll extends Expand {
           iteration += 1;
         }
         lastDir = currDir;
-        this.vHSParent = (await selector.topUi()).findViewById(
-          this.vHSParent!!.id
-        );
-        if (!this.vHSParent) {
-          throw new NotImplementedError('Id of scroll parent changed');
-        }
+        await this.updateTarget(selector);
       } while (
         iteration < 3 &&
         (await selector.select(this.args.v, true)) == null
@@ -328,12 +349,7 @@ export class Scroll extends Expand {
           iteration += 1;
         }
         lastDir = currDir;
-        this.vVSParent = (await selector.topUi()).findViewById(
-          this.vVSParent!!.id
-        );
-        if (!this.vVSParent) {
-          throw new NotImplementedError('Id of scroll parent changed');
-        }
+        await this.updateTarget(selector);
       } while (
         iteration < 3 &&
         (await selector.select(this.args.v, true)) == null
@@ -344,6 +360,47 @@ export class Scroll extends Expand {
       return false;
     } else {
       throw new CannotReachHereError();
+    }
+  }
+
+  private async updateTarget(selector: DxSelector) {
+    const ui = await selector.topUi();
+    let prev: N<DxView> = null;
+    if (this.vVSParent) {
+      prev = this.vVSParent;
+    } else if (this.vHSParent) {
+      prev = this.vHSParent;
+    } else {
+      throw new IllegalStateError(
+        'Cannot have both vertical and horizontal scrollable parent'
+      );
+    }
+    let found: N<DxView> = null;
+    if (prev.hash && prev.hash.length > 0 && prev.hash != 'undefined') {
+      found = ui.findViewByHash(prev.hash);
+    }
+    if (!found && prev.text.length > 0) {
+      found = ui.findViewByText(prev.text);
+    }
+    if (!found && prev.resId.length > 0) {
+      found = ui.findViewByResource(prev.resType, prev.resEntry);
+    }
+    if (!found && prev.desc.length > 0) {
+      found = ui.findViewByDesc(prev.desc);
+    }
+    if (!found && prev.id && prev.id.length > 0 && prev.id != 'undefined') {
+      found = ui.findViewById(prev.id);
+    }
+    if (!found) {
+      found = ui.findViews((w) => w.cls == prev!!.cls)[0];
+    }
+    if (!found) {
+      throw new NotImplementedError('Update scrollable parent failed');
+    }
+    if (prev == this.vVSParent) {
+      this.vVSParent = found;
+    } else if (prev == this.vHSParent) {
+      this.vHSParent = found;
     }
   }
 
@@ -362,10 +419,44 @@ export class Scroll extends Expand {
         v.resEntry,
       ],
       [v.desc.length > 0, SegmentBottomUpFinder.findViewByDesc, v.desc],
+      [
+        v.id.length > 0 && v.id != 'undefined',
+        SegmentBottomUpFinder.findViewById,
+        v.id,
+      ],
     ];
     for (const [test, fn, ...args] of fns) {
       if (!found && test) {
         found = (fn as Function)(playee.s, ...args);
+      }
+    }
+    if (!found) {
+      found = SegmentBottomUpFinder.findView(
+        playee.s,
+        (w) => Views.isVisibleToUser(w, playee.d) && w.cls == v.cls
+      );
+    }
+    // fine tune to make it scrollable
+    if (
+      found &&
+      !Views.canB2TScroll(found) &&
+      !Views.canT2BScroll(found) &&
+      !Views.canL2RScroll(found) &&
+      !Views.canR2LScroll(found)
+    ) {
+      // make it to its only (grand)children
+      while (found?.children.length == 1) {
+        found = found.children[0];
+      }
+      // find its parent that are scrollable
+      while (
+        found &&
+        !Views.canB2TScroll(found) &&
+        !Views.canT2BScroll(found) &&
+        !Views.canL2RScroll(found) &&
+        !Views.canR2LScroll(found)
+      ) {
+        found = found.parent;
       }
     }
     return found;

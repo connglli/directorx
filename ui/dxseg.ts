@@ -294,14 +294,19 @@ export class SegmentBottomUpFinder {
     return doFind(s);
   }
 
-  /** Find the first met view with text t */
+  /** Find the first met view with text */
   static findViewByText(s: DxSegment, text: string): N<DxView> {
     return SegmentBottomUpFinder.findView(s, (w) => w.text == text);
   }
 
-  /** Find the first met view with desc t */
+  /** Find the first met view with desc */
   static findViewByDesc(s: DxSegment, desc: string): N<DxView> {
     return SegmentBottomUpFinder.findView(s, (w) => w.desc == desc);
+  }
+
+  /** Find the first met view with id */
+  static findViewById(s: DxSegment, id: string): N<DxView> {
+    return SegmentBottomUpFinder.findView(s, (w) => w.id == id);
   }
 
   /** Find the first met view with resource type and entry */

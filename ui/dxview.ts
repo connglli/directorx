@@ -2,6 +2,7 @@ import { DevInfo } from '../dxdroid.ts';
 import { XYInterval } from '../utils/interval.ts';
 import ArrayTreeOp, { ArrayTreeNode } from '../utils/array_tree_op.ts';
 import { extract } from '../utils/types.ts';
+import { NotImplementedError } from '../utils/error.ts';
 
 type N<T> = T | null;
 
@@ -661,14 +662,30 @@ export class DxToolbar extends DxView {
 
 /** Utility to find a specific view */
 export class ViewFinder extends ArrayTreeOp {
-  /** Find the first horizontally scrollable parent */
+  /** Find the first horizontally scrollable parent, this returns a parent
+   * that is either a view used for scrolling (e.g., ListView) but not ensured
+   * to be scrollable, or a scrollable generic view */
   static findHScrollableParent(v: DxView): N<DxView> {
-    return ViewFinder.findParent(v, (p) => p.flags.s.l || p.flags.s.r);
+    return ViewFinder.findParent(
+      v,
+      (p) => p instanceof DxHorizontalScrollView || p.flags.s.l || p.flags.s.r
+    );
   }
 
-  /** Find the first horizontally scrollable parent */
+  /** Find the first horizontally scrollable parent, this returns a parent
+   * that is either a view used for scrolling (e.g., ListView) but not ensured
+   * to be scrollable, or a scrollable generic view */
   static findVScrollableParent(v: DxView): N<DxView> {
-    return ViewFinder.findParent(v, (p) => p.flags.s.t || p.flags.s.b);
+    return ViewFinder.findParent(
+      v,
+      (p) =>
+        p instanceof DxRecyclerView ||
+        p instanceof DxListView ||
+        p instanceof DxScrollView ||
+        p instanceof DxNestedScrollView ||
+        p.flags.s.t ||
+        p.flags.s.b
+    );
   }
 
   /** Find the first view that satisfy the predicate */
@@ -687,14 +704,40 @@ export class ViewFinder extends ArrayTreeOp {
     x: number,
     y: number,
     visible = true,
-    enabled = true
+    a11y = true
   ): N<DxView> {
-    const views = ViewFinder.findViewsByXY(v, x, y, visible, enabled);
-    if (views.length > 0) {
-      // only those important for accessibility are useful
-      return visible ? views.find((v) => v.flags.a) ?? null : views[0];
-    } else {
+    let views = ViewFinder.findViewsByXY(v, x, y, visible);
+    if (a11y) {
+      views = views.filter((v) => v.flags.a);
+    }
+    // one seldom taps progress bar
+    views = views.filter(
+      (v) => v.cls.toLowerCase().indexOf('progressbar') == -1
+    );
+    if (views.length == 0) {
       return null;
+    } else if (views.length == 1) {
+      return views[0];
+    }
+    {
+      const texts = views.filter((v) => v.text.length > 0);
+      if (texts.length >= 1) {
+        return texts[0];
+      }
+    }
+    let sorted = views
+      .slice()
+      .sort(
+        (a, b) => Views.informativeLevelOf(b) - Views.informativeLevelOf(a)
+      );
+    if (sorted[0] == views[0]) {
+      return sorted[0];
+    } else if (
+      Views.informativeLevelOf(sorted[0]) > Views.informativeLevelOf(sorted[1])
+    ) {
+      return Views.informativeLevelOf(sorted[0]) >= 2 ? sorted[0] : views[0];
+    } else {
+      return views[0];
     }
   }
 
@@ -753,31 +796,21 @@ export class ViewFinder extends ArrayTreeOp {
     v: DxView,
     x: number,
     y: number,
-    visible = true,
-    enabled = true
+    visible = true
   ): DxView[] {
     let found: DxView[] = [];
-    if (!ViewFinder.isInView(v, x, y, visible, enabled)) {
+    if (!ViewFinder.isInView(v, x, y, visible)) {
       return found;
     }
     found.push(v);
     for (const c of v.children) {
-      found = [
-        ...ViewFinder.findViewsByXY(c, x, y, visible, enabled),
-        ...found,
-      ];
+      found = [...ViewFinder.findViewsByXY(c, x, y, visible), ...found];
     }
     return found;
   }
 
   /** Check whether a point hits self or not */
-  static isInView(
-    v: DxView,
-    x: number,
-    y: number,
-    visible = true,
-    enabled = true
-  ): boolean {
+  static isInView(v: DxView, x: number, y: number, visible = true): boolean {
     let hit =
       Views.x0(v) <= x &&
       x <= Views.x1(v) &&
@@ -785,9 +818,6 @@ export class ViewFinder extends ArrayTreeOp {
       y <= Views.y1(v);
     if (visible) {
       hit = hit && v.shown;
-    }
-    if (enabled) {
-      hit = hit && v.flags.E;
     }
     return hit;
   }
@@ -824,12 +854,14 @@ export class Views {
    * 1: informative,
    * 2: very informative,
    * 3: great informative
+   * 4: super informative
    */
   static informativeLevelOf(v: DxView): number {
     return (
       (v.desc.length != 0 ? 1 : 0) +
       (v.text.length != 0 ? 1 : 0) +
-      (v.resId.length != 0 ? 1 : 0)
+      (v.resId.length != 0 ? 1 : 0) +
+      (v.hint.length != 0 ? 1 : 0)
     );
   }
 
@@ -886,6 +918,27 @@ export class Views {
       XYInterval.overlap(XYInterval.of(0, width, 0, height), Views.bounds(v)) !=
       null
     );
+  }
+
+  /** Return the distance from parent to child, or
+   * 0 if child == parent, or -1 if not a child */
+  static distance(child: DxView, parent: DxView) {
+    const path = Views.path(child, parent);
+    return path.length - 1;
+  }
+
+  /** Return the path from parent to child, or empty */
+  static path(child: DxView, parent: DxView) {
+    const path: DxView[] = [];
+    let ptr: N<DxView> = child;
+    while (ptr) {
+      path.push(ptr);
+      if (ptr == parent) {
+        return path.reverse();
+      }
+      ptr = ptr.parent;
+    }
+    return [];
   }
 
   static canR2LScroll(v: DxView): boolean {

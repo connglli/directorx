@@ -473,7 +473,7 @@ class ResPlayer extends DxPlayer {
         if (pattern.dirty && !pattern.dismiss()) {
           throw x;
         } else {
-          DxLog.warning(`pattern-failed ${x} try next`);
+          DxLog.warning(`pattern-failed: ${x}, try next`);
         }
       }
     }
