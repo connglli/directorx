@@ -159,6 +159,7 @@ export class FragmentManager {
  * We treat them all as a DxCompatUi, and unify their operations */
 export default class DxCompatUi extends WindowOwner implements FragmentOwner {
   public isActivity = true;
+  public uiGenerator: N<string> = null;
   public readonly fragmentManager: FragmentManager = new FragmentManager(this);
   public constructor(app: string, public readonly name: string) {
     super(app);

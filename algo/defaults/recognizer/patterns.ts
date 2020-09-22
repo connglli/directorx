@@ -436,6 +436,14 @@ export class Scroll extends Expand {
         (w) => Views.isVisibleToUser(w, playee.d) && w.cls == v.cls
       );
     }
+    if (!found && playee.u.uiGenerator == 'uiautomator') {
+      found = SegmentBottomUpFinder.findView(
+        playee.s,
+        (w) =>
+          Views.isVisibleToUser(w, playee.d) &&
+          w.cls == 'android.widget.ScrollView'
+      );
+    }
     // fine tune to make it scrollable
     if (
       found &&

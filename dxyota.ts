@@ -179,8 +179,7 @@ interface CompViewProps {
 }
 
 /** Exported ViewMap includes all properties from
- * dumped and computed
- */
+ * dumped and computed */
 export type ViewMap = DumpViewProps & CompViewProps;
 
 export class ActivityYotaBuilder {
@@ -203,6 +202,7 @@ export class ActivityYotaBuilder {
     const obj = JSON.parse(this.dump);
     const vhm = obj['hierarchy'] as DumpViewHierarchyProps;
     this.buildView(vhm, a);
+    a.uiGenerator = 'uiautomator';
     return a;
   }
 

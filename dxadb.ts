@@ -541,6 +541,7 @@ export class ActivityDumpSysBuilder {
     const ui = new DxCompatUi(this.app, this.name);
     this.buildView(ui);
     this.buildFragments(ui, ui);
+    ui.uiGenerator = 'dumpsys';
     return ui;
   }
 
