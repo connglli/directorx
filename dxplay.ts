@@ -10,8 +10,8 @@ import DxEvent, {
 } from './dxevent.ts';
 import DxLog from './dxlog.ts';
 import DxPacker from './dxpack.ts';
-import DxView from './ui/dxview.ts';
-import DxCompatUi from './ui/dxui.ts';
+import type DxView from './ui/dxview.ts';
+import type DxCompatUi from './ui/dxui.ts';
 import DxDroid, { DevInfo, ViewInputOptions } from './dxdroid.ts';
 import DxSynthesizer from './algo/mod.ts';
 import {
@@ -488,6 +488,7 @@ export interface DxPlayOptions extends ResPlayerCreateOptions {
   dxpk: string; // path to dxpk
   decode: boolean; // decode or not
   verbose?: boolean; // verbose mode
+  droidInputTopLeft?: boolean; // tap/... top-left instead of center
   lifecycleHookPath?: string; // lifecycle hook path
   customLoggerPath?: string; // custom logger path
 }
@@ -498,6 +499,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
     pty,
     dxpk,
     verbose = false,
+    droidInputTopLeft = false,
     decode,
     lifecycleHookPath,
     customLoggerPath,
@@ -511,6 +513,7 @@ export default async function dxPlay(opt: DxPlayOptions): Promise<void> {
   await DxDroid.connect(serial);
   const droid = DxDroid.get();
   droid.decoding(decode);
+  droid.setInputCenter(!droidInputTopLeft);
 
   const pkr = await DxPacker.load(dxpk);
   const dev = droid.dev;

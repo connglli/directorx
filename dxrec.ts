@@ -15,7 +15,7 @@ import DxEvent, {
   DxTextEvent,
   DxHideSoftKeyboardEvent,
 } from './dxevent.ts';
-import DxCompatUi from './ui/dxui.ts';
+import type DxCompatUi from './ui/dxui.ts';
 import DxLog from './dxlog.ts';
 import DxDroid from './dxdroid.ts';
 import createLifecycleHook, {

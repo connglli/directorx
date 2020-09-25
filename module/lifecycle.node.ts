@@ -1,6 +1,6 @@
 import createModuleGlobal from './global.ts';
 import parseModuleArgs, { DxModuleArgs } from './args.ts';
-import DxDroid from '../dxdroid.ts';
+import type DxDroid from '../dxdroid.ts';
 import createRequire from '../utils/module/custom_node_module.ts';
 
 type LifecycleHookArgs = DxModuleArgs;

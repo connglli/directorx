@@ -1,12 +1,12 @@
 import { NormalizeError, DxSegmentNormalizer } from '../../normalizer.ts';
 import DxView, { Views, ViewFinder } from '../../../ui/dxview.ts';
-import DxCompatUi from '../../../ui/dxui.ts';
+import type DxCompatUi from '../../../ui/dxui.ts';
 import DxSegment, {
   Segments,
   DxHVESegSep,
   DxShrinkSegSep,
 } from '../../../ui/dxseg.ts';
-import { DevInfo } from '../../../dxdroid.ts';
+import type { DevInfo } from '../../../dxdroid.ts';
 import DxLog from '../../../dxlog.ts';
 import { XYIntervalTree } from '../../../utils/interval_tree.ts';
 import Interval, { XYIntervals, XYInterval } from '../../../utils/interval.ts';

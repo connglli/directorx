@@ -1,10 +1,7 @@
 import DxSelector from '../../selector.ts';
 import DxView from '../../../ui/dxview.ts';
-import DxDroid, {
-  ViewMap,
-  SelectOptions,
-  DroidInput,
-} from '../../../dxdroid.ts';
+import type DxDroid from '../../../dxdroid.ts';
+import type { ViewMap, SelectOptions, DroidInput } from '../../../dxdroid.ts';
 import { BoWModel, similarity, closest } from '../../../utils/vecutil.ts';
 import { splitAsWords } from '../../../utils/strutil.ts';
 import { NotImplementedError } from '../../../utils/error.ts';

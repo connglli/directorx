@@ -7,7 +7,7 @@ import DxView, {
 } from './ui/dxview.ts';
 import DxCompatUi from './ui/dxui.ts';
 import { NotImplementedError, IllegalStateError } from './utils/error.ts';
-import { DevInfo } from './dxdroid.ts';
+import type { DevInfo } from './dxdroid.ts';
 
 const RETRY_COUNT = 10;
 

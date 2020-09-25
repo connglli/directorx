@@ -1,6 +1,6 @@
-import DxView from '../ui/dxview.ts';
-import DxCompatUi from '../ui/dxui.ts';
-import { ViewMap } from '../dxdroid.ts';
+import type DxView from '../ui/dxview.ts';
+import type DxCompatUi from '../ui/dxui.ts';
+import type { ViewMap } from '../dxdroid.ts';
 
 export type OnNotFoundCallback = (
   selector: DxSelector,

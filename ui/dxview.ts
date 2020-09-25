@@ -1,8 +1,7 @@
-import { DevInfo } from '../dxdroid.ts';
+import type { DevInfo } from '../dxdroid.ts';
 import { XYInterval } from '../utils/interval.ts';
 import ArrayTreeOp, { ArrayTreeNode } from '../utils/array_tree_op.ts';
 import { extract } from '../utils/types.ts';
-import { NotImplementedError } from '../utils/error.ts';
 
 type N<T> = T | null;
 

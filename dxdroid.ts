@@ -5,14 +5,16 @@ import DxYota, {
   SelectOptions,
   ViewMap,
 } from './dxyota.ts';
-import DxEvent, { DxSwipeEvent } from './dxevent.ts';
+import type DxEvent from './dxevent.ts';
+import type { DxSwipeEvent } from './dxevent.ts';
 import DxView, { Views } from './ui/dxview.ts';
-import DxCompatUi from './ui/dxui.ts';
+import type DxCompatUi from './ui/dxui.ts';
 import DxLog from './dxlog.ts';
 import { XYInterval } from './utils/interval.ts';
 import { CannotReachHereError, IllegalStateError } from './utils/error.ts';
 
-export { DevInfo, ViewInputType, ViewInputOptions, SelectOptions, ViewMap };
+export { DevInfo };
+export type { ViewInputType, ViewInputOptions, SelectOptions, ViewMap };
 
 export class DxDroidError extends Error {}
 
@@ -162,6 +164,10 @@ export default class DxDroid {
     return this.decoding_;
   }
 
+  setInputCenter(center: boolean = true) {
+    this.inputOpt_.center = center;
+  }
+
   get input(): DroidInput {
     this.check();
     const self = this;
@@ -204,8 +210,15 @@ export default class DxDroid {
         if (!bounds) {
           throw new IllegalStateError('View is not visible to user');
         }
-        const realX = (bounds.x.low + bounds.x.high) / 2;
-        const realY = (bounds.y.low + bounds.y.high) / 2;
+        let realX: number;
+        let realY: number;
+        if (self.inputOpt_.center) {
+          realX = (bounds.x.low + bounds.x.high) / 2;
+          realY = (bounds.y.low + bounds.y.high) / 2;
+        } else {
+          realX = bounds.x.low + 1;
+          realY = bounds.y.low + 1;
+        }
         switch (event.ty) {
           case 'tap':
             return await this.tap(realX, realY);
@@ -268,6 +281,9 @@ export default class DxDroid {
 
   private init_ = false;
   private decoding_ = true;
+  private inputOpt_ = {
+    center: true, // tap center, or top-left
+  };
   private dev_: DevInfo = (null as any) as DevInfo; // eslint-disable-line
   private constructor(
     private readonly adb_: DxAdb,

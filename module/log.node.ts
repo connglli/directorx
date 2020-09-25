@@ -1,5 +1,5 @@
 import parseModuleArgs, { DxModuleArgs } from './args.ts';
-import { CustomLogger } from '../dxlog.ts';
+import type { CustomLogger } from '../dxlog.ts';
 import createRequire from '../utils/module/custom_node_module.ts';
 
 type CustomLoggerArgs = DxModuleArgs;

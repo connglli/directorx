@@ -1,10 +1,11 @@
 import DxSelector from '../../selector.ts';
-import { DxUiNormalizer } from '../../normalizer.ts';
+import type { DxUiNormalizer } from '../../normalizer.ts';
 import DxView, { Views, ViewFinder } from '../../../ui/dxview.ts';
-import DxDroid, { ViewMap, DevInfo } from '../../../dxdroid.ts';
+import type DxDroid from '../../../dxdroid.ts';
+import type { ViewMap, DevInfo } from '../../../dxdroid.ts';
 import { BoWModel, similarity, closest } from '../../../utils/vecutil.ts';
 import { NotImplementedError } from '../../../utils/error.ts';
-import DxCompatUi from '../../../ui/dxui.ts';
+import type DxCompatUi from '../../../ui/dxui.ts';
 import { splitAsWords } from '../../../utils/strutil.ts';
 
 type N<T> = T | null;

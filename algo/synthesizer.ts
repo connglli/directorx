@@ -1,12 +1,13 @@
-import DxSelector from './selector.ts';
-import { DxSegmentNormalizer } from './normalizer.ts';
+import type DxSelector from './selector.ts';
+import type { DxSegmentNormalizer } from './normalizer.ts';
 import DxSegmentMatcher, { NO_MATCH } from './matcher.ts';
-import DxRecognizer, { DxPattern } from './recognizer.ts';
-import { DxXYEvent, DxEvSeq } from '../dxevent.ts';
+import type DxRecognizer from './recognizer.ts';
+import type { DxPattern } from './recognizer.ts';
+import type { DxXYEvent, DxEvSeq } from '../dxevent.ts';
 import DxView, { Views } from '../ui/dxview.ts';
-import DxSegment from '../ui/dxseg.ts';
-import DxCompatUi from '../ui/dxui.ts';
-import { DevInfo, DroidInput } from '../dxdroid.ts';
+import type DxSegment from '../ui/dxseg.ts';
+import type DxCompatUi from '../ui/dxui.ts';
+import type { DevInfo, DroidInput } from '../dxdroid.ts';
 import DxLog from '../dxlog.ts';
 import { IllegalStateError } from '../utils/error.ts';
 

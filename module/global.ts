@@ -1,4 +1,5 @@
-import DxDroid, { DroidInput } from '../dxdroid.ts';
+import type DxDroid from '../dxdroid.ts';
+import type { DroidInput } from '../dxdroid.ts';
 import DxLog from '../dxlog.ts';
 import { isXYEvent } from '../dxevent.ts';
 import { Views, ViewFinder } from '../ui/dxview.ts';
@@ -8,7 +9,7 @@ import * as DxAlgoDefaults from '../algo/defaults/mod.ts';
 import * as Vectors from '../utils/vecutil.ts';
 import * as Strings from '../utils/strutil.ts';
 import * as Errors from '../utils/error.ts';
-import { ModuleGlobal } from '../utils/module/custom_module.ts';
+import type { ModuleGlobal } from '../utils/module/custom_module.ts';
 
 /** The base global context of any directorx module */
 export interface DxModuleGlobal extends ModuleGlobal {

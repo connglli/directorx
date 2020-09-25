@@ -1,11 +1,11 @@
 import DxSynthesizer from '../synthesizer.ts';
-import DxSelector from '../selector.ts';
+import type DxSelector from '../selector.ts';
 import { NO_MATCH } from '../matcher.ts';
 import { DxPattern, PatternArgs } from '../recognizer.ts';
 import { DxXYEvent, DxEvSeq, isXYEvent } from '../../dxevent.ts';
 import DxView, { Views, ViewFinder } from '../../ui/dxview.ts';
-import DxCompatUi from '../../ui/dxui.ts';
-import { DevInfo, DroidInput } from '../../dxdroid.ts';
+import type DxCompatUi from '../../ui/dxui.ts';
+import type { DevInfo, DroidInput } from '../../dxdroid.ts';
 import { IllegalStateError } from '../../utils/error.ts';
 
 type N<T> = T | null;

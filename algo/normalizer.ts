@@ -1,6 +1,6 @@
-import DxCompatUi from '../ui/dxui.ts';
-import DxSegment from '../ui/dxseg.ts';
-import { DevInfo } from '../dxdroid.ts';
+import type DxCompatUi from '../ui/dxui.ts';
+import type DxSegment from '../ui/dxseg.ts';
+import type { DevInfo } from '../dxdroid.ts';
 
 export class NormalizeError extends Error {
   constructor(msg: string) {

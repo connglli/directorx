@@ -1,4 +1,4 @@
-import DxCompatUi from './ui/dxui.ts';
+import type DxCompatUi from './ui/dxui.ts';
 import Stack from './utils/stack.ts';
 
 export type DxEventType =

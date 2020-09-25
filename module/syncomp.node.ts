@@ -6,13 +6,13 @@
  * (2) provides a custom global/window object that is specific
  *     to directorx */
 import createModuleGlobal from './global.ts';
-import {
+import type {
   DxUiNormalizer,
   DxSegmentNormalizer,
   DxSegmentMatcher,
   DxRecognizer,
 } from '../algo/mod.ts';
-import DxDroid from '../dxdroid.ts';
+import type DxDroid from '../dxdroid.ts';
 import createRequire from '../utils/module/custom_node_module.ts';
 
 /** A component create exports a create function to

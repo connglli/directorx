@@ -8,11 +8,13 @@
  * that is specific to directorx */
 import createModuleGlobal, { DxModuleGlobal } from './global.ts';
 import parseModuleArgs, { DxModuleArgs } from './args.ts';
-import DxDroid, { DevInfo } from '../dxdroid.ts';
-import DxEvent, { DxEvSeq } from '../dxevent.ts';
-import DxView from '../ui/dxview.ts';
-import DxCompatUi from '../ui/dxui.ts';
-import DxSynthesizer from '../algo/mod.ts';
+import type DxDroid from '../dxdroid.ts';
+import type { DevInfo } from '../dxdroid.ts';
+import type DxEvent from '../dxevent.ts';
+import type { DxEvSeq } from '../dxevent.ts';
+import type DxView from '../ui/dxview.ts';
+import type DxCompatUi from '../ui/dxui.ts';
+import type DxSynthesizer from '../algo/mod.ts';
 import { NotImplementedError } from '../utils/error.ts';
 import importModule, {
   Module,

@@ -71,6 +71,7 @@ prog
   .option('-M, --matcher <type:string>', 'path of the segment matcher used')
   .option('-R, --recogn <type:string>', 'path of the pattern recognizer used')
   .option('-G, --mylog <type:string>', 'path of the custom logger')
+  .option('-t, --topleft', 'input at topleft instead of center of a view')
   .option('-v, --verbose', 'output verbose information')
   .action(
     async (
@@ -87,6 +88,7 @@ prog
         matcher,
         recogn,
         mylog,
+        topleft,
       }: IFlags,
       dxpk: string
     ): Promise<void> => {
@@ -97,6 +99,7 @@ prog
         K: lookahead as number | undefined,
         decode: DECODE,
         verbose: verbose as boolean | undefined,
+        droidInputTopLeft: topleft as boolean | undefined,
         lifecycleHookPath: lhook as string | undefined,
         dontHideSoftKeyboard: nohide as boolean | undefined,
         pluginPath: plugin as string | undefined,

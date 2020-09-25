@@ -1,4 +1,5 @@
-import DxRecognizer, { DxPattern, PatternArgs } from '../../recognizer.ts';
+import type DxRecognizer from '../../recognizer.ts';
+import type { DxPattern, PatternArgs } from '../../recognizer.ts';
 import {
   NavigationUp,
   VagueText,

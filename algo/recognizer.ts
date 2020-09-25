@@ -1,9 +1,10 @@
-import DxSelector from './selector.ts';
-import DxEvent, { DxEvSeq } from '../dxevent.ts';
-import DxView from '../ui/dxview.ts';
-import DxSegment from '../ui/dxseg.ts';
-import DxCompatUi from '../ui/dxui.ts';
-import { DroidInput, DevInfo } from '../dxdroid.ts';
+import type DxSelector from './selector.ts';
+import type DxEvent from '../dxevent.ts';
+import type { DxEvSeq } from '../dxevent.ts';
+import type DxView from '../ui/dxview.ts';
+import type DxSegment from '../ui/dxseg.ts';
+import type DxCompatUi from '../ui/dxui.ts';
+import type { DroidInput, DevInfo } from '../dxdroid.ts';
 
 export interface PatternArgs {
   // original fired event

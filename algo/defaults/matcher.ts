@@ -1,6 +1,6 @@
 import DxSegmentMatcher, { DxSegMatch, NO_MATCH } from '../matcher.ts';
-import DxView from '../../ui/dxview.ts';
-import DxSegment from '../../ui/dxseg.ts';
+import type DxView from '../../ui/dxview.ts';
+import type DxSegment from '../../ui/dxseg.ts';
 import { BiGraph } from '../../utils/bigraph.ts';
 import * as vecutil from '../../utils/vecutil.ts';
 

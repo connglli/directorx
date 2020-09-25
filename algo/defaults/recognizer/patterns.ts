@@ -1,5 +1,5 @@
 import { DxPattern } from '../../recognizer.ts';
-import DxSelector from '../../selector.ts';
+import type DxSelector from '../../selector.ts';
 import DxView, {
   DxTabHost,
   DxViewPager,
@@ -13,7 +13,7 @@ import DxSegment, {
   SegmentFinder,
   SegmentBottomUpFinder,
 } from '../../../ui/dxseg.ts';
-import { DevInfo, DroidInput } from '../../../dxdroid.ts';
+import type { DevInfo, DroidInput } from '../../../dxdroid.ts';
 import { splitAsWords, wordsInclude } from '../../../utils/strutil.ts';
 import { BoWModel, closest, similarity } from '../../../utils/vecutil.ts';
 import {
@@ -59,7 +59,8 @@ export class VagueText extends Expand {
       return false;
     }
     const player = this.args.p;
-    const expand = this.isDevExpanded;
+    const widthEqual = this.args.r.d.width == this.args.p.d.width;
+    const widthExpand = this.args.r.d.width < this.args.p.d.width;
     // currently, we only tackle prefix
     // TODO: add more vague patterns
     this.vFound = SegmentFinder.findViews(
@@ -67,8 +68,10 @@ export class VagueText extends Expand {
       (w) =>
         Views.isVisibleToUser(w, player.d) &&
         w.text.length > 0 &&
-        ((expand && w.text.startsWith(v.text)) ||
-          (!expand && v.text.startsWith(w.text)))
+        ((widthEqual &&
+          (w.text.startsWith(v.text) || v.text.startsWith(w.text))) ||
+          (widthExpand && w.text.startsWith(v.text)) ||
+          (!widthExpand && v.text.startsWith(w.text)))
     );
     return this.vFound.length > 0;
   }
@@ -77,7 +80,7 @@ export class VagueText extends Expand {
     if (this.vFound.length <= 0) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    const expand = this.isDevExpanded;
+    const expand = this.args.r.d.width <= this.args.p.d.width;
     // let's sort the founded view by their distance
     this.vFound.sort((a, b) => Math.abs(a.text.length - b.text.length));
     const matched = expand
@@ -95,10 +98,6 @@ export class VagueText extends Expand {
     this.setDirty();
     return true;
   }
-
-  protected get isDevExpanded() {
-    return this.args.r.d.width <= this.args.p.d.width;
-  }
 }
 
 /** VagueTextExt differs from VagueText that it finds the
@@ -114,7 +113,8 @@ export class VagueTextExt extends VagueText {
       return false;
     }
     const player = this.args.p;
-    const expand = this.isDevExpanded;
+    const widthEqual = this.args.r.d.width == this.args.p.d.width;
+    const widthExpand = this.args.r.d.width < this.args.p.d.width;
     // currently, we only tackle prefix
     // TODO: add more vague patterns
     let found = SegmentBottomUpFinder.findView(
@@ -122,8 +122,10 @@ export class VagueTextExt extends VagueText {
       (w) =>
         Views.isVisibleToUser(w, player.d) &&
         w.text.length > 0 &&
-        ((expand && w.text.startsWith(v.text)) ||
-          (!expand && v.text.startsWith(w.text)))
+        ((widthEqual &&
+          (w.text.startsWith(v.text) || v.text.startsWith(w.text))) ||
+          (widthExpand && w.text.startsWith(v.text)) ||
+          (!widthExpand && v.text.startsWith(w.text)))
     );
     if (found) {
       this.vFound.push(found);
