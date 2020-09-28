@@ -195,9 +195,9 @@ export class DumpSysActivityInfo {
     }
     let localActivityLinePrefix = '    ';
     let activeFragmentsStartLine = -1;
-    const activeFragmentsStartLinePrefix = '    Active Fragments in ';
+    const activeFragmentsStartLinePrefix = '    Active Fragments';
     let addedFragmentsStartLine = -1;
-    const addedFragmentsStartLinePrefix = '    Added Fragments:';
+    const addedFragmentsStartLinePrefix = '    Added Fragments';
     for (let i = localActivityStartLine; i < this.info.length; i++) {
       if (this.info[i].startsWith(activeFragmentsStartLinePrefix)) {
         activeFragmentsStartLine = i + 1;
@@ -351,9 +351,9 @@ export class DumpSysActivityInfo {
     }
     let localFragmentActivityLinePrefix = '    ';
     let activeFragmentsStartLine = -1;
-    const activeFragmentsStartLinePrefix = '    Active Fragments:';
+    const activeFragmentsStartLinePrefix = '    Active Fragments';
     let addedFragmentsStartLine = -1;
-    const addedFragmentsStartLinePrefix = '    Added Fragments:';
+    const addedFragmentsStartLinePrefix = '    Added Fragments';
     for (let i = localFragmentActivityStartLine; i < this.info.length; i++) {
       if (this.info[i].startsWith(activeFragmentsStartLinePrefix)) {
         activeFragmentsStartLine = i + 1;
@@ -421,7 +421,7 @@ export class DumpSysActivityInfo {
     if (localFragmentActivityStartLine == -1) {
       return;
     }
-    const activeFragmentsStartLineInfix = '    Active Fragments:';
+    const activeFragmentsStartLineInfix = '    Active Fragments';
     const incorrectLine = localFragmentActivityStartLine;
     const incorrectString = this.info[incorrectLine];
     if (!incorrectString.includes(activeFragmentsStartLineInfix)) {
@@ -430,10 +430,24 @@ export class DumpSysActivityInfo {
     // let's fix it by pre-pending spaces
     const ind = incorrectString.indexOf(activeFragmentsStartLineInfix);
     const stateString = incorrectString.slice(0, ind);
-    const activeString = activeFragmentsStartLineInfix.slice();
+    const activeString = incorrectString.slice(
+      ind,
+      incorrectString.indexOf(':', ind) + 1
+    );
     const nextString = incorrectString.slice(ind + activeString.length);
-    this.info.splice(incorrectLine, 1, stateString, activeString, nextString);
-    for (let i = incorrectLine + 2; i < localFragmentActivityEndLine; i++) {
+    let addedStringNum = 0;
+    if (nextString.length > 0) {
+      this.info.splice(incorrectLine, 1, stateString, activeString, nextString);
+      addedStringNum = 3;
+    } else {
+      this.info.splice(incorrectLine, 1, stateString, activeString);
+      addedStringNum = 2;
+    }
+    for (
+      let i = incorrectLine + addedStringNum;
+      i < localFragmentActivityEndLine;
+      i++
+    ) {
       if (this.info[i].includes('Added Fragments:')) {
         this.info[i] = '  ' + this.info[i];
       } else if (this.info[i].includes('Fragments Created Menus:')) {

@@ -703,41 +703,16 @@ export class ViewFinder extends ArrayTreeOp {
     x: number,
     y: number,
     visible = true,
-    a11y = true
+    a11y = true,
+    meaningful = true
   ): N<DxView> {
     let views = ViewFinder.findViewsByXY(v, x, y, visible);
     if (a11y) {
       views = views.filter((v) => v.flags.a);
     }
-    // one seldom taps progress bar
-    views = views.filter(
-      (v) => v.cls.toLowerCase().indexOf('progressbar') == -1
-    );
-    if (views.length == 0) {
-      return null;
-    } else if (views.length == 1) {
-      return views[0];
-    }
-    {
-      const texts = views.filter((v) => v.text.length > 0);
-      if (texts.length >= 1) {
-        return texts[0];
-      }
-    }
-    let sorted = views
-      .slice()
-      .sort(
-        (a, b) => Views.informativeLevelOf(b) - Views.informativeLevelOf(a)
-      );
-    if (sorted[0] == views[0]) {
-      return sorted[0];
-    } else if (
-      Views.informativeLevelOf(sorted[0]) > Views.informativeLevelOf(sorted[1])
-    ) {
-      return Views.informativeLevelOf(sorted[0]) >= 2 ? sorted[0] : views[0];
-    } else {
-      return views[0];
-    }
+    return meaningful
+      ? ViewFinder.heuristicallyFindFirstMeaningful(views)
+      : views[0];
   }
 
   /** Find the first met view with hash h */
@@ -809,7 +784,12 @@ export class ViewFinder extends ArrayTreeOp {
   }
 
   /** Check whether a point hits self or not */
-  static isInView(v: DxView, x: number, y: number, visible = true): boolean {
+  private static isInView(
+    v: DxView,
+    x: number,
+    y: number,
+    visible = true
+  ): boolean {
     let hit =
       Views.x0(v) <= x &&
       x <= Views.x1(v) &&
@@ -819,6 +799,46 @@ export class ViewFinder extends ArrayTreeOp {
       hit = hit && v.shown;
     }
     return hit;
+  }
+
+  private static heuristicallyFindFirstMeaningful(views: DxView[]): N<DxView> {
+    if (views.length == 0) {
+      return null;
+    } else if (views.length == 1) {
+      return views[0];
+    }
+    // one seldom taps progress bar
+    views = views.filter(
+      (v) => v.cls.toLowerCase().indexOf('progressbar') == -1
+    );
+    if (views.length == 0) {
+      return null;
+    } else if (views.length == 1) {
+      return views[0];
+    }
+    {
+      const texts = views.filter((v) => v.text.length > 0);
+      if (texts.length >= 1) {
+        return texts[0];
+      }
+    }
+    let sorted = views
+      .slice()
+      .sort(
+        (a, b) => Views.informativeLevelOf(b) - Views.informativeLevelOf(a)
+      );
+    if (sorted[0] == views[0]) {
+      return sorted[0];
+    } else if (
+      Views.informativeLevelOf(sorted[0]) > Views.informativeLevelOf(sorted[1])
+    ) {
+      return Views.informativeLevelOf(sorted[0]) >= 2 &&
+        !Views.isChild(views[0], sorted[0])
+        ? sorted[0]
+        : views[0];
+    } else {
+      return views[0];
+    }
   }
 }
 

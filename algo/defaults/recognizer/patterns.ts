@@ -616,9 +616,11 @@ export class DrawerMenu extends Reveal {
     if (!this.vTargetMenuButton) {
       throw new IllegalStateError("Pattern is not satisfied, don't apply");
     }
-    await input.tap(
-      Views.x0(this.vTargetMenuButton) + 1,
-      Views.y0(this.vTargetMenuButton)
+    await input.convertInput(
+      this.args.e,
+      this.vTargetMenuButton,
+      this.args.r.d,
+      this.args.p.d
     );
     this.setDirty();
     return false;
@@ -1257,6 +1259,33 @@ export class DualFragmentGotoDetailed extends DualFragment {
     // the let's find the selected one
     let selected = content.children.find((v) => v.flags.S) ?? null;
     if (!selected) {
+      // let's find one that is different from others (colors)
+      const bgSet = content.children.map((c) => {
+        let summary = '';
+        function appendSummary(cv: DxView) {
+          summary += `${cv.bgClass}:${cv.bgColor};`;
+          for (const ccv of cv.children) {
+            appendSummary(ccv);
+          }
+        }
+        appendSummary(c);
+        return summary;
+      });
+      const bgNum: Record<string, number> = {};
+      for (const b of bgSet) {
+        if (bgNum[b]) {
+          bgNum[b] += 1;
+        } else {
+          bgNum[b] = 1;
+        }
+      }
+      const entries = Object.entries(bgNum);
+      const diff = entries.filter((kv) => kv[1] == 1);
+      if (diff.length == 1) {
+        selected = content.children[bgSet.indexOf(diff[0][0])];
+      }
+    }
+    if (!selected) {
       throw new NotImplementedError('No selected item in the descriptive view');
     }
     const texts = ViewFinder.findViews(selected, (v) => Views.isText(v));
@@ -1307,7 +1336,21 @@ export class DualFragmentGotoDetailed extends DualFragment {
             !f.hidden &&
             !f.detached &&
             f.cls == desFrag?.cls &&
-            !!pDesFrag?.viewId &&
+            !!f.viewId &&
+            Fragments.isValid(f, playee.u)
+        );
+      }
+      if (!pDesFrag) {
+        // no such fragment with the same class, try detailed class
+        // sometimes, the descriptive fragment is used only when it
+        // is needed, and when not, the detailed fragment is used
+        pDesFrag = playee.u.fragmentManager.findFragment(
+          (f) =>
+            f.active &&
+            !f.hidden &&
+            !f.detached &&
+            f.cls == this.vDetFrag?.cls &&
+            !!f.viewId &&
             Fragments.isValid(f, playee.u)
         );
       }
