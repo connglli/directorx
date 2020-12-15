@@ -7,6 +7,7 @@ import {
 } from './base/adb.ts';
 import DxView, { ViewFlags, ViewType, ViewFactory } from './ui/dxview.ts';
 import DxCompatUi, { FragmentOwner, FragmentProps } from './ui/dxui.ts';
+import DxLog from './dxlog.ts';
 import * as base64 from './utils/base64.ts';
 import { IllegalStateError } from './utils/error.ts';
 
@@ -341,7 +342,7 @@ export class DumpSysActivityInfo {
         this.viewHierarchy[1] - 1,
         this.viewHierarchy[1] - 1,
       ];
-      this.fragments_ = [
+      this.supportFragments_ = [
         this.localFragmentActivity_[0],
         this.localFragmentActivity_[0],
         this.localFragmentActivity_[0],
@@ -728,9 +729,65 @@ export class ActivityDumpSysBuilder {
     } else if (diff > 0) {
       // child of curr
       if (diff != 1) {
-        throw new IllegalStateError(
-          `Expect a direct child, but got an indirect (+${diff}) child: ${line}`
+        if (false) {
+          throw new IllegalStateError(
+            `Expect a direct child, but got an indirect (+${diff}) child: ${line}`
+          );
+        }
+        DxLog.warning(
+          `Expect a direct child, but got an indirect (+${diff}) child, add a dummy view`
         );
+        while (diff > 1) {
+          parent = cview;
+          cview = ViewFactory.create(ViewType.VIEW, {
+            package: parent.pkg,
+            class: 'android.view.View',
+            id: '',
+            hash: '',
+            flags: {
+              V: parent.flags.V,
+              f: false,
+              F: false,
+              S: false,
+              E: true,
+              d: true,
+              s: {
+                l: false,
+                t: false,
+                r: false,
+                b: false,
+              },
+              c: false,
+              lc: false,
+              cc: false,
+              a: true,
+            },
+            shown: parent.shown,
+            bgClass: parent.bgClass,
+            bgColor: parent.bgColor,
+            foreground: null,
+            left: parent.left,
+            top: parent.top,
+            right: parent.right,
+            bottom: parent.bottom,
+            elevation: parent.elevation,
+            translationX: parent.translationX,
+            translationY: parent.translationY,
+            translationZ: parent.translationZ,
+            scrollX: parent.scrollX,
+            scrollY: parent.scrollY,
+            resPkg: '',
+            resType: '',
+            resEntry: '',
+            desc: '',
+            text: '',
+            tag: '',
+            tip: '',
+            hint: '',
+          });
+          parent.addView(cview);
+          diff -= 1;
+        }
       }
       parent = cview;
     } else {
