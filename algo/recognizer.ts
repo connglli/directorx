@@ -37,12 +37,9 @@ export abstract class DxPattern {
   /** Pattern name */
   abstract get name(): string;
   /** Whether current circumstance match this pattern */
-  abstract async match(): Promise<boolean>;
+  abstract match(): Promise<boolean>;
   /** Apply the pattern and return whether the original event is consumed */
-  abstract async apply(
-    input: DroidInput,
-    selector: DxSelector
-  ): Promise<boolean>;
+  abstract apply(input: DroidInput, selector: DxSelector): Promise<boolean>;
   /** Return whether this pattern has produced some side effects */
   get dirty() {
     return this.dirty_;

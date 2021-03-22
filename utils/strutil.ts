@@ -1,7 +1,7 @@
 import voca from 'https://jspm.dev/voca@1.4.0';
 
 export function splitAsWords(s: string): string[] {
-  return voca.words(s);
+  return (voca as any).words(s);
 }
 
 /** English stopwords list. This list comes

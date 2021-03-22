@@ -106,7 +106,7 @@ abstract class DxPlayer {
     }
   }
 
-  protected abstract async playEvent(e: DxEvent, rDev: DevInfo): Promise<void>;
+  protected abstract playEvent(e: DxEvent, rDev: DevInfo): Promise<void>;
 }
 
 /** PxPlayer plays each event pixel by pixel */
