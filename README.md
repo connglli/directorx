@@ -2,7 +2,7 @@
 
 ## Requirement
 
-1. deno v1.8.2 (std v0.60.0)
+1. deno v1.9.2+ (std v0.60.0)
 2. yota v0.0.1
 3. VirtualXposed (physical device), or Xposed (emulator)
 

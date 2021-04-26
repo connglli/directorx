@@ -16,7 +16,8 @@
     "typescript": "^3.9.7"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "bundle:js": "deno bundle --unstable dx.ts rx.bundle.js",
+    "bundle": "deno compile --unstable --allow-read --allow-write --allow-env --allow-net --allow-run -o rx dx.ts"
   },
   "keywords": [
     "android",
